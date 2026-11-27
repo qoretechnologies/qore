@@ -287,6 +287,119 @@ public hashdecl PipelineOptionInfo {
 }
 
 #! Pipeline element
+#! The state of a pipeline that its queue threads use: its name, its logs and its error status
+/** The queue threads hold their pipeline only by a weak reference, and cannot call it once its destructor runs in
+    another thread (a method call on an object whose destructor runs in another thread is refused, qore#7509), while
+    the destructor waits for them to process their records: while the pipeline is alive they call its methods (which
+    a subclass can reimplement), and once such a call is refused they log, and report their errors, here; the pipeline
+    reads its error status from here
+*/
+class PipelineSharedState {
+    public {
+        #! the name of the pipeline
+        string name;
+
+        #! the logs of the pipeline
+        *code<nothing(string, ...)> info_log;
+        *code<nothing(string, ...)> error_log;
+        *code<nothing(string, ...)> debug_log;
+
+        #! the lock of the pipeline
+        Mutex lck;
+
+        #! the errors of the queue threads
+        list<hash<ExceptionInfo>> error_list;
+
+        #! True if the pipeline is aborting
+        *bool abort_flag;
+
+        #! the queues of the pipeline (weak references: the pipeline holds them)
+        hash<string, auto> queues;
+
+        #! True while the pipeline is processing data (DataProviderPipeline::isProcessing())
+        bool processing = False;
+
+        #! True if the pipeline uses the bulk API (PipelineInfo::bulk)
+        bool bulk = True;
+    }
+
+    constructor(string name, *code<nothing(string, ...)> info_log, *code<nothing(string, ...)> error_log,
+            *code<nothing(string, ...)> debug_log, Mutex lck) {
+        self.name = name;
+        self.info_log = info_log;
+        self.error_log = error_log;
+        self.debug_log = debug_log;
+        self.lck = lck;
+    }
+
+    #! records a queue of the pipeline
+    registerQueue(PipelineQueue queue) {
+        queues{queue.id_str} := queue;
+    }
+
+    #! returns the number of queues of the pipeline (PipelineInfo::num_queues)
+    int getNumQueues() {
+        return queues.size();
+    }
+
+    #! Records a fatal error of a queue thread, and aborts the pipeline's queues
+    recordError(hash<ExceptionInfo> ex) {
+        bool lock = !lck.lockOwner();
+        if (lock) {
+            lck.lock();
+        }
+        on_exit if (lock) {
+            lck.unlock();
+        }
+
+        error_list += ex;
+        abort_flag = True;
+        foreach string id in (keys queues) {
+            *PipelineQueue q = queues{id};
+            if (!q) {
+                continue;
+            }
+            q.queue_abort = True;
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
+        }
+    }
+
+    #! Logs to the info log, if set
+    logInfo(string fmt, ...) {
+        if (info_log) {
+            softlist<auto> args += ("PIPELINE " + name + " INFO: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(info_log, args);
+        }
+    }
+
+    #! Logs to the error log, if set
+    logError(string fmt, ...) {
+        if (error_log) {
+            softlist<auto> args += ("PIPELINE " + name + " ERROR: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(error_log, args);
+        }
+    }
+
+    #! Logs to the debug log, if set
+    logDebug(string fmt, ...) {
+        if (debug_log) {
+            softlist<auto> args += ("PIPELINE " + name + " DEBUG: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(debug_log, args);
+        }
+    }
+}
+
 class PipelineQueue {
     public {
         #! Queue ID
@@ -394,12 +507,26 @@ class PipelineQueue {
 
         #! Parent object
         DataProviderPipeline parent;
+
+        #! The state of the pipeline that the queue thread uses while the pipeline is destroyed (qore#7509)
+        PipelineSharedState shared;
+    }
+
+    private:internal {
+        #! The queue thread's reference to the pipeline for its calls of the pipeline (see getPipeline())
+        /** Released only when the queue thread does not hold the pipeline's lock (see releasePipeline()): a release
+            that destroys the pipeline runs its destructor, which takes the lock and waits for the other queue threads,
+            which need the lock to end (qore#7509)
+        */
+        *DataProviderPipeline thread_hold;
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size, bool start_thread = True) {
+    constructor(DataProviderPipeline parent, PipelineSharedState shared, Mutex lck, WaitGroup cnt, int id, int size,
+            bool start_thread = True) {
         self.size = size;
         self.parent := parent;
+        self.shared = shared;
         self.lck = lck;
         self.cnt = cnt;
 
@@ -442,11 +569,11 @@ class PipelineQueue {
     #! Processes data on the caller's thread for synchronous single-queue pipelines
     processSynchronously(auto qdata) {
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
         if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
-                "down", parent.getName());
+                "down", shared.name);
         }
 
         processing = True;
@@ -469,7 +596,7 @@ class PipelineQueue {
                 foreach auto data_elem in (data_recs) {
                     softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
                     new_recs += new_elem_recs;
-                    parent.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
+                    logDebugToPipeline("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
                 }
 
                 if (output_callback && elem_index == elem_count - 1) {
@@ -479,7 +606,7 @@ class PipelineQueue {
                 ++elem_index;
             }
         } catch (hash<ExceptionInfo> ex) {
-            parent.reportError(self, ex);
+            reportErrorToPipeline(ex);
         }
     }
 
@@ -502,10 +629,10 @@ class PipelineQueue {
     */
     submit(auto qdata) {
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
 
-        parent.logDebug("queue %d data submission: %y", id, qdata);
+        logDebugToPipeline("queue %d data submission: %y", id, qdata);
         bool lock = !lck.lockOwner();
         if (lock) {
             lck.lock();
@@ -523,12 +650,12 @@ class PipelineQueue {
         }
 
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
 
         if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
-                "down", parent.getName());
+                "down", shared.name);
         }
 
         # Enqueue data; when metrics are enabled, wrap in a hash with the enqueue timestamp
@@ -554,6 +681,112 @@ class PipelineQueue {
         }
     }
 
+    #! Reports a fatal error to the pipeline (DataProviderPipeline::reportError()), or to the shared state if the
+    #! pipeline is being destroyed
+    /** A call of an object whose destructor runs in another thread is refused (qore#7509): the destructor waits for
+        this thread, and reads the error from the shared state
+    */
+    private reportErrorToPipeline(hash<ExceptionInfo> ex) {
+        # the error is recorded, and the pipeline aborted, first: logging it runs code that can raise an error, which
+        # is logged here and does not end the error path
+        shared.recordError(ex);
+        string exstr = get_exception_string(ex);
+        string msg = sprintf("pipeline %d: %s", id, exstr);
+        try {
+            *DataProviderPipeline p = getPipeline();
+            if (p) {
+                try {
+                    p.logError("pipeline %d: %s", id, exstr);
+                    return;
+                } catch (hash<ExceptionInfo> ex1) {
+                    if (!PipelineQueue::refusedCall(ex1, "logError")) {
+                        rethrow;
+                    }
+                }
+            }
+            shared.logError("%s", msg);
+        } catch (hash<ExceptionInfo> ex1) {
+            try {
+                shared.logError("%s; the error could not be logged: %s", msg, get_exception_string(ex1));
+            } catch () {
+                # the error has been recorded; the shared state's log raised an error as well
+            }
+        }
+    }
+
+    #! Returns True if the exception was raised by the call of the given method of a pipeline that is being destroyed
+    #! in another thread, which refuses the call (qore#7509), and not by the method's code
+    private static bool refusedCall(hash<ExceptionInfo> ex, string method) {
+        if (ex.err != "OBJECT-ALREADY-DELETED") {
+            return False;
+        }
+        # the refusal is raised at the call: the innermost frame is the method's, and the message is the refusal's for
+        # the method; an error that the method's code raises has the frames of its code
+        *hash<auto> frame = ex.callstack[0];
+        return frame && regex(frame.function ?? "", "::" + method + "$")
+            && regex(ex.desc ?? "", "^cannot call [^ ]*::" + method + "\\(\\) on an object that has already been "
+                "deleted$");
+    }
+
+    #! Returns the pipeline for a call, or @ref nothing if it is gone
+    /** In a queue thread of the pipeline, the reference is kept in the \c thread_hold of the queue that the thread
+        runs (DataProviderPipelinePriv::running_queue), which can be another queue than this one (a parent queue's
+        thread submits records to a child queue), until the thread no longer holds the pipeline's lock (see
+        releasePipeline())
+    */
+    private *DataProviderPipeline getPipeline() {
+        *DataProviderPipeline p = parent;
+        if (p) {
+            *PipelineQueue running = DataProviderPipelinePriv::running_queue;
+            if (running && running.shared === shared && !running.thread_hold) {
+                running.thread_hold = p;
+            }
+        }
+        return p;
+    }
+
+    #! Releases the queue thread's reference to the pipeline (see getPipeline()); called with the pipeline's lock held
+    /** The lock is released while the reference is: a release that destroys the pipeline runs its destructor in this
+        thread, which takes the lock and waits for the other queue threads, which need the lock to end; an error of the
+        destructor is logged here, as no caller gets it
+    */
+    private releasePipeline() {
+        if (!thread_hold) {
+            return;
+        }
+        lck.unlock();
+        on_exit lck.lock();
+        try {
+            remove thread_hold;
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                shared.logError("error destroying the pipeline in queue %d: %s", id, get_exception_string(ex));
+            } catch () {
+            }
+        }
+    }
+
+    #! Logs a debug message with the pipeline's DataProviderPipeline::logDebug(), or with the shared state if the
+    #! pipeline is being destroyed (see reportErrorToPipeline())
+    private logDebugToPipeline(string fmt, ...) {
+        softlist<auto> args = fmt;
+        if (argv) {
+            args += argv;
+        }
+        *DataProviderPipeline p = getPipeline();
+        if (p) {
+            try {
+                call_object_method_args(p, "logDebug", args);
+                return;
+            } catch (hash<ExceptionInfo> ex) {
+                if (!PipelineQueue::refusedCall(ex, "logDebug")) {
+                    rethrow;
+                }
+            }
+        }
+        call_object_method_args(shared, "logDebug", args);
+    }
+
     #! Processing thread
     run(WaitGroup run_cnt) {
         # Add to cnt before any weak `parent` dereference so cnt's non-zero window
@@ -561,7 +794,16 @@ class PipelineQueue {
         # so it always fires (even if registerThread or runIntern throws), preventing
         # the pipeline destructor from blocking forever in cnt.wait().
         cnt.add();
-        on_exit cnt.done();
+        # the thread's count is released here, unless the pipeline's destructor runs in this thread: it releases it
+        # itself, as it does not wait for this thread (see DataProviderPipeline::destructor())
+        DataProviderPipelinePriv::running_queue_cnt = cnt;
+        on_exit if (DataProviderPipelinePriv::running_queue_cnt === cnt) {
+            remove DataProviderPipelinePriv::running_queue_cnt;
+            cnt.done();
+        }
+        # the queue that this thread runs keeps the thread's reference to the pipeline (see getPipeline())
+        DataProviderPipelinePriv::running_queue = self;
+        on_exit remove DataProviderPipelinePriv::running_queue;
 
         # Call registerThread() while the constructor still blocks on run_cnt.wait(),
         # which guarantees the user thread holds a strong ref to the parent pipeline
@@ -577,6 +819,8 @@ class PipelineQueue {
 
         lck.lock();
         on_exit lck.unlock();
+        # the thread's reference to the pipeline is released when the thread ends, without the lock
+        on_exit releasePipeline();
 
         runIntern();
     }
@@ -789,6 +1033,12 @@ class PipelineQueue {
                     }
                 }
 
+                # the thread does not hold the pipeline while it waits (see releasePipeline()); the release can
+                # destroy it, which stops the queue
+                if (thread_hold) {
+                    releasePipeline();
+                    continue;
+                }
                 ++data_waiting;
                 cond.wait(lck);
                 --data_waiting;
@@ -852,7 +1102,7 @@ class PipelineQueue {
                         foreach auto data_elem in (data_recs) {
                             softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
                             new_recs += new_elem_recs;
-                            parent.logDebug("queue %d data processor %y output: %y", id,
+                            logDebugToPipeline("queue %d data processor %y output: %y", id,
                                 elem.className(), new_elem_recs);
                         }
 
@@ -907,7 +1157,7 @@ class PipelineQueue {
                 if (mc_cache) {
                     mc_cache.recordError(id_str);
                 }
-                parent.reportError(self, ex);
+                reportErrorToPipeline(ex);
             }
 
             # Mark processing complete and wake waitDone() if waiting
@@ -1013,7 +1263,7 @@ class PipelineQueue {
                     }
 
                     softlist<auto> data_recs = flush_results;
-                    parent.logDebug("queue %d data processor %y flush output: %y", id, elem.className(),
+                    logDebugToPipeline("queue %d data processor %y flush output: %y", id, elem.className(),
                         flush_results);
                     int elem_size = elems.size();
                     # iterate subsequent processor elements in the queue
@@ -1036,7 +1286,7 @@ class PipelineQueue {
                                 }
 
                                 new_recs += new_elem_recs;
-                                parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
+                                logDebugToPipeline("queue %d data processor %y processing flushed output: %y", id,
                                     elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
@@ -1078,7 +1328,7 @@ class PipelineQueue {
             if (mc) {
                 mc.recordError(id_str);
             }
-            parent.reportError(self, ex);
+            reportErrorToPipeline(ex);
         }
     }
 }
@@ -1156,6 +1406,22 @@ public class PipelineMetricsCollector {
 
         #! Parent pipeline reference (weak to avoid circular reference)
         DataProviderPipeline parent;
+
+        #! The state that the pipeline shares with its queue threads, read instead of the pipeline (qore#7509)
+        /** The snapshots are taken, and the errors logged, also in the queue threads while the pipeline's destructor
+            waits for them, when the pipeline cannot be called (a method call on an object whose destructor runs in
+            another thread is refused); taken from the pipeline when the collector is created
+        */
+        *object shared;
+    }
+
+    #! logs an error of the collector to the pipeline's error log, through the state that the pipeline shares
+    private logError(string fmt, ...) {
+        if (shared) {
+            call_object_method_args(shared, "logError", (fmt,) + argv);
+        } else {
+            call_object_method_args(parent, "logError", (fmt,) + argv);
+        }
     }
 
     #! Creates the metrics collector
@@ -1164,6 +1430,8 @@ public class PipelineMetricsCollector {
     */
     constructor(DataProviderPipeline parent, AbstractPipelineMetricsCollector collector) {
         self.parent := parent;
+        # the pipeline's shared state, if it has one already
+        shared = parent.getSharedStateIntern();
         self.collector = collector;
         collection_start = now_us();
         collection_start_mono_us = clock_get_monotonic_us();
@@ -1317,7 +1585,7 @@ public class PipelineMetricsCollector {
             try {
                 collector.reportMetrics(snapshot);
             } catch (hash<ExceptionInfo> ex) {
-                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+                logError("metrics collector error: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -1421,7 +1689,7 @@ public class PipelineMetricsCollector {
             try {
                 collector.reportMetrics(snapshot);
             } catch (hash<ExceptionInfo> ex) {
-                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+                logError("metrics collector error: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -1595,7 +1863,7 @@ public class PipelineMetricsCollector {
         try {
             collector.reportMetrics(snapshot);
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1618,7 +1886,7 @@ public class PipelineMetricsCollector {
         try {
             collector.shutdown();
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector shutdown error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector shutdown error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1681,7 +1949,7 @@ public class PipelineMetricsCollector {
         try {
             collector.reset();
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector reset error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector reset error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1850,8 +2118,10 @@ public class PipelineMetricsCollector {
         prev_element_snap = new_prev;
 
         return <PipelineMetricsSnapshot>{
-            "pipeline_name": parent.getName(),
-            "status": parent.aborting() ? PS_ABORTED : (parent.isProcessing() ? PS_RUNNING : PS_IDLE),
+            "pipeline_name": shared ? shared.name : parent.getName(),
+            "status": (shared ? shared.abort_flag : parent.aborting())
+                ? PS_ABORTED
+                : ((shared ? shared.processing : parent.isProcessing()) ? PS_RUNNING : PS_IDLE),
             "start_time": collection_start,
             "snapshot_time": now,
             "total_records_submitted": total_submitted,
@@ -1859,8 +2129,8 @@ public class PipelineMetricsCollector {
             "throughput_rps": throughput,
             "avg_latency_us": avg_latency,
             "element_metrics": out_metrics,
-            "num_queues": parent.getInfo().num_queues,
-            "bulk_mode": parent.getInfo().bulk,
+            "num_queues": shared ? shared.getNumQueues() : parent.getInfo().num_queues,
+            "bulk_mode": shared ? shared.bulk : parent.getInfo().bulk,
             "total_errors": total_errors,
             "delta": snapshot_delta,
         };
@@ -1894,8 +2164,8 @@ public class DataProviderPipeline {
         #! Pipeline ID sequence generator
         Sequence seq(1);
 
-        #! list of exceptions in pipelines
-        list<hash<ExceptionInfo>> error_list;
+        #! the state that the queue threads use, with the pipeline's error status (qore#7509)
+        PipelineSharedState shared;
 
         #! run start time
         date start_time;
@@ -1930,8 +2200,6 @@ public class DataProviderPipeline {
         #! Stop flag
         bool stop_flag;
 
-        #! Abort flag
-        bool abort_flag;
 
         #! Thread WaitGroup
         WaitGroup cnt();
@@ -1967,6 +2235,8 @@ public class DataProviderPipeline {
         synchronous = opts.synchronous ?? False;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
+        shared = new PipelineSharedState(name, info_log, error_log, debug_log, lck);
+
         # Initialize metrics collector if provided
         if (opts.metrics_collector) {
             metrics_collector = new PipelineMetricsCollector(self, opts.metrics_collector);
@@ -1975,7 +2245,8 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1, !synchronous);
+        pmap."0" = new PipelineQueue(self, shared, lck, cnt, 0, 1, !synchronous);
+        shared.registerQueue(pmap."0");
     }
 
     #! Copy constructor; creates an empty pipeline with the same configuration as the original
@@ -1986,6 +2257,9 @@ public class DataProviderPipeline {
         lck = new Mutex();
         seq = new Sequence();
         cnt = new WaitGroup();
+        # the copy's state, with its own errors and queues
+        shared = new PipelineSharedState(shared.name, info_log, error_log, debug_log, lck);
+        shared.bulk = do_bulk;
 
         # ensure the copy is reset
         resetIntern();
@@ -1995,6 +2269,7 @@ public class DataProviderPipeline {
 
         # rename to label as copy
         name = sprintf("copy of %s", name);
+        shared.name = name;
     }
 
     #! Destroys the object
@@ -2006,6 +2281,13 @@ public class DataProviderPipeline {
     */
     destructor() {
         stopIntern();
+        # a queue thread's call of the pipeline (through its weak reference) that held the last reference to it
+        # destroys it in the queue thread, which ends only once the destructor has returned: the destructor does not
+        # wait for it (qore#7509)
+        if (DataProviderPipelinePriv::running_queue_cnt === cnt) {
+            remove DataProviderPipelinePriv::running_queue_cnt;
+            cnt.done();
+        }
         cnt.wait();
         if (metrics_collector && !metrics_collector.isShutDown()) {
             metrics_collector.forceCallback();
@@ -2024,6 +2306,14 @@ public class DataProviderPipeline {
         return exists pmap{id};
     }
 
+    #! @cond nodoc
+    # only called by the pipeline's metrics collector (PipelineMetricsCollector): the state that the pipeline shares
+    # with its queue threads (qore#7509)
+    *object getSharedStateIntern() {
+        return shared;
+    }
+    #! @endcond
+
     #! Returns True if the object is stopping
     bool stopping() {
         return stop_flag ?? False;
@@ -2031,7 +2321,7 @@ public class DataProviderPipeline {
 
     #! Returns True if the object is aborting
     bool aborting() {
-        return abort_flag ?? False;
+        return shared.abort_flag ?? False;
     }
 
     #! Registers a new thread
@@ -2104,6 +2394,7 @@ public class DataProviderPipeline {
 
         if (do_bulk && !processor.supportsBulkApi()) {
             do_bulk = False;
+            shared.bulk = False;
         }
     }
 
@@ -2125,8 +2416,9 @@ public class DataProviderPipeline {
         checkUpdatePipelineIntern(id);
 
         int new_id = seq.next();
-        PipelineQueue queue(self, lck, cnt, new_id, 1);
+        PipelineQueue queue(self, shared, lck, cnt, new_id, 1);
         pmap{new_id} = queue;
+        shared.registerQueue(queue);
 
         if (!pmap{id}.elems || (pmap{id}.elems.last() instanceof AbstractDataProcessor)) {
             list<PipelineQueue> pipeline_list();
@@ -2226,6 +2518,7 @@ public class DataProviderPipeline {
         # unlock on exit
         on_exit {
             locked = False;
+            shared.processing = False;
         }
 
         # wait for primary queue to complete processing
@@ -2247,7 +2540,7 @@ public class DataProviderPipeline {
         }
 
         logInfo("completed processing %d pipeline%s; status %y errors: %d processing time: %y records processed: %d",
-            pmap.size(), pmap.size() == 1 ? "" : "s", error_list ? "ERROR" : "COMPLETE", error_list.size(),
+            pmap.size(), pmap.size() == 1 ? "" : "s", shared.error_list ? "ERROR" : "COMPLETE", shared.error_list.size(),
             microseconds(stop_mono_us - start_mono_us), record_count);
 
         # throw any exceptions
@@ -2265,7 +2558,7 @@ public class DataProviderPipeline {
     */
     abort(*bool ignore_exceptions) {
         # do not grab the lock first to interrupt iterators adding data to the pipeline
-        abort_flag = True;
+        shared.abort_flag = True;
         foreach PipelineQueue q in (pmap.iterator()) {
             q.queue_abort = True;
         }
@@ -2298,9 +2591,10 @@ public class DataProviderPipeline {
         }
 
         locked = False;
+        shared.processing = False;
 
         if (ignore_exceptions) {
-            remove error_list;
+            remove shared.error_list;
         } else {
             throwPipelineException();
         }
@@ -2315,7 +2609,7 @@ public class DataProviderPipeline {
     */
     hash<PipelineInfo> getInfo() {
         string status;
-        if (abort_flag) {
+        if (shared.abort_flag) {
             status = PS_ABORTED;
         } else if (locked) {
             status = PS_RUNNING;
@@ -2384,22 +2678,16 @@ public class DataProviderPipeline {
 
     #! Called from a pipeline queue object to report a fatal error durring processing
     reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
-        logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
-
-        bool lock = !lck.lockOwner();
-        if (lock) {
-            lck.lock();
-        }
-        on_exit if (lock) {
-            lck.unlock();
-        }
-
-        error_list += ex;
-        abort_flag = True;
-        foreach PipelineQueue q in (pmap.iterator()) {
-            q.queue_abort = True;
-            if (q.queue_waiting || q.data_waiting) {
-                q.cond.broadcast();
+        # the error is recorded, and the pipeline aborted, before it is logged, whose code can raise an error
+        shared.recordError(ex);
+        string exstr = get_exception_string(ex);
+        string msg = sprintf("pipeline %d: %s", queue.getId(), exstr);
+        try {
+            logError("pipeline %d: %s", queue.getId(), exstr);
+        } catch (hash<ExceptionInfo> ex1) {
+            try {
+                shared.logError("%s; the error could not be logged: %s", msg, get_exception_string(ex1));
+            } catch () {
             }
         }
     }
@@ -2441,8 +2729,9 @@ public class DataProviderPipeline {
     private:internal PipelineQueue copyPipeline(PipelineQueue old_queue) {
         *PipelineQueue queue = pmap{old_queue.id};
         if (!queue) {
-            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size, !synchronous);
+            queue = new PipelineQueue(self, shared, lck, cnt, old_queue.id, old_queue.size, !synchronous);
             pmap{old_queue.id} = queue;
+            shared.registerQueue(queue);
         }
 
         queue.elems = old_queue.elems;
@@ -2534,8 +2823,8 @@ public class DataProviderPipeline {
             }
         }
 
-        if (abort_flag) {
-            delete abort_flag;
+        if (shared.abort_flag) {
+            delete shared.abort_flag;
             foreach PipelineQueue q in (pmap.iterator()) {
                 q.queue_abort = False;
             }
@@ -2566,7 +2855,7 @@ public class DataProviderPipeline {
                 throw "PIPELINE-ERROR", sprintf("pipeline %y has no elements", name);
             }
 
-            if (error_list || abort_flag) {
+            if (shared.error_list || shared.abort_flag) {
                 throw "PIPELINE-ERROR", sprintf("pipeline %y has an error status; call %s::reset() or %s::abort() before "
                     "submitting new data", name, self.className(), self.className());
             }
@@ -2574,6 +2863,7 @@ public class DataProviderPipeline {
             remove stop_time;
             remove stop_mono_us;
             locked = True;
+            shared.processing = True;
 
             # Set cached flags on all queues to avoid per-record overhead
             if (metrics_collector) {
@@ -2623,7 +2913,7 @@ public class DataProviderPipeline {
     */
     private:internal throwPipelineException() {
         # throw exceptions
-        if (*list<hash<ExceptionInfo>> errs = remove error_list) {
+        if (*list<hash<ExceptionInfo>> errs = remove shared.error_list) {
             throw "PIPELINE-FAILED", sprintf("pipeline %y: %d pipeline%s threw exceptions in processing", name,
                 errs.size(), errs.size() == 1 ? "" :"s"), errs;
         }
@@ -2659,6 +2949,16 @@ public class DataProviderPipeline {
     }
 }
 }
+
+#! @cond nodoc
+namespace DataProviderPipelinePriv {
+#! the count of the queue thread of a pipeline that the current thread runs, until it is released (see
+#! PipelineQueue::run())
+thread_local *WaitGroup running_queue_cnt;
+#! the queue that the current thread runs (see PipelineQueue::getPipeline())
+thread_local *PipelineQueue running_queue;
+}
+#! @endcond
 
 *list sub get_stack() {
     if (!HAVE_RUNTIME_THREAD_STACK_TRACE)

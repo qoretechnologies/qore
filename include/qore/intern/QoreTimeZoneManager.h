@@ -36,6 +36,7 @@
 #include <cinttypes>
 #include <cstddef>
 #include <array>
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -441,6 +442,7 @@ protected:
     // our utc offset in seconds east of UTC
     int our_utcoffset;
 
+    //! the zoneinfo directory; changed only by a test hook in debug builds, under rwl (dbgSetZoneinfoRoot())
     QoreString root;
     tzmap_t tzmap;
 
@@ -486,6 +488,22 @@ private:
     typedef std::map<std::string, std::string> spelling_map_t;
     //! the canonical names of the spellings of regions that restricted code used (at most MaxRestrictedSpellings)
     spelling_map_t restricted_spellings;
+    //! the spellings of regions that code that is not restricted used after max_spelling_zones spellings got zones of
+    //! their own, with the name of the entry in the zoneinfo directory that each reaches (at most
+    //! max_spelling_names; qore#7592)
+    spelling_map_t spelling_names;
+    //! the number of zones of spellings: region names that are not the name of the entry in the zoneinfo directory
+    //! that they reach (case variants, names through links to directories), which code that is not restricted
+    //! created (qore#7592)
+    size_t spelling_zones = 0;
+    //! the most zones of spellings (MaxSpellingZones; changed only by a test hook in debug builds)
+    size_t max_spelling_zones = MaxSpellingZones;
+    //! the most entries in spelling_names (MaxSpellingNames; changed only by a test hook in debug builds)
+    size_t max_spelling_names = MaxSpellingNames;
+#ifdef DEBUG
+    //! the number of zoneinfo files of regions opened (a test hook)
+    std::atomic<uint64_t> dbg_region_file_reads{0};
+#endif
     //! zones whose name reaches another file or other data now; kept as dates refer to them
     std::vector<AbstractQoreZoneInfo*> retired_zones;
 
@@ -546,9 +564,15 @@ private:
     //! raises the error of a charge that failed
     DLLLOCAL static void raiseChargeError(TzChargeResult res, const char* name, ExceptionSink* xsink);
 
+    //! returns the zone of a name for the data of a zoneinfo file, creating it if needed
+    /** @param over_limit not nullptr if \a name is a spelling of a region (qore#7592): a new entry is created only
+        while fewer than max_spelling_zones spellings have zones; otherwise \c *over_limit is set to true and
+        \c nullptr is returned without an exception
+    */
     DLLLOCAL const AbstractQoreZoneInfo* getZone(const std::string& name, const std::string& data,
             const struct stat& sbuf, const std::string& primary_name, bool region, alias_map_t& aliases,
-            const char* label, ExceptionSink* xsink, const SandboxTzCharge* charge = nullptr);
+            const char* label, ExceptionSink* xsink, const SandboxTzCharge* charge = nullptr,
+            bool* over_limit = nullptr);
 
     //! prepares the charge of a path zone that the calling code, which a sandbox governs, loads (qore#7566)
     /** Fails closed: raises an exception if the name is not an absolute path without \c ".", \c ".." or empty
@@ -621,9 +645,32 @@ private:
         @param xsink an exception is raised here if the region cannot be loaded
         @param restricted true if restricted code loads the region: it gets the zone of the canonical name of the
         file reached (its path in the zoneinfo directory with the links resolved, on macOS its true name), so that the
-        names that restricted code adds are bounded by the files of the zoneinfo directory
+        names that restricted code adds are bounded by the files of the zoneinfo directory; other code gets the zone
+        named as given, except for a spelling beyond the limit of spellings (see loadSpelling())
     */
     DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink, bool restricted);
+
+    //! returns the zone of a region spelling that code that is not restricted loads (qore#7592)
+    /** A spelling is a region name that is not the name of the entry in the zoneinfo directory that it reaches (a case
+        variant on a file system that does not distinguish case, a name through a link to a directory).  It gets a
+        zone of its own, named as given, while fewer than max_spelling_zones spellings have zones; after that, the
+        zone of the entry's name, and the spelling is remembered in spelling_names (at most max_spelling_names
+        entries; emptied when full), so that the names that code that is not restricted adds are bounded by the
+        entries of the zoneinfo directory and the limit, whatever names data gives
+
+        @param region the spelling
+        @param entry the name of the entry that it reaches
+        @param data the data of the file
+        @param sbuf the status of the file
+        @param primary_name the name of the zone of the file's data
+        @param label the description of the region for errors in its data
+        @param xsink for the exception if the zone cannot be loaded
+
+        @return the zone or nullptr if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* loadSpelling(const char* region, const std::string& entry,
+            const std::string& data, const struct stat& sbuf, const std::string& primary_name, const char* label,
+            ExceptionSink* xsink);
 
     //! finds or loads the zoneinfo file at the given absolute path; the lock must not be held
     /** Only code that is not restricted loads paths.  The file is opened at exactly this path without blocking and
@@ -700,6 +747,46 @@ public:
 
     //! the maximum number of spellings of regions whose canonical names are remembered for restricted code
     static constexpr size_t MaxRestrictedSpellings = 512;
+
+    //! the maximum number of zones of region spellings (names that are not the name of the entry in the zoneinfo
+    //! directory that they reach) that code that is not restricted creates; further spellings get the zone of the
+    //! entry's name (qore#7592)
+    static constexpr size_t MaxSpellingZones = 512;
+
+    //! the maximum number of spellings beyond MaxSpellingZones whose entry names are remembered (qore#7592)
+    static constexpr size_t MaxSpellingNames = 512;
+
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    //! the sizes of the region name caches (a test hook)
+    struct DbgRegionCacheStats {
+        //! the number of region names with zones
+        size_t region_names;
+        //! the number of zones of spellings
+        size_t spelling_zones;
+        //! the number of spellings whose entry names are remembered
+        size_t spelling_names;
+        //! the number of spellings whose canonical names are remembered for restricted code
+        size_t restricted_spellings;
+        //! the number of zoneinfo files of regions opened
+        uint64_t region_file_reads;
+    };
+
+    //! returns the sizes of the region name caches (a test hook)
+    DLLLOCAL DbgRegionCacheStats dbgGetRegionCacheStats();
+
+    //! sets the limits of the region spelling caches; 0 restores the default (a test hook)
+    DLLLOCAL void dbgSetSpellingLimits(size_t zones, size_t names);
+
+    //! sets the zoneinfo directory from which regions that are not cached are read (a test hook)
+    /** Zones that are cached already keep their data.  Refused for restricted code (callerRestrictedForPaths()).
+
+        @param dir an absolute path, or nullptr for the directory of the build (ZONEINFO_LOCATION)
+        @param xsink for the exception if the directory cannot be set
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int dbgSetZoneinfoRoot(const char* dir, ExceptionSink* xsink);
+#endif
 
     //! the maximum number of zones loaded from paths on Windows, where they are cached by the path
     static constexpr unsigned MaxPathZones = 16384;

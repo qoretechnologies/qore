@@ -32,6 +32,17 @@ const SmallBodySize = 64 * 1024;
 #! a body far larger than the client's flow-control windows and the socket buffers
 const LargeBodySize = 8 * 1024 * 1024;
 
+#! a minimum rate at which the largest progress step that the bound allows for lasts one window (1 s in startServer())
+/** The bound credits a client with one step of its progress at the minimum rate (the data taken within one second,
+    up to 8 MiB: SendRateWindow::MaxProgressStep), so that the time that it allows a client that stops reading
+    depends on how much the socket buffers took, unless the step at this rate lasts no longer than the window.
+
+    The bound charges the whole time of the body to the client, also while the server fills the socket buffers: a
+    server that sends far slower than this rate (such as under valgrind) is ended before the buffers are full, and the
+    RST_STREAM of the body is then written
+*/
+const StepBoundMinRate = 8 * 1024 * 1024;
+
 #! responds by the path of the request
 /** - \c /pumped-held: a small body sent from an InputStream on a stream whose data is held
     - \c /buffered-held: a small buffered body on a stream whose data is held
@@ -300,13 +311,17 @@ class HttpServerBodyBoundTakenTest inherits QUnit::Test {
         BoundBodyHandler h();
         # far larger than the socket buffers of both ends, also on a host with large TCP buffer limits
         h.huge_body = binary(strmul("x", 128 * 1024 * 1024));
-        hash<auto> setup = startServer(h);
+        # the data that the socket buffers of both ends take at once is a step of the client's progress, which the
+        # bound allows for at the minimum rate, up to the largest step: at the default rate of this test, the host's
+        # buffers decide whether the body is ended within the wait below (two minutes for the largest step); at this
+        # rate, any step lasts at most a window
+        hash<auto> setup = startServer(h, StepBoundMinRate);
         on_exit setup.server.stop();
         RawHttp2Client c(setup.port);
         on_exit c.close();
         int stream_id = c.get("/huge-buffered");
         assertEq("/huge-buffered", h.received.get(30s), "the request was received");
-        # far longer than two windows at the minimum rate, with the largest step
+        # far longer than the two windows of the bound (the body's end, then the connection's), each with its step
         usleep(8s);
         hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
         assertTrue(r.closed, sprintf("the connection was ended (%d bytes taken, ended: %y)", r.data_bytes, r.ended));

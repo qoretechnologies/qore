@@ -1602,7 +1602,8 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
     can depend on which name of a region was loaded first.  This applies to region names from data as well (a
     deserialized date or @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API
-    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  For other code, a relative
+    \c find_create_timezone() gets); for other code, a region name from data keeps its name (up to the limit
+    of spellings described in @ref time_zone_region_spellings).  For other code, a relative
     path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path
     was loaded already; the file is opened at exactly this path without blocking, the policy is checked again for

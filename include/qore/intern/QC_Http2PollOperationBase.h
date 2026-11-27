@@ -486,6 +486,7 @@ private:
     // --- I/O-thread-only data (no lock needed) ---
 
     //! Registered stream queues — I/O-thread-only
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
     //! Stream IDs that had data drained — I/O-thread-only
@@ -508,6 +509,7 @@ private:
         @ref isStreamPeerClosed(), so this set stays bounded by the number of
         resets seen on the connection.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int32_t> peer_closed_streams;
 
     //! Persistent-session close-delivery Queue for this connection, or nullptr.

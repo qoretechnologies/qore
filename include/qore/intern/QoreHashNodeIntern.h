@@ -649,6 +649,17 @@ public:
 #endif
 #ifdef DEBUG
     bool is_obj = false;
+    //! true while the members are freed (freeMembers(), and the release of the hash from QoreHashNode::derefImpl()
+    //! until finishFreeMembers()): no code can look up, change or iterate the members then (qore#7569)
+    /** In freeMembers() the members are deleted while the key map and the member list still link them, until both
+        are emptied at its end; a read through a weak reference gets an empty stand-in during the release
+        (lockWeak()), so no access path reaches the members then.  A new access path that did not would read freed
+        members: assertNotReleasing() makes it fail in debug builds; release builds have no flag.  It is asserted by
+        the member lookups (findMember(), and so the lvalue helpers, hash_assignment_priv, findCreateMember()), the
+        hash iterators, the copies (copy(), copyIntern(), evalImpl()), membersEqual(), getKeys(), getValues(), the
+        first and last key and value accessors, and the JIT's hashdecl slot access.
+    */
+    bool releasing = false;
 #endif
     //! false if the hash cannot be changed: it was freed, or it is a copy of a freed hash (see copyFreedState())
     bool valid = true;
@@ -666,6 +677,19 @@ public:
     QoreSandboxChargeRecord sb;
 
     DLLLOCAL qore_hash_private() {
+    }
+
+#ifdef DEBUG
+    //! runs the hook that dbg_hash_access_during_release() arms, at each step of the release of a hash: at the start
+    //! of freeMembers() and of each freeNextMember() call, while \c releasing is set (qore#7569)
+    DLLLOCAL void dbgReleaseStep();
+#endif
+
+    //! asserts that the members are not being freed (see \c releasing); nothing in a release build
+    DLLLOCAL void assertNotReleasing() const {
+#ifdef DEBUG
+        assert(!releasing);
+#endif
     }
 
     //! the estimated memory of a member: the member (which is its node in the member list and in the key map), its
@@ -743,6 +767,7 @@ public:
         whose search gives the bucket of the key by its keyed hash (qore_hash_member_map::findSlow(), qore#7557)
     */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key) const {
+        assertNotReleasing();
         // the miss path is only the call of findSlow(), which returns nullptr for a map without members, for the
         // same reason as in findMember(const char*, size_t)
         return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : hm.findSlow(key);
@@ -750,6 +775,7 @@ public:
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key, size_t len) const {
+        assertNotReleasing();
         // the miss path is only the call of findSlow(), which returns nullptr for a map without members: a test of the
         // member count here makes GCC keep the arguments on the stack across the hash call of the fast path, as this
         // search is the one of object members (bench-member rows)
@@ -758,11 +784,13 @@ public:
 
     //! returns the member with the key \a key, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
+        assertNotReleasing();
         return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
     }
 
     //! returns the member with the key \a key, whose hash is \a hash, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) const {
+        assertNotReleasing();
         return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, strlen(key), hash)) : (hm.empty() ? nullptr : hm.findSlow(key));
     }
 
@@ -784,6 +812,8 @@ public:
     */
     template <typename F>
     DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
+        assertNotReleasing();
+        other.assertNotReleasing();
         assert(size() == other.size());
         const HashMember* m = member_list.front();
         // the hashes have as many members (the callers check it), so the walk ends at the end of both lists; it counts
@@ -1074,10 +1104,12 @@ public:
     }
 
     DLLLOCAL const char* getFirstKey() const  {
+        assertNotReleasing();
         return member_list.empty() ? nullptr : member_list.front()->key.c_str();
     }
 
     DLLLOCAL const char* getLastKey() const {
+        assertNotReleasing();
         return member_list.empty() ? nullptr : member_list.back()->key.c_str();
     }
 
@@ -1188,6 +1220,7 @@ public:
             copyFreedState(*h->priv);
             return h;
         }
+        assertNotReleasing();
         QoreHashNode* h = new QoreHashNode;
         qore_hash_private& hp = *h->priv;
         bool copy_layout = hp.reserveForCopy(*this);
@@ -1233,6 +1266,7 @@ public:
     /** always inline, as the compiler inlined it before qore#7557, so that a copy of a small hash costs no call more
     */
     QORE_HASH_ALWAYS_INLINE DLLLOCAL void copyIntern(qore_hash_private& h) const {
+        assertNotReleasing();
         bool copy_layout = h.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
@@ -1271,6 +1305,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
+        assertNotReleasing();
         QoreHashNodeHolder h(getCopy(), xsink);
         qore_hash_private& hp = *h->priv;
         bool copy_layout = hp.reserveForCopy(*this);
@@ -1350,13 +1385,31 @@ public:
 
     //! Frees all members; the hash itself stays valid (see clear())
     /** Only for a hash that no code can reach any more, or whose values' release runs no code (see clear()): no code
-        searches the key map while the members are deleted, so it is cleared after them, in one pass
+        searches the key map while the members are deleted, so it is cleared after them, in one pass.  In debug builds
+        \c releasing is set meanwhile, so that an access to the members fails (qore#7569)
     */
     // always inline, as before qore#7265, in the release of a hash and of an object's members
 #if defined(__GNUC__) || defined(__clang__)
     __attribute__((always_inline))
 #endif
     DLLLOCAL void freeMembers(ExceptionSink* xsink, bool reverse = false) {
+#ifdef DEBUG
+        // restores the flag when the members are freed: it stays set in the release of the hash, until
+        // finishFreeMembers()
+        struct ReleasingHelper {
+            qore_hash_private& h;
+            bool old;
+
+            ReleasingHelper(qore_hash_private& h) : h(h), old(h.releasing) {
+                h.releasing = true;
+            }
+
+            ~ReleasingHelper() {
+                h.releasing = old;
+            }
+        } releasing_helper(*this);
+        dbgReleaseStep();
+#endif
         if (reverse) {
             for (HashMember* m = member_list.back(); m;) {
                 HashMember* p = m->prev;
@@ -1396,6 +1449,11 @@ public:
     */
     DLLLOCAL static bool freeNextMember(QoreHashNode& h, ExceptionSink* xsink) {
         qore_hash_private* p = h.priv;
+#ifdef DEBUG
+        // set by QoreHashNode::derefImpl() for the whole release of the hash (qore#7569)
+        assert(p->releasing);
+        p->dbgReleaseStep();
+#endif
         if (p->member_list.empty()) {
             return false;
         }
@@ -1421,6 +1479,12 @@ public:
     //! Finishes freeing a hash after its members have been freed and its member index cleared
     DLLLOCAL static void finishFreeMembers(QoreHashNode& h) {
         qore_hash_private* p = h.priv;
+#ifdef DEBUG
+        // the members are freed and the key map and the member list are empty: the release that
+        // QoreHashNode::derefImpl() started has ended (qore#7569)
+        assert(p->member_list.empty() && p->hm.empty());
+        p->releasing = false;
+#endif
         if (!p->weak_hold) {
             // no weak holder can take a reference to the hash (see QoreContainerWeakRefs)
             delete &h;
@@ -1683,10 +1747,12 @@ public:
     }
 
     DLLLOCAL static QoreValue getFirstKeyValue(const QoreHashNode* h) {
+        h->priv->assertNotReleasing();
         return h->priv->member_list.empty() ? QoreValue() : h->priv->member_list.front()->val;
     }
 
     DLLLOCAL static QoreValue getLastKeyValue(const QoreHashNode* h) {
+        h->priv->assertNotReleasing();
         return h->priv->member_list.empty() ? QoreValue() : h->priv->member_list.back()->val;
     }
 };

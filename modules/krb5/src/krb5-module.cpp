@@ -705,6 +705,339 @@ static void krb5_map_keytab_name(const char* name, const Krb5CacheNamespace& ns,
     }
 }
 
+//! A file keytab that code that a sandbox governs uses, as the file that the module opened and checked (qore#7767)
+/** The library opens a \c FILE keytab by name at every use, following links: for an acceptor credential made from
+    it, at every context that the credential accepts, long after the module checked the name against the filesystem
+    policy.  Code that may change the entries on the path (the sandboxed code itself, or code of another sandbox)
+    could replace the file in the meantime, for example with a link to another keytab, and the library would use the
+    keys of that keytab.
+
+    The module therefore opens the file once for each operation, in the directory that it opened, without following
+    a link at the last component, checks the policy for the canonical path of the file that it opened, refuses a file
+    that is not a regular file with one link, and gives the library only that file:
+    - for an operation that reads the keytab, a \c MEMORY keytab of the module with a copy of its entries, which an
+      acceptor credential keeps; its name is outside the names of the keytabs of every isolation domain
+      (\c qore-krb5-file-keytab-<n>, where the \c MEMORY keytabs of code that a sandbox governs are
+      \c qore-sandbox-<domain>-<name>), so no code that a sandbox governs can open it
+    - for an operation that writes the keytab, the open descriptor (\c /proc/self/fd/N on Linux, \c /dev/fd/N
+      elsewhere), which the library writes in place
+*/
+class Krb5PinnedKeytab {
+public:
+    //! the keytab that the library uses: a copy of the entries for a read, the descriptor's file for a write, or
+    //! nullptr if the caller's keytab is used as it is (no sandbox, or not a file keytab)
+    krb5_keytab keytab = nullptr;
+    //! the name of \c keytab
+    std::string name;
+    //! true if the file does not exist (a read that allows it)
+    bool missing = false;
+
+    DLLLOCAL explicit Krb5PinnedKeytab(krb5_context ctx) : ctx(ctx) {
+    }
+
+    DLLLOCAL ~Krb5PinnedKeytab() {
+        if (keytab) {
+            krb5_kt_close(ctx, keytab);
+        }
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+
+    //! Gives the keytab to use for a caller's keytab
+    DLLLOCAL krb5_keytab use(krb5_keytab orig) const {
+        return keytab ? keytab : orig;
+    }
+
+    //! Moves the file offset of the descriptor to the start before the library opens the file: the library reads
+    //! the header from the offset where it opens the file, and /dev/fd/N on macOS shares the offset with the
+    //! descriptor
+    DLLLOCAL void rewind() const {
+        if (fd >= 0) {
+            lseek(fd, 0, SEEK_SET);
+        }
+    }
+
+    //! Opens and checks a file keytab of code that a sandbox governs, for the access \a mode (QSEC_*)
+    /** Does nothing for code that no sandbox governs and for keytabs that are not file keytabs
+
+        @param orig the keytab of the caller
+        @param mode the access (QSEC_*) that the caller's policy must allow
+        @param allow_missing if true, a file that does not exist sets \c missing; otherwise an exception is raised
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int pin(krb5_keytab orig, int mode, bool allow_missing, ExceptionSink* xsink, const char* context);
+
+    Krb5PinnedKeytab(const Krb5PinnedKeytab&) = delete;
+    Krb5PinnedKeytab& operator=(const Krb5PinnedKeytab&) = delete;
+
+private:
+    krb5_context ctx;
+    //! the descriptor of the file
+    int fd = -1;
+
+    DLLLOCAL int openFile(const std::string& given, const std::string& path, int mode, bool& retry,
+        ExceptionSink* xsink, const char* context);
+    DLLLOCAL int copy(krb5_keytab file, ExceptionSink* xsink, const char* context);
+};
+
+//! Gives the name of a new MEMORY keytab of the module, which no code that a sandbox governs can open (qore#7767)
+static std::string krb5_module_keytab_name() {
+    static std::atomic<uint64_t> count(0);
+    return "MEMORY:qore-krb5-file-keytab-" + std::to_string(++count);
+}
+
+//! Closes a descriptor at the end of a block
+class Krb5FdHolder {
+public:
+    int fd;
+
+    DLLLOCAL explicit Krb5FdHolder(int fd) : fd(fd) {
+    }
+
+    DLLLOCAL ~Krb5FdHolder() {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+
+    DLLLOCAL int release() {
+        int rv = fd;
+        fd = -1;
+        return rv;
+    }
+
+    Krb5FdHolder(const Krb5FdHolder&) = delete;
+    Krb5FdHolder& operator=(const Krb5FdHolder&) = delete;
+};
+
+int Krb5PinnedKeytab::pin(krb5_keytab orig, int mode, bool allow_missing, ExceptionSink* xsink,
+        const char* context) {
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (!smh) {
+            return 0;
+        }
+    }
+    const char* type = krb5_kt_get_type(ctx, orig);
+    if (!type || (strcmp(type, "FILE") && strcmp(type, "WRFILE"))) {
+        return 0;
+    }
+    char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
+    krb5_error_code rc = krb5_kt_get_name(ctx, orig, kt_name, sizeof(kt_name));
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+    }
+    std::string given = krb5_keytab_filesystem_path(kt_name);
+    // a link at the last component that the name has now is followed: the canonical path is checked, and the file
+    // is opened without following a link there; a change in the meantime is retried
+    for (unsigned i = 0; i < 8; ++i) {
+        std::string path = given;
+        char* real = realpath(given.c_str(), nullptr);
+        if (real) {
+            path = real;
+            free(real);
+        }
+        bool retry = false;
+        if (openFile(given, path, mode, retry, xsink, context)) {
+            return -1;
+        }
+        if (!retry) {
+            break;
+        }
+    }
+    if (fd < 0) {
+        if (!missing) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the keytab file '%s' changed while it was opened, or "
+                "is a link that cannot be resolved", context, given.c_str());
+            return -1;
+        }
+        if (!allow_missing) {
+            xsink->raiseException("KRB5-KEYTAB-ERROR", "%s: the keytab file '%s' does not exist", context,
+                given.c_str());
+            return -1;
+        }
+        return 0;
+    }
+
+    // the library opens the descriptor's file, never the name
+    char fd_name[64];
+#ifdef __linux__
+    snprintf(fd_name, sizeof fd_name, "/proc/self/fd/%d", fd);
+#else
+    snprintf(fd_name, sizeof fd_name, "/dev/fd/%d", fd);
+#endif
+    std::string file_name = (!strcmp(type, "WRFILE") ? "WRFILE:" : "FILE:") + std::string(fd_name);
+    krb5_keytab file = nullptr;
+    rc = krb5_kt_resolve(ctx, file_name.c_str(), &file);
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+    }
+    if (mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE)) {
+        keytab = file;
+        name = file_name;
+        return 0;
+    }
+    int rv = copy(file, xsink, context);
+    krb5_kt_close(ctx, file);
+    return rv;
+}
+
+int Krb5PinnedKeytab::openFile(const std::string& given, const std::string& path, int mode, bool& retry,
+        ExceptionSink* xsink, const char* context) {
+    size_t slash = path.rfind('/');
+    std::string dir = slash == std::string::npos ? std::string(".") : (slash ? path.substr(0, slash) : "/");
+    std::string base = slash == std::string::npos ? path : path.substr(slash + 1);
+    if (base.empty() || base == "." || base == "..") {
+        xsink->raiseException("KRB5-KEYTAB-ERROR", "%s: the keytab name '%s' does not name a file", context,
+            given.c_str());
+        return -1;
+    }
+    bool write = mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+    Krb5FdHolder dfd(::open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC));
+    if (dfd.fd < 0) {
+        if (errno == ENOENT && !write) {
+            missing = true;
+            return 0;
+        }
+        xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot open the directory of the keytab file "
+            "'%s'", context, given.c_str());
+        return -1;
+    }
+    // the canonical path of the directory opened, for the policy check of the file in it
+    std::string canon;
+    {
+        char* real = realpath(dir.c_str(), nullptr);
+        if (real) {
+            canon = real;
+            free(real);
+        }
+    }
+    struct stat dst, cst;
+    if (canon.empty() || fstat(dfd.fd, &dst) || stat(canon.c_str(), &cst) || dst.st_dev != cst.st_dev
+        || dst.st_ino != cst.st_ino) {
+        retry = true;
+        return 0;
+    }
+    if (canon.back() != '/') {
+        canon += '/';
+    }
+    canon += base;
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        // errors name the file as given, not the file reached
+        ExceptionSink check;
+        if (smh && !smh->checkFilesystemAccess(canon.c_str(), mode, &check)) {
+            QoreValue err = check.getExceptionErr();
+            QoreStringValueHelper err_str(err);
+            std::string code = err_str->empty() ? std::string("FILESYSTEM-ACCESS-DENIED")
+                : std::string(err_str->c_str());
+            check.clear();
+            xsink->raiseException(code.c_str(), "%s: access to the keytab file '%s' denied: the file opened is not "
+                "permitted by the security policy", context, given.c_str());
+            return -1;
+        }
+    }
+    int flags = (write ? O_RDWR : O_RDONLY) | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
+    Krb5FdHolder f(openat(dfd.fd, base.c_str(), flags));
+    if (f.fd < 0 && errno == ENOENT && (mode & QSEC_CREATE)) {
+        // a new file, as the library creates one
+        f.fd = openat(dfd.fd, base.c_str(), flags | O_CREAT | O_EXCL, 0600);
+        if (f.fd < 0 && errno == EEXIST) {
+            retry = true;
+            return 0;
+        }
+    }
+    if (f.fd < 0) {
+        if (errno == ENOENT && !write) {
+            missing = true;
+            return 0;
+        }
+        if (errno == ELOOP) {
+            // a link at the last component, put there after realpath()
+            retry = true;
+            return 0;
+        }
+        xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot open the keytab file '%s'", context,
+            given.c_str());
+        return -1;
+    }
+    struct stat st;
+    // a regular file with one link: another link to it could be in a directory that the policy does not allow
+    if (fstat(f.fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the keytab file '%s' is not a regular file with one link",
+            context, given.c_str());
+        return -1;
+    }
+    int fl = fcntl(f.fd, F_GETFL);
+    if (fl != -1) {
+        fcntl(f.fd, F_SETFL, fl & ~O_NONBLOCK);
+    }
+    if (!st.st_size && (mode & QSEC_CREATE)) {
+        // the header of an empty keytab file (version 0x502), as the library writes it in a file that it creates
+        static const unsigned char header[2] = {0x05, 0x02};
+        if (pwrite(f.fd, header, sizeof header, 0) != static_cast<ssize_t>(sizeof header)) {
+            xsink->raiseErrnoException("KRB5-KEYTAB-ERROR", errno, "%s: cannot write the keytab file '%s'", context,
+                given.c_str());
+            return -1;
+        }
+    }
+    fd = f.release();
+    missing = false;
+    return 0;
+}
+
+int Krb5PinnedKeytab::copy(krb5_keytab file, ExceptionSink* xsink, const char* context) {
+    // the entries in the order of the file: a MEMORY keytab gives the entry added last first
+    struct Entries {
+        krb5_context ctx;
+        std::vector<krb5_keytab_entry> list;
+
+        ~Entries() {
+            for (krb5_keytab_entry& e : list) {
+                krb5_free_keytab_entry_contents(ctx, &e);
+            }
+        }
+    } entries = {ctx, {}};
+    {
+        rewind();
+        Krb5KeytabCursorHolder cursor(ctx, file);
+        krb5_error_code rc = cursor.start();
+        if (rc) {
+            return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+        }
+        while (true) {
+            krb5_keytab_entry entry;
+            memset(&entry, 0, sizeof(entry));
+            rc = krb5_kt_next_entry(ctx, file, &entry, &cursor.cursor);
+            if (rc == KRB5_KT_END) {
+                break;
+            }
+            if (rc) {
+                return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+            }
+            entries.list.push_back(entry);
+        }
+    }
+    std::string copy_name = krb5_module_keytab_name();
+    krb5_keytab mem = nullptr;
+    krb5_error_code rc = krb5_kt_resolve(ctx, copy_name.c_str(), &mem);
+    if (rc) {
+        return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+    }
+    for (auto i = entries.list.rbegin(), e = entries.list.rend(); i != e; ++i) {
+        rc = krb5_kt_add_entry(ctx, mem, &*i);
+        if (rc) {
+            krb5_kt_close(ctx, mem);
+            return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", context);
+        }
+    }
+    keytab = mem;
+    name = copy_name;
+    return 0;
+}
+
 static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsink, const char* context) {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
@@ -2130,11 +2463,26 @@ QoreGssCredential::QoreGssCredential(const QoreKrb5Keytab& keytab, const QoreKrb
         // whatever KRB5RCACHENAME, KRB5RCACHETYPE and KRB5RCACHEDIR say; never "none:", which turns replay detection
         // off
         std::string rcache = "file2:" + rcache_path;
-        char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
-        krb5_error_code rc = krb5_kt_get_name(keytab.ctx, keytab.keytab, kt_name, sizeof(kt_name));
-        if (rc) {
-            krb5_raise_exception(xsink, keytab.ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+        // the library reads a file keytab by name at every context that the credential accepts: the credential
+        // names a copy of the entries of the file that the module opened and checked (qore#7767)
+        Krb5PinnedKeytab pinned(keytab.ctx);
+        if (pinned.pin(keytab.keytab, QSEC_READ, false, xsink, "importing GSSAPI credential from keytab")) {
             return;
+        }
+        char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
+        if (pinned.keytab) {
+            if (pinned.name.size() >= sizeof(kt_name)) {
+                xsink->raiseException("KRB5-KEYTAB-ERROR", "importing GSSAPI credential from keytab: keytab name "
+                    "too long");
+                return;
+            }
+            strcpy(kt_name, pinned.name.c_str());
+        } else {
+            krb5_error_code rc = krb5_kt_get_name(keytab.ctx, keytab.keytab, kt_name, sizeof(kt_name));
+            if (rc) {
+                krb5_raise_exception(xsink, keytab.ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+                return;
+            }
         }
         // the principal is the name of the acceptor, as with gss_krb5_import_cred()
         gss_name_t desired_name = GSS_C_NO_NAME;
@@ -3012,9 +3360,15 @@ QoreKrb5Credentials* QoreKrb5Context::acquireCredentialsWithKeytab(const QoreKrb
         return nullptr;
     }
 
+    // the keys of the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(keytab.ctx);
+    if (pinned.pin(keytab.keytab, QSEC_READ, false, xsink, "acquiring initial credentials with keytab")) {
+        return nullptr;
+    }
+
     krb5_creds creds;
     memset(&creds, 0, sizeof(creds));
-    krb5_error_code rc = krb5_get_init_creds_keytab(ctx, &creds, principal.principal, keytab.keytab,
+    krb5_error_code rc = krb5_get_init_creds_keytab(ctx, &creds, principal.principal, pinned.use(keytab.keytab),
         opts.start_time, opts.serviceName(), opts.opt);
     if (rc) {
         krb5_raise_exception(xsink, ctx, rc, "KRB5-INIT-CREDS-ERROR",
@@ -3408,7 +3762,15 @@ bool QoreKrb5Keytab::hasContent(ExceptionSink* xsink) const {
         return false;
     }
 
-    krb5_error_code rc = krb5_kt_have_content(ctx, keytab);
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, true, xsink, "checking keytab content")) {
+        return false;
+    }
+    if (pinned.missing) {
+        return false;
+    }
+    krb5_error_code rc = krb5_kt_have_content(ctx, pinned.use(keytab));
     if (!rc) {
         return true;
     }
@@ -3459,7 +3821,14 @@ int QoreKrb5Keytab::addEntry(const QoreKrb5Principal& principal, const char* key
     entry.vno = kvno;
     entry.timestamp = time(nullptr);
 
-    rc = krb5_kt_add_entry(ctx, keytab, &entry);
+    // the file that the module opened and checked, written in place (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_WRITE | QSEC_CREATE, false, xsink, "adding keytab entry")) {
+        krb5_free_keytab_entry_contents(ctx, &entry);
+        return -1;
+    }
+    pinned.rewind();
+    rc = krb5_kt_add_entry(ctx, pinned.use(keytab), &entry);
     krb5_free_keytab_entry_contents(ctx, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "adding keytab entry");
@@ -3474,10 +3843,16 @@ QoreHashNode* QoreKrb5Keytab::getEntry(const QoreKrb5Principal& principal, krb5_
         return nullptr;
     }
 
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, false, xsink, "reading keytab entry")) {
+        return nullptr;
+    }
+
     krb5_keytab_entry entry;
     memset(&entry, 0, sizeof(entry));
 
-    krb5_error_code rc = krb5_kt_get_entry(ctx, keytab, principal.principal, kvno, enctype, &entry);
+    krb5_error_code rc = krb5_kt_get_entry(ctx, pinned.use(keytab), principal.principal, kvno, enctype, &entry);
     if (rc) {
         krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "reading keytab entry");
         return nullptr;
@@ -3500,8 +3875,15 @@ QoreListNode* QoreKrb5Keytab::listEntries(ExceptionSink* xsink) const {
         return nullptr;
     }
 
+    // the file that the module opened and checked (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_READ, false, xsink, "listing keytab entries")) {
+        return nullptr;
+    }
+    krb5_keytab kt = pinned.use(keytab);
+
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKrb5KeytabEntryInfo->getTypeInfo()), xsink);
-    Krb5KeytabCursorHolder cursor(ctx, keytab);
+    Krb5KeytabCursorHolder cursor(ctx, kt);
 
     krb5_error_code rc = cursor.start();
     if (rc) {
@@ -3516,7 +3898,7 @@ QoreListNode* QoreKrb5Keytab::listEntries(ExceptionSink* xsink) const {
 
         krb5_keytab_entry entry;
         memset(&entry, 0, sizeof(entry));
-        rc = krb5_kt_next_entry(ctx, keytab, &entry, &cursor.cursor);
+        rc = krb5_kt_next_entry(ctx, kt, &entry, &cursor.cursor);
         if (rc == KRB5_KT_END) {
             break;
         }
@@ -3547,15 +3929,24 @@ int QoreKrb5Keytab::removeEntry(const QoreKrb5Principal& principal, krb5_kvno kv
         return -1;
     }
 
+    // the file that the module opened and checked, written in place (qore#7767)
+    Krb5PinnedKeytab pinned(ctx);
+    if (pinned.pin(keytab, QSEC_WRITE, false, xsink, "removing keytab entry")) {
+        return -1;
+    }
+    krb5_keytab kt = pinned.use(keytab);
+
     krb5_keytab_entry entry;
     memset(&entry, 0, sizeof(entry));
 
-    krb5_error_code rc = krb5_kt_get_entry(ctx, keytab, principal.principal, kvno, enctype, &entry);
+    pinned.rewind();
+    krb5_error_code rc = krb5_kt_get_entry(ctx, kt, principal.principal, kvno, enctype, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "looking up keytab entry for removal");
     }
 
-    rc = krb5_kt_remove_entry(ctx, keytab, &entry);
+    pinned.rewind();
+    rc = krb5_kt_remove_entry(ctx, kt, &entry);
     krb5_free_keytab_entry_contents(ctx, &entry);
     if (rc) {
         return krb5_raise_exception(xsink, ctx, rc, "KRB5-KEYTAB-ERROR", "removing keytab entry");
