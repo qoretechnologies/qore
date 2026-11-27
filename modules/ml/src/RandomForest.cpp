@@ -413,48 +413,94 @@ std::vector<uint8_t> QoreRandomForest::serializeState() const {
 
 QoreRandomForest* QoreRandomForest::deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink) {
+    using namespace MLSerialization;
     const uint8_t* ptr = data;
     size_t remaining = len;
 
-    int n_trees = MLSerialization::readInt32(ptr, remaining, xsink);
+    int n_trees = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int max_depth = MLSerialization::readInt32(ptr, remaining, xsink);
+    int max_depth = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int min_samples_split = MLSerialization::readInt32(ptr, remaining, xsink);
+    int min_samples_split = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int min_samples_leaf = MLSerialization::readInt32(ptr, remaining, xsink);
+    int min_samples_leaf = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::string max_features = MLSerialization::readString(ptr, remaining, xsink);
+    std::string max_features = readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    bool bootstrap = MLSerialization::readInt32(ptr, remaining, xsink) != 0;
+    int32_t bootstrap_val = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::string criterion = MLSerialization::readString(ptr, remaining, xsink);
+    std::string criterion = readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::string task = MLSerialization::readString(ptr, remaining, xsink);
+    std::string task = readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    int n_features = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int n_classes = MLSerialization::readInt32(ptr, remaining, xsink);
+    int n_classes = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int n_classes_list = MLSerialization::readInt32(ptr, remaining, xsink);
+    std::vector<double> classes = readDoubleVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<double> classes(n_classes_list);
-    for (int i = 0; i < n_classes_list; ++i) {
-        classes[i] = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return nullptr; }
-    }
-    std::vector<std::string> field_names = MLSerialization::readStringVector(
-        ptr, remaining, xsink);
+    std::vector<std::string> field_names = readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
+    std::string target_field = readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int actual_n_trees = MLSerialization::readInt32(ptr, remaining, xsink);
+    int actual_n_trees = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    std::vector<FlatTree> trees(actual_n_trees);
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    bool classification = task == "classification";
+    if (checkOneOf(task, {"classification", "regression"}, "RandomForest", "task", xsink)
+        || checkRange(n_trees, 1, INT32_MAX, "RandomForest", "n_trees", xsink)
+        || checkRange(min_samples_split, 2, INT32_MAX, "RandomForest", "min_samples_split", xsink)
+        || checkRange(min_samples_leaf, 1, INT32_MAX, "RandomForest", "min_samples_leaf", xsink)
+        || checkRange(bootstrap_val, 0, 1, "RandomForest", "bootstrap", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "RandomForest", "the number of features", xsink)
+        || checkSize(n_classes, (int64_t)classes.size(), "RandomForest", "the number of classes", xsink)
+        || (classification
+            ? checkRange(n_classes, 1, INT32_MAX, "RandomForest", "the number of classes", xsink)
+            : checkSize(n_classes, 0, "RandomForest", "the number of classes of a regression forest", xsink))
+        || checkSize(actual_n_trees, n_trees, "RandomForest", "the number of trees", xsink)
+        // each tree is written in more than 5 32-bit integers
+        || checkRange(actual_n_trees, 0, (int64_t)(remaining / (5 * sizeof(int32_t))), "RandomForest",
+            "the number of trees", xsink)) {
+        return nullptr;
+    }
+    // the class labels are sorted and unique
+    for (size_t i = 1; i < classes.size(); ++i) {
+        if (!(classes[i - 1] < classes[i])) {
+            stateError(xsink, "RandomForest", "the class labels must be sorted in ascending order without duplicates");
+            return nullptr;
+        }
+    }
+    bool bootstrap = bootstrap_val != 0;
+
+    std::vector<FlatTree> trees;
+    trees.reserve(actual_n_trees);
     for (int i = 0; i < actual_n_trees; ++i) {
-        trees[i] = FlatTree::deserialize(ptr, remaining, xsink);
+        FlatTree tree = FlatTree::deserialize(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
+        if (checkSize(tree.n_features, n_features, "RandomForest", "the number of features of a tree", xsink)) {
+            return nullptr;
+        }
+        if (classification) {
+            // a tree has the classes of the rows it was fitted on: all classes of the forest, or with bootstrap
+            // samples, some of them
+            if ((bootstrap
+                    ? checkRange(tree.n_classes, 1, n_classes, "RandomForest", "the number of classes of a tree", xsink)
+                    : checkSize(tree.n_classes, n_classes, "RandomForest", "the number of classes of a tree", xsink))) {
+                return nullptr;
+            }
+            if (!std::includes(classes.begin(), classes.end(), tree.classes.begin(), tree.classes.end())) {
+                stateError(xsink, "RandomForest", "the class labels of a tree must be class labels of the forest");
+                return nullptr;
+            }
+        } else if (checkSize(tree.n_classes, 0, "RandomForest", "the number of classes of a regression tree",
+                xsink)) {
+            return nullptr;
+        }
+        trees.push_back(std::move(tree));
+    }
+    if (checkEnd(remaining, "RandomForest", xsink)) {
+        return nullptr;
     }
 
     auto* rf = new QoreRandomForest(n_trees, max_depth, min_samples_split,

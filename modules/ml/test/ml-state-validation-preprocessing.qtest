@@ -1,0 +1,438 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationPreprocessingTest
+
+#! Restored states of the preprocessing models are checked against the invariants of a fitted model
+/** (qore#7844) A state that breaks one is refused with ML-DESERIALIZE-ERROR, and no model is restored.
+*/
+class MlStateValidationPreprocessingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml restored state validation: preprocessing", "1.0", \ARGV) {
+        addTestCase("a well-formed StandardScaler state is restored", \standardScalerValidTest());
+        addTestCase("a StandardScaler state whose sizes differ from its feature count is refused",
+            \standardScalerSizeTest());
+        addTestCase("a StandardScaler state with a standard deviation that is not positive is refused",
+            \standardScalerStdTest());
+
+        addTestCase("a well-formed MinMaxScaler state is restored", \minMaxScalerValidTest());
+        addTestCase("a MinMaxScaler state whose feature range is empty is refused", \minMaxScalerRangeTest());
+        addTestCase("a MinMaxScaler state whose sizes differ from its feature count is refused",
+            \minMaxScalerSizeTest());
+
+        addTestCase("a well-formed Imputer state is restored", \imputerValidTest());
+        addTestCase("an Imputer state with an invalid strategy is refused", \imputerStrategyTest());
+        addTestCase("an Imputer state whose sizes differ from its feature count is refused", \imputerSizeTest());
+
+        addTestCase("a well-formed OneHotEncoder state is restored", \oneHotEncoderValidTest());
+        addTestCase("a OneHotEncoder state with an invalid option is refused", \oneHotEncoderOptionTest());
+        addTestCase("a OneHotEncoder state whose category lists differ from its features is refused",
+            \oneHotEncoderFeatureTest());
+        addTestCase("a OneHotEncoder state whose categories are not sorted and distinct is refused",
+            \oneHotEncoderCategoryTest());
+        addTestCase("a OneHotEncoder state whose output column count differs from its categories is refused",
+            \oneHotEncoderOutputTest());
+
+        addTestCase("a well-formed LabelEncoder state is restored", \labelEncoderValidTest());
+        addTestCase("a LabelEncoder state whose classes are not sorted and distinct is refused",
+            \labelEncoderClassTest());
+        addTestCase("a LabelEncoder state with field names is refused", \labelEncoderFieldNamesTest());
+
+        addTestCase("a well-formed VarianceThreshold state is restored", \varianceThresholdValidTest());
+        addTestCase("a VarianceThreshold state whose sizes differ from its feature count is refused",
+            \varianceThresholdSizeTest());
+        addTestCase("a VarianceThreshold state whose support differs from its variances is refused",
+            \varianceThresholdSupportTest());
+
+        addTestCase("a well-formed PolynomialFeatures state is restored", \polynomialFeaturesValidTest());
+        addTestCase("a PolynomialFeatures state with an invalid degree or feature count is refused",
+            \polynomialFeaturesParamTest());
+        addTestCase("a PolynomialFeatures state beyond the term limits is refused", \polynomialFeaturesLimitTest());
+        addTestCase("a PolynomialFeatures state of a high interaction-only degree is restored",
+            \polynomialFeaturesHighDegreeTest());
+
+        addTestCase("a preprocessing state with data after its end is refused", \trailingTest());
+
+        addTestCase("a fitted StandardScaler is restored", \standardScalerRoundTripTest());
+        addTestCase("a fitted MinMaxScaler is restored", \minMaxScalerRoundTripTest());
+        addTestCase("a fitted Imputer is restored", \imputerRoundTripTest());
+        addTestCase("a fitted OneHotEncoder is restored", \oneHotEncoderRoundTripTest());
+        addTestCase("a fitted LabelEncoder is restored", \labelEncoderRoundTripTest());
+        addTestCase("a fitted VarianceThreshold is restored", \varianceThresholdRoundTripTest());
+        addTestCase("a fitted PolynomialFeatures is restored", \polynomialFeaturesRoundTripTest());
+        set_return_value(main());
+    }
+
+    #! the state of a StandardScaler over 2 features, with the given fields replaced
+    static binary standardScalerState(*hash<auto> opt) {
+        return b8(opt.with_mean ?? True) + b8(opt.with_std ?? True) + i32(opt.n_features ?? 2)
+            + (opt.mean ?? vec(("1", "2"))) + (opt.std ?? vec(("2", "0.5")))
+            + (opt.field_names ?? strv(("a", "b")))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a MinMaxScaler over 2 features, with the given fields replaced
+    static binary minMaxScalerState(*hash<auto> opt) {
+        return f64(opt.feature_min ?? "0") + f64(opt.feature_max ?? "1") + i32(opt.n_features ?? 2)
+            + (opt.data_min ?? vec(("0", "0"))) + (opt.data_max ?? vec(("2", "4")))
+            + (opt.scale ?? vec(("0.5", "0.25"))) + (opt.min_adj ?? vec(("0", "0")))
+            + (opt.field_names ?? strv(("a", "b")))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of an Imputer over 2 features, with the given fields replaced
+    static binary imputerState(*hash<auto> opt) {
+        return str(opt.strategy ?? "mean") + f64(opt.constant_value ?? "0") + i32(opt.n_features ?? 2)
+            + (opt.fill_values ?? vec(("1", "2")))
+            + (opt.field_names ?? strv(("a", "b")))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a OneHotEncoder over 2 features with the categories (0, 1) and (2, 5), with the given fields
+    #! replaced
+    static binary oneHotEncoderState(*hash<auto> opt) {
+        return i32(opt.drop_first ?? 0) + i32(opt.n_features ?? 2) + i32(opt.n_output_cols ?? 4)
+            + i32(opt.n_lists ?? 2) + (opt.categories ?? (intv((0, 1)) + intv((2, 5))))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a LabelEncoder with 3 classes, with the given fields replaced
+    static binary labelEncoderState(*hash<auto> opt) {
+        return (opt.classes ?? strv(("blue", "green", "red"))) + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a VarianceThreshold over 3 features that keeps the first and the last, with the given fields
+    #! replaced
+    static binary varianceThresholdState(*hash<auto> opt) {
+        return f64(opt.threshold ?? "0.5") + i32(opt.n_features ?? 3) + i32(opt.n_selected ?? 2)
+            + (opt.variances ?? vec(("1", "0", "2"))) + (opt.support ?? intv((1, 0, 1)))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a PolynomialFeatures of degree 2 with a bias over 2 features, with the given fields replaced
+    static binary polynomialFeaturesState(*hash<auto> opt) {
+        return i32(opt.degree ?? 2) + b8(opt.include_bias ?? True) + b8(opt.interaction_only ?? False)
+            + i32(opt.n_features ?? 2) + i32(opt.n_output_cols ?? 6)
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    #! returns @p m restored from its serialized form
+    static ML::AbstractMLModel roundTrip(ML::AbstractMLModel m) {
+        return ML::ml_deserialize(ML::ml_serialize(m));
+    }
+
+    refused(string algorithm, binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), (algorithm, state), what);
+    }
+
+    standardScalerValidTest() {
+        ML::StandardScaler s = cast<ML::StandardScaler>(restore("StandardScaler", standardScalerState()));
+        assertEq({"a": 1.0, "b": 2.0}, s.transform({"a": 3.0, "b": 3.0}));
+        assertEq(((2.0, 1.0),), s.transformMatrix(((5.0, 2.5),)));
+        s = cast<ML::StandardScaler>(restore("StandardScaler", standardScalerState({"field_names": strv(())})));
+        assertEq(((2.0, 1.0),), s.transformMatrix(((5.0, 2.5),)));
+    }
+
+    standardScalerSizeTest() {
+        refused("StandardScaler", standardScalerState({"n_features": 0}), "no features");
+        refused("StandardScaler", standardScalerState({"n_features": -1}), "a negative feature count");
+        refused("StandardScaler", standardScalerState({"n_features": 3}), "more features than means");
+        refused("StandardScaler", standardScalerState({"mean": vec(("1",))}), "fewer means than features");
+        refused("StandardScaler", standardScalerState({"std": vec(("1", "1", "1"))}),
+            "more standard deviations than features");
+    }
+
+    standardScalerStdTest() {
+        refused("StandardScaler", standardScalerState({"std": vec(("0", "1"))}), "a standard deviation of 0");
+        refused("StandardScaler", standardScalerState({"std": vec(("1", "-1"))}), "a negative standard deviation");
+        refused("StandardScaler", standardScalerState({"std": vec(("nan", "1"))}), "a NaN standard deviation");
+    }
+
+    minMaxScalerValidTest() {
+        ML::MinMaxScaler s = cast<ML::MinMaxScaler>(restore("MinMaxScaler", minMaxScalerState()));
+        assertEq(((1.0, 0.5),), s.transformMatrix(((2.0, 2.0),)));
+        assertEq({"a": 0.5, "b": 1.0}, s.transform({"a": 1.0, "b": 4.0}));
+    }
+
+    minMaxScalerRangeTest() {
+        refused("MinMaxScaler", minMaxScalerState({"feature_min": "1", "feature_max": "1"}),
+            "feature_min equal to feature_max");
+        refused("MinMaxScaler", minMaxScalerState({"feature_min": "1", "feature_max": "0"}),
+            "feature_min greater than feature_max");
+        # the constructor accepts a NaN bound
+        assertTrue(restore("MinMaxScaler", minMaxScalerState({"feature_min": "nan"})).isFitted());
+    }
+
+    minMaxScalerSizeTest() {
+        refused("MinMaxScaler", minMaxScalerState({"n_features": 0}), "no features");
+        refused("MinMaxScaler", minMaxScalerState({"n_features": 3}), "more features than values");
+        refused("MinMaxScaler", minMaxScalerState({"data_min": vec(("0",))}), "one data minimum");
+        refused("MinMaxScaler", minMaxScalerState({"data_max": vec(("2",))}), "one data maximum");
+        refused("MinMaxScaler", minMaxScalerState({"scale": vec(("0.5",))}), "one scale factor");
+        refused("MinMaxScaler", minMaxScalerState({"min_adj": vec(("0", "0", "0"))}), "three offsets");
+    }
+
+    imputerValidTest() {
+        ML::Imputer imp = cast<ML::Imputer>(restore("Imputer", imputerState()));
+        assertEq({"a": 1.0, "b": 5.0}, imp.transform({"b": 5.0}));
+        assertEq("mean", imp.getStrategy());
+        imp = cast<ML::Imputer>(restore("Imputer", imputerState({"strategy": "constant", "constant_value": "3",
+            "fill_values": vec(("3", "3"))})));
+        assertEq({"a": 4.0, "b": 3.0}, imp.transform({"a": 4.0}));
+    }
+
+    imputerStrategyTest() {
+        refused("Imputer", imputerState({"strategy": "other"}), "an unknown strategy");
+        refused("Imputer", imputerState({"strategy": ""}), "an empty strategy");
+    }
+
+    imputerSizeTest() {
+        refused("Imputer", imputerState({"n_features": 0}), "no features");
+        refused("Imputer", imputerState({"n_features": 3}), "more features than fill values");
+        refused("Imputer", imputerState({"fill_values": vec(("1",))}), "fewer fill values than features");
+    }
+
+    oneHotEncoderValidTest() {
+        ML::OneHotEncoder enc = cast<ML::OneHotEncoder>(restore("OneHotEncoder", oneHotEncoderState()));
+        assertEq(((0.0, 1.0, 0.0, 1.0),), enc.transformMatrix(((1.0, 5.0),)));
+        assertEq(("feature_0_0", "feature_0_1", "feature_1_2", "feature_1_5"), enc.getOutputFeatureNames());
+        enc = cast<ML::OneHotEncoder>(restore("OneHotEncoder", oneHotEncoderState({"drop_first": 1,
+            "n_output_cols": 2, "field_names": strv(("x", "y"))})));
+        assertEq(((1.0, 1.0),), enc.transformMatrix(((1.0, 5.0),)));
+        assertEq(("x_1", "y_5"), enc.getOutputFeatureNames());
+        # a feature with one category has no output column when the first category is dropped
+        enc = cast<ML::OneHotEncoder>(restore("OneHotEncoder", oneHotEncoderState({"drop_first": 1,
+            "n_output_cols": 1, "categories": intv((7,)) + intv((2, 5))})));
+        assertEq(((1.0,),), enc.transformMatrix(((7.0, 5.0),)));
+    }
+
+    oneHotEncoderOptionTest() {
+        refused("OneHotEncoder", oneHotEncoderState({"drop_first": 2}), "a drop_first value of 2");
+        refused("OneHotEncoder", oneHotEncoderState({"drop_first": -1}), "a negative drop_first value");
+    }
+
+    oneHotEncoderFeatureTest() {
+        refused("OneHotEncoder", oneHotEncoderState({"n_features": 0, "n_lists": 0, "n_output_cols": 0,
+            "categories": binary()}), "no features");
+        refused("OneHotEncoder", oneHotEncoderState({"n_features": 3}), "more features than category lists");
+        refused("OneHotEncoder", oneHotEncoderState({"n_lists": 1, "n_output_cols": 2,
+            "categories": intv((0, 1))}), "fewer category lists than features");
+        refused("OneHotEncoder", oneHotEncoderState({"n_lists": -1}),
+            "a negative category list count");
+        refused("OneHotEncoder", oneHotEncoderState({"categories": intv((0, 1)) + le(0xffffffff, 4)}),
+            "a category count beyond the data");
+    }
+
+    oneHotEncoderCategoryTest() {
+        refused("OneHotEncoder", oneHotEncoderState({"n_output_cols": 2, "categories": intv(()) + intv((2, 5))}),
+            "a feature without categories");
+        refused("OneHotEncoder", oneHotEncoderState({"categories": intv((1, 0)) + intv((2, 5))}),
+            "unsorted categories");
+        refused("OneHotEncoder", oneHotEncoderState({"categories": intv((0, 1)) + intv((5, 5))}),
+            "a repeated category");
+    }
+
+    oneHotEncoderOutputTest() {
+        refused("OneHotEncoder", oneHotEncoderState({"n_output_cols": 3}), "fewer output columns than categories");
+        refused("OneHotEncoder", oneHotEncoderState({"n_output_cols": 5}), "more output columns than categories");
+        refused("OneHotEncoder", oneHotEncoderState({"drop_first": 1}),
+            "an output column count that includes the dropped categories");
+    }
+
+    labelEncoderValidTest() {
+        ML::LabelEncoder enc = cast<ML::LabelEncoder>(restore("LabelEncoder", labelEncoderState()));
+        assertEq((2, 0, -1), enc.transform(("red", "blue", "other")));
+        assertEq(("green",), enc.inverseTransform((1,)));
+        enc = cast<ML::LabelEncoder>(restore("LabelEncoder", labelEncoderState({"classes": strv(())})));
+        assertEq((-1,), enc.transform(("red",)));
+    }
+
+    labelEncoderClassTest() {
+        refused("LabelEncoder", labelEncoderState({"classes": strv(("a", "a"))}), "a repeated class");
+        refused("LabelEncoder", labelEncoderState({"classes": strv(("b", "a"))}), "unsorted classes");
+        refused("LabelEncoder", labelEncoderState({"classes": strv(("a", "c", "b"))}), "unsorted later classes");
+    }
+
+    labelEncoderFieldNamesTest() {
+        refused("LabelEncoder", labelEncoderState({"field_names": strv(("x",))}), "a field name");
+    }
+
+    varianceThresholdValidTest() {
+        ML::VarianceThreshold vt = cast<ML::VarianceThreshold>(restore("VarianceThreshold",
+            varianceThresholdState()));
+        assertEq(((1.0, 3.0),), vt.transformMatrix(((1.0, 2.0, 3.0),)));
+        assertEq((True, False, True), vt.getSupport());
+        # a NaN variance is never above the threshold
+        vt = cast<ML::VarianceThreshold>(restore("VarianceThreshold", varianceThresholdState({
+            "variances": vec(("1", "nan", "2"))})));
+        assertEq(((1.0, 3.0),), vt.transformMatrix(((1.0, 2.0, 3.0),)));
+    }
+
+    varianceThresholdSizeTest() {
+        refused("VarianceThreshold", varianceThresholdState({"n_features": 0}), "no features");
+        refused("VarianceThreshold", varianceThresholdState({"n_features": 4}), "more features than variances");
+        refused("VarianceThreshold", varianceThresholdState({"variances": vec(("1", "2"))}),
+            "fewer variances than features");
+        refused("VarianceThreshold", varianceThresholdState({"support": intv((1, 0))}),
+            "fewer support values than features");
+        refused("VarianceThreshold", varianceThresholdState({"support": le(0xffffffff, 4)}),
+            "a support count beyond the data");
+    }
+
+    varianceThresholdSupportTest() {
+        refused("VarianceThreshold", varianceThresholdState({"support": intv((2, 0, 1))}), "a support value of 2");
+        refused("VarianceThreshold", varianceThresholdState({"n_selected": 3, "support": intv((1, 1, 1))}),
+            "a feature kept whose variance is not above the threshold");
+        refused("VarianceThreshold", varianceThresholdState({"n_selected": 1, "support": intv((1, 0, 0))}),
+            "a feature dropped whose variance is above the threshold");
+        refused("VarianceThreshold", varianceThresholdState({"n_selected": 3}), "more selected than kept features");
+        refused("VarianceThreshold", varianceThresholdState({"n_selected": -1}), "a negative selected count");
+    }
+
+    polynomialFeaturesValidTest() {
+        ML::PolynomialFeatures pf = cast<ML::PolynomialFeatures>(restore("PolynomialFeatures",
+            polynomialFeaturesState()));
+        assertEq(((1.0, 2.0, 3.0, 4.0, 6.0, 9.0),), pf.transformMatrix(((2.0, 3.0),)));
+        pf = cast<ML::PolynomialFeatures>(restore("PolynomialFeatures", polynomialFeaturesState({
+            "field_names": strv(("a", "b"))})));
+        assertEq(("1", "a", "b", "a^2", "a b", "b^2"), pf.getOutputFeatureNames());
+        # interaction terms of 3 features up to degree 3: 3 + 3 + 1
+        pf = cast<ML::PolynomialFeatures>(restore("PolynomialFeatures", polynomialFeaturesState({
+            "degree": 3, "include_bias": False, "interaction_only": True, "n_features": 3, "n_output_cols": 7})));
+        assertEq(((1.0, 2.0, 3.0, 2.0, 3.0, 6.0, 6.0),), pf.transformMatrix(((1.0, 2.0, 3.0),)));
+    }
+
+    polynomialFeaturesParamTest() {
+        refused("PolynomialFeatures", polynomialFeaturesState({"degree": 0, "n_output_cols": 3}), "degree 0");
+        refused("PolynomialFeatures", polynomialFeaturesState({"degree": -1, "n_output_cols": 3}),
+            "a negative degree");
+        refused("PolynomialFeatures", polynomialFeaturesState({"n_features": 0, "n_output_cols": 2}),
+            "no features");
+        refused("PolynomialFeatures", polynomialFeaturesState({"n_features": -1, "n_output_cols": 2}),
+            "a negative feature count");
+    }
+
+    polynomialFeaturesLimitTest() {
+        refused("PolynomialFeatures", polynomialFeaturesState({"degree": 1, "include_bias": False,
+            "n_features": 20000000, "n_output_cols": 20000000}), "more terms than the limit");
+        refused("PolynomialFeatures", polynomialFeaturesState({"degree": 20000, "include_bias": False,
+            "n_features": 1, "n_output_cols": 20000}), "more term feature indices than the limit");
+    }
+
+    polynomialFeaturesHighDegreeTest() {
+        # a degree greater than the feature count has no more interaction terms
+        ML::PolynomialFeatures pf = cast<ML::PolynomialFeatures>(restore("PolynomialFeatures",
+            polynomialFeaturesState({"degree": 0x7fffffff, "include_bias": False, "interaction_only": True,
+            "n_output_cols": 3})));
+        assertEq(((2.0, 3.0, 6.0),), pf.transformMatrix(((2.0, 3.0),)));
+    }
+
+    trailingTest() {
+        refused("StandardScaler", standardScalerState({"tail": i32(0)}), "StandardScaler: 4 bytes after the state");
+        refused("MinMaxScaler", minMaxScalerState({"tail": i32(0)}), "MinMaxScaler: 4 bytes after the state");
+        refused("Imputer", imputerState({"tail": i32(0)}), "Imputer: 4 bytes after the state");
+        refused("OneHotEncoder", oneHotEncoderState({"tail": i32(0)}), "OneHotEncoder: 4 bytes after the state");
+        refused("LabelEncoder", labelEncoderState({"tail": i32(0)}), "LabelEncoder: 4 bytes after the state");
+        refused("VarianceThreshold", varianceThresholdState({"tail": i32(0)}),
+            "VarianceThreshold: 4 bytes after the state");
+        refused("PolynomialFeatures", polynomialFeaturesState({"tail": i32(0)}),
+            "PolynomialFeatures: 4 bytes after the state");
+    }
+
+    standardScalerRoundTripTest() {
+        # a missing value gives a mean that is not a number
+        ML::StandardScaler s();
+        s.fitMatrix(((1.0, @nan@), (3.0, 4.0)));
+        s = cast<ML::StandardScaler>(roundTrip(s));
+        assertEq(1.0, s.transformMatrix(((3.0, 4.0),))[0][0]);
+        # fields of a fit with records, then a fit with a matrix of another width
+        s = new ML::StandardScaler();
+        s.fit(({"a": 1.0, "b": 2.0}, {"a": 3.0, "b": 4.0}));
+        s.fitMatrix(((1.0, 2.0, 3.0), (3.0, 4.0, 5.0)));
+        s = cast<ML::StandardScaler>(roundTrip(s));
+        assertEq(((1.0, 1.0, 1.0),), s.transformMatrix(((3.0, 4.0, 5.0),)));
+    }
+
+    minMaxScalerRoundTripTest() {
+        ML::MinMaxScaler s();
+        s.fitMatrix(((1.0, @nan@), (3.0, 4.0)));
+        s = cast<ML::MinMaxScaler>(roundTrip(s));
+        assertEq(1.0, s.transformMatrix(((3.0, 4.0),))[0][0]);
+        s = new ML::MinMaxScaler();
+        s.fit(({"a": 1.0, "b": 2.0}, {"a": 3.0, "b": 4.0}));
+        s.fitMatrix(((0.0, 0.0, 0.0), (2.0, 4.0, 1.0)));
+        s = cast<ML::MinMaxScaler>(roundTrip(s));
+        assertEq(((1.0, 1.0, 1.0),), s.transformMatrix(((2.0, 4.0, 1.0),)));
+        # a NaN bound that the constructor accepts
+        s = new ML::MinMaxScaler({"feature_min": @nan@});
+        s.fitMatrix(((0.0,), (1.0,)));
+        assertTrue(roundTrip(s).isFitted());
+    }
+
+    imputerRoundTripTest() {
+        ML::Imputer imp();
+        list<auto> data = ((1.0, NOTHING), (3.0, 4.0));
+        imp.fitMatrix(data);
+        imp = cast<ML::Imputer>(roundTrip(imp));
+        data = ((NOTHING, NOTHING),);
+        assertEq(((2.0, 4.0),), imp.transformMatrix(data));
+        imp = new ML::Imputer();
+        imp.fit(({"a": 1.0, "b": 2.0},));
+        data = ((1.0, NOTHING, 3.0), (3.0, 4.0, NOTHING));
+        imp.fitMatrix(data);
+        imp = cast<ML::Imputer>(roundTrip(imp));
+        data = ((NOTHING, NOTHING, NOTHING),);
+        assertEq(((2.0, 4.0, 3.0),), imp.transformMatrix(data));
+    }
+
+    oneHotEncoderRoundTripTest() {
+        ML::OneHotEncoder enc();
+        enc.fitMatrix(((1.0, 7.0), (0.0, 7.0), (1.0, 3.0)));
+        enc = cast<ML::OneHotEncoder>(roundTrip(enc));
+        assertEq(((0.0, 1.0, 0.0, 1.0),), enc.transformMatrix(((1.0, 7.0),)));
+        enc = new ML::OneHotEncoder({"drop_first": True});
+        enc.fitMatrix(((1.0, 7.0), (0.0, 7.0), (1.0, 3.0)));
+        enc = cast<ML::OneHotEncoder>(roundTrip(enc));
+        assertEq(((1.0, 1.0),), enc.transformMatrix(((1.0, 7.0),)));
+    }
+
+    labelEncoderRoundTripTest() {
+        # a fit with only missing values has no classes
+        ML::LabelEncoder enc();
+        enc.fit((NOTHING, NOTHING));
+        enc = cast<ML::LabelEncoder>(roundTrip(enc));
+        assertEq((), enc.getClasses());
+        enc = new ML::LabelEncoder();
+        enc.fit(("b", NOTHING, "a"));
+        enc = cast<ML::LabelEncoder>(roundTrip(enc));
+        assertEq((1, 0), enc.transform(("b", "a")));
+    }
+
+    varianceThresholdRoundTripTest() {
+        # a missing value gives a variance that is not a number, and the feature is not kept
+        ML::VarianceThreshold vt();
+        vt.fitMatrix(((1.0, @nan@, 0.0), (3.0, 1.0, 5.0)));
+        vt = cast<ML::VarianceThreshold>(roundTrip(vt));
+        assertEq((True, False, True), vt.getSupport());
+    }
+
+    polynomialFeaturesRoundTripTest() {
+        ML::PolynomialFeatures pf({"degree": 2});
+        pf.fitMatrix(((1.0, @nan@),));
+        pf = cast<ML::PolynomialFeatures>(roundTrip(pf));
+        assertEq(5, pf.getNumOutputFeatures());
+        assertEq(((2.0, 3.0, 4.0, 6.0, 9.0),), pf.transformMatrix(((2.0, 3.0),)));
+    }
+}

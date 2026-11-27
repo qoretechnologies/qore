@@ -12,6 +12,7 @@
 #include "ml_serialization.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
 #include <unordered_map>
 
@@ -136,33 +137,57 @@ QoreOneHotEncoder* QoreOneHotEncoder::deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink) {
     const uint8_t* ptr = data;
     size_t remaining = len;
+    using namespace MLSerialization;
 
-    bool df = MLSerialization::readInt32(ptr, remaining, xsink) != 0;
+    int32_t df = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nf = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t nf = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int noc = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t noc = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nc = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t nc = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<std::vector<int>> cats(nc);
-    for (int i = 0; i < nc; ++i) {
-        int n = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return nullptr; }
-        cats[i].resize(n);
-        for (int j = 0; j < n; ++j) {
-            cats[i][j] = MLSerialization::readInt32(ptr, remaining, xsink);
-            if (*xsink) { return nullptr; }
-        }
+    // the state must satisfy the invariants that fit() establishes (qore#7844)
+    if (checkRange(df, 0, 1, "OneHotEncoder", "drop_first", xsink)
+        || checkRange(nf, 1, INT32_MAX, "OneHotEncoder", "the number of features", xsink)
+        || checkSize(nc, nf, "OneHotEncoder", "the number of category lists", xsink)) {
+        return nullptr;
     }
-    auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
+    // each category list is a count and its values, as writeIntVector() writes them
+    std::vector<std::vector<int>> cats;
+    int64_t n_output = 0;
+    for (int32_t i = 0; i < nc; ++i) {
+        std::vector<int> c = readIntVector(ptr, remaining, xsink);
+        if (*xsink) { return nullptr; }
+        // fit() learns at least one category per feature, sorted and distinct
+        if (c.empty()) {
+            stateError(xsink, "OneHotEncoder", "feature %d has no categories", (int)i);
+            return nullptr;
+        }
+        for (size_t j = 1; j < c.size(); ++j) {
+            if (c[j] <= c[j - 1]) {
+                stateError(xsink, "OneHotEncoder", "the categories of feature %d are not sorted and distinct",
+                    (int)i);
+                return nullptr;
+            }
+        }
+        n_output += (int64_t)c.size() - df;
+        cats.push_back(std::move(c));
+    }
+    auto fnames = readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    auto* enc = new QoreOneHotEncoder(df);
+    if (checkEnd(remaining, "OneHotEncoder", xsink)
+        || checkRange(n_output, 0, INT32_MAX, "OneHotEncoder", "the number of output columns", xsink)
+        || checkSize(noc, n_output, "OneHotEncoder", "the number of output columns", xsink)) {
+        return nullptr;
+    }
+
+    std::unique_ptr<QoreOneHotEncoder> enc(new QoreOneHotEncoder(df != 0));
     enc->n_features = nf;
     enc->n_output_cols = noc;
     enc->categories = std::move(cats);
     enc->field_names = std::move(fnames);
     enc->fitted = true;
-    return enc;
+    return enc.release();
 }

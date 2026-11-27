@@ -1,0 +1,464 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationStatisticalTest
+
+#! A restored NaiveBayes, GMM, KMeans, PCA, LOF or HoltWinters state is checked against the invariants of a trained
+/** model (qore#7844).  A state that breaks one is refused with ML-DESERIALIZE-ERROR, and no model is restored.
+*/
+class MlStateValidationStatisticalTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml restored state validation: statistical models", "1.0", \ARGV) {
+        addTestCase("a well-formed NaiveBayes state is restored", \naiveBayesValidTest());
+        addTestCase("a NaiveBayes state whose class counts disagree is refused", \naiveBayesClassCountTest());
+        addTestCase("a NaiveBayes state whose class statistics differ from its features is refused",
+            \naiveBayesStatsSizeTest());
+        addTestCase("a NaiveBayes state with invalid class values is refused", \naiveBayesClassValueTest());
+        addTestCase("a NaiveBayes state with invalid sample counts is refused", \naiveBayesSampleCountTest());
+        addTestCase("a NaiveBayes state without features is refused", \naiveBayesFeatureTest());
+
+        addTestCase("a well-formed GMM state is restored", \gmmValidTest());
+        addTestCase("a GMM state whose component counts disagree is refused", \gmmComponentCountTest());
+        addTestCase("a GMM state whose means or covariances differ from its features is refused",
+            \gmmDimensionTest());
+        addTestCase("a GMM state with an invalid option is refused", \gmmOptionTest());
+
+        addTestCase("a well-formed KMeans state is restored", \kmeansValidTest());
+        addTestCase("a KMeans state whose centroids differ from k or its features is refused",
+            \kmeansDimensionTest());
+        addTestCase("a KMeans state with invalid centroid counts is refused", \kmeansCountTest());
+        addTestCase("a KMeans state with an invalid option is refused", \kmeansOptionTest());
+
+        addTestCase("a well-formed PCA state is restored", \pcaValidTest());
+        addTestCase("a PCA state whose component count is out of range is refused", \pcaComponentCountTest());
+        addTestCase("a PCA state whose vectors differ from its features or components is refused",
+            \pcaDimensionTest());
+
+        addTestCase("a well-formed LOF state is restored", \lofValidTest());
+        addTestCase("a LOF state whose k is out of range is refused", \lofKTest());
+        addTestCase("a LOF state whose per-row data differs from its rows is refused", \lofRowCountTest());
+        addTestCase("a LOF state with an invalid neighbor list is refused", \lofNeighborTest());
+        addTestCase("a LOF state with an invalid threshold is refused", \lofValueTest());
+
+        addTestCase("a well-formed HoltWinters state is restored", \holtWintersValidTest());
+        addTestCase("a HoltWinters state whose period or seasonal factors are invalid is refused",
+            \holtWintersPeriodTest());
+        addTestCase("a HoltWinters state whose step counter is out of range is refused", \holtWintersStepTest());
+        addTestCase("a HoltWinters state with an invalid option is refused", \holtWintersOptionTest());
+        addTestCase("a HoltWinters model restored with a step counter at the end of its range keeps working",
+            \holtWintersStepRangeTest());
+
+        addTestCase("a statistical model state with data after its end is refused", \trailingTest());
+
+        addTestCase("a NaiveBayes model trained on data with null cells is saved and restored",
+            \naiveBayesRoundTripTest());
+        addTestCase("a GMM model trained on data with NaN cells is saved and restored", \gmmRoundTripTest());
+        addTestCase("a KMeans model trained on data with NaN or null cells is saved and restored",
+            \kmeansRoundTripTest());
+        addTestCase("a LOF model trained on data with NaN cells is saved and restored", \lofRoundTripTest());
+        addTestCase("a HoltWinters model trained on data with NaN values is saved and restored",
+            \holtWintersRoundTripTest());
+        addTestCase("a model refitted with another column count than its field names is saved and restored",
+            \fieldNameWidthTest());
+        set_return_value(main());
+    }
+
+    refused(string algorithm, binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), (algorithm, state), algorithm + ": " + what);
+    }
+
+    #! the statistics of one NaiveBayes class
+    static binary nbClass(softstring prior, list<softstring> mean, list<softstring> var, int count) {
+        return f64(prior) + vec(mean) + vec(var) + i32(count);
+    }
+
+    #! the state of a NaiveBayes classifier of 2 classes over 2 features, with the given fields replaced
+    static binary naiveBayesState(*hash<auto> opt) {
+        return f64(opt.var_smoothing ?? "0.25") + i32(opt.n_features ?? 2) + i32(opt.n_classes ?? 2)
+            + i32(opt.total_samples ?? 4) + i32(opt.n_class_values ?? 2)
+            + (opt.classes ?? (f64("0") + f64("1")))
+            + (opt.stats ?? (nbClass("-1", ("0", "0"), ("1", "1"), 2) + nbClass("-1", ("5", "5"), ("1", "1"), 2)))
+            + (opt.field_names ?? strv(())) + str("")
+            + (opt.tail ?? binary());
+    }
+
+    naiveBayesValidTest() {
+        ML::NaiveBayes nb = cast<ML::NaiveBayes>(restore("NaiveBayes", naiveBayesState()));
+        assertEq(0, nb.predictMatrix(((0.5, 0.5),))[0].predicted_class);
+        nb = cast<ML::NaiveBayes>(restore("NaiveBayes", naiveBayesState({"field_names": strv(("a", "b"))})));
+        assertEq(1, nb.predict({"a": 5.0, "b": 5.0}).predicted_class);
+        # update() counts rows of unknown classes only in the total
+        nb = cast<ML::NaiveBayes>(restore("NaiveBayes", naiveBayesState({"total_samples": 5})));
+        assertEq(0, nb.predictMatrix(((0.5, 0.5),))[0].predicted_class);
+    }
+
+    naiveBayesClassCountTest() {
+        refused("NaiveBayes", naiveBayesState({"n_classes": 0, "n_class_values": 0, "classes": binary(),
+            "stats": binary()}), "no classes");
+        refused("NaiveBayes", naiveBayesState({"n_class_values": 1, "classes": f64("0")}),
+            "fewer class values than classes");
+        refused("NaiveBayes", naiveBayesState({"n_class_values": 3, "classes": f64("0") + f64("1") + f64("2")}),
+            "more class values than classes");
+        refused("NaiveBayes", naiveBayesState({"n_classes": -1, "n_class_values": -1}), "a negative class count");
+        refused("NaiveBayes", naiveBayesState({"n_classes": 0x7fffffff}), "a class count beyond the data");
+    }
+
+    naiveBayesStatsSizeTest() {
+        refused("NaiveBayes", naiveBayesState({"stats": nbClass("-1", ("0", "0", "0"), ("1", "1"), 2)
+            + nbClass("-1", ("5", "5"), ("1", "1"), 2)}), "a mean vector larger than the features");
+        refused("NaiveBayes", naiveBayesState({"stats": nbClass("-1", ("0", "0"), ("1",), 2)
+            + nbClass("-1", ("5", "5"), ("1", "1"), 2)}), "a variance vector smaller than the features");
+    }
+
+    naiveBayesClassValueTest() {
+        refused("NaiveBayes", naiveBayesState({"classes": f64("0") + f64("nan")}), "a NaN class value");
+        refused("NaiveBayes", naiveBayesState({"classes": f64("0") + f64("1e300")}),
+            "a class value beyond the integer range");
+        refused("NaiveBayes", naiveBayesState({"classes": f64("1") + f64("0")}), "class values in descending order");
+        refused("NaiveBayes", naiveBayesState({"classes": f64("1") + f64("1")}), "a repeated class value");
+    }
+
+    naiveBayesSampleCountTest() {
+        refused("NaiveBayes", naiveBayesState({"total_samples": 0}), "no training samples");
+        refused("NaiveBayes", naiveBayesState({"total_samples": 3}), "class counts above the total");
+        refused("NaiveBayes", naiveBayesState({"stats": nbClass("-1", ("0", "0"), ("1", "1"), 0)
+            + nbClass("-1", ("5", "5"), ("1", "1"), 2)}), "a class without samples");
+        refused("NaiveBayes", naiveBayesState({"stats": nbClass("-1", ("0", "0"), ("1", "1"), -2)
+            + nbClass("-1", ("5", "5"), ("1", "1"), 2)}), "a negative class count");
+    }
+
+    naiveBayesFeatureTest() {
+        refused("NaiveBayes", naiveBayesState({"n_features": 0, "stats": nbClass("-1", (), (), 2)
+            + nbClass("-1", (), (), 2)}), "no features");
+    }
+
+    #! the state of a GMM of 2 components over 2 features, with the given fields replaced
+    static binary gmmState(*hash<auto> opt) {
+        binary identity = mat(2, 2, ("1", "0", "0", "1"));
+        return i32(opt.n_components ?? 2) + i32(opt.max_iterations ?? 100) + f64("0.25")
+            + str(opt.covariance_type ?? "full") + i32(opt.n_features ?? 2) + i32(opt.batch_count ?? 1)
+            + f64("-1")
+            + (opt.means ?? (i32(2) + vec(("0", "0")) + vec(("5", "5"))))
+            + (opt.covariances ?? (i32(2) + identity + identity))
+            + (opt.weights ?? vec(("0.5", "0.5")))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    gmmValidTest() {
+        ML::GMM gmm = cast<ML::GMM>(restore("GMM", gmmState()));
+        assertEq(0, gmm.predictMatrix(((0.5, 0.5),))[0].cluster);
+        gmm = cast<ML::GMM>(restore("GMM", gmmState({"covariance_type": "diagonal",
+            "field_names": strv(("a", "b"))})));
+        assertEq(1, gmm.predict({"a": 5.0, "b": 5.0}).cluster);
+    }
+
+    gmmComponentCountTest() {
+        binary identity = mat(2, 2, ("1", "0", "0", "1"));
+        refused("GMM", gmmState({"n_components": 0, "means": i32(0), "covariances": i32(0), "weights": vec(())}),
+            "no components");
+        refused("GMM", gmmState({"n_components": -1, "means": i32(-1), "covariances": i32(-1)}),
+            "a negative component count");
+        refused("GMM", gmmState({"means": i32(1) + vec(("0", "0"))}), "fewer means than components");
+        refused("GMM", gmmState({"covariances": i32(1) + identity}), "fewer covariances than components");
+        refused("GMM", gmmState({"weights": vec(("1",))}), "fewer weights than components");
+        refused("GMM", gmmState({"n_components": 0x7fffffff, "means": i32(0x7fffffff)}),
+            "a component count beyond the data");
+    }
+
+    gmmDimensionTest() {
+        binary identity = mat(2, 2, ("1", "0", "0", "1"));
+        refused("GMM", gmmState({"means": i32(2) + vec(("0", "0", "0")) + vec(("5", "5"))}),
+            "a mean larger than the features");
+        refused("GMM", gmmState({"covariances": i32(2) + identity + mat(1, 1, ("1",))}),
+            "a covariance smaller than the features");
+        refused("GMM", gmmState({"covariances": i32(2) + identity + mat(2, 3, ("1", "0", "0", "0", "1", "0"))}),
+            "a covariance that is not square");
+        refused("GMM", gmmState({"n_features": 3}), "more features than the means");
+        refused("GMM", gmmState({"n_features": 0, "means": i32(2) + vec(()) + vec(()),
+            "covariances": i32(2) + mat(0, 0, ()) + mat(0, 0, ())}), "no features");
+    }
+
+    gmmOptionTest() {
+        refused("GMM", gmmState({"covariance_type": "other"}), "an unknown covariance type");
+        refused("GMM", gmmState({"max_iterations": 0}), "max_iterations = 0");
+        refused("GMM", gmmState({"batch_count": 0}), "a batch count of 0");
+        refused("GMM", gmmState({"batch_count": -1}), "a negative batch count");
+        refused("GMM", gmmState({"batch_count": 0x7fffffff}), "a batch count that the next update cannot increment");
+    }
+
+    #! the state of a KMeans model of 2 centroids over 2 features, with the given fields replaced
+    static binary kmeansState(*hash<auto> opt) {
+        return i32(opt.k ?? 2) + i32(100) + f64("0.25") + str(opt.init_method ?? "kmeans++")
+            + (opt.centroids ?? mat(2, 2, ("0", "0", "5", "5")))
+            + (opt.counts ?? intv((2, 2)))
+            + i32(opt.n_features ?? 2) + f64("1")
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    kmeansValidTest() {
+        ML::KMeans km = cast<ML::KMeans>(restore("KMeans", kmeansState()));
+        assertEq(0, km.predictMatrix(((0.5, 0.5),))[0].cluster);
+        km = cast<ML::KMeans>(restore("KMeans", kmeansState({"init_method": "random", "counts": intv((0, 2)),
+            "field_names": strv(("a", "b"))})));
+        assertEq(1, km.predict({"a": 5.0, "b": 5.0}).cluster);
+    }
+
+    kmeansDimensionTest() {
+        refused("KMeans", kmeansState({"k": 3, "counts": intv((2, 2, 2))}), "k greater than the centroids");
+        refused("KMeans", kmeansState({"k": 0, "centroids": mat(0, 2, ()), "counts": intv(())}), "k = 0");
+        refused("KMeans", kmeansState({"n_features": 3}), "more features than centroid columns");
+        refused("KMeans", kmeansState({"n_features": 0, "centroids": mat(2, 0, ())}), "no features");
+    }
+
+    kmeansCountTest() {
+        refused("KMeans", kmeansState({"counts": intv((2,))}), "fewer centroid counts than centroids");
+        refused("KMeans", kmeansState({"counts": intv((2, 2, 2))}), "more centroid counts than centroids");
+        refused("KMeans", kmeansState({"counts": intv((-1, 2))}), "a negative centroid count");
+        refused("KMeans", kmeansState({"counts": intv((0x7fffffff, 2))}),
+            "a centroid count that the next update cannot increment");
+    }
+
+    kmeansOptionTest() {
+        refused("KMeans", kmeansState({"init_method": "other"}), "an unknown init method");
+    }
+
+    #! the state of a PCA model keeping 1 component of 2 features, with the given fields replaced
+    static binary pcaState(*hash<auto> opt) {
+        return i32(opt.n_components ?? 0) + f64("0") + b8(True) + b8(opt.scale ?? False)
+            + i32(opt.actual_n_components ?? 1) + i32(opt.n_features ?? 2)
+            + (opt.components ?? mat(1, 2, ("1", "0")))
+            + (opt.mean ?? vec(("0", "0")))
+            + (opt.stddev ?? vec(("1", "1")))
+            + (opt.evr ?? vec(("1",)))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    pcaValidTest() {
+        ML::PCA pca = cast<ML::PCA>(restore("PCA", pcaState()));
+        list<float> components = pca.transformMatrix(((2.0, 3.0),))[0].components;
+        assertEq(1, components.size());
+        assertEq(2.0, components[0]);
+        pca = cast<ML::PCA>(restore("PCA", pcaState({"n_components": 2, "actual_n_components": 2, "scale": True,
+            "components": mat(2, 2, ("1", "0", "0", "1")), "stddev": vec(("2", "1")), "evr": vec(("0.5", "0.5")),
+            "field_names": strv(("a", "b"))})));
+        components = pca.transform({"a": 2.0, "b": 3.0}).components;
+        assertEq(2, components.size());
+        assertEq(1.0, components[0]);
+        assertEq(3.0, components[1]);
+    }
+
+    pcaComponentCountTest() {
+        refused("PCA", pcaState({"actual_n_components": 0, "components": mat(0, 2, ()), "evr": vec(())}),
+            "no components");
+        refused("PCA", pcaState({"actual_n_components": 3, "components": mat(3, 2, ("1", "0", "0", "1", "1", "1")),
+            "evr": vec(("0.5", "0.25", "0.25"))}), "more components than features");
+        refused("PCA", pcaState({"n_components": 1, "actual_n_components": 2,
+            "components": mat(2, 2, ("1", "0", "0", "1")), "evr": vec(("0.5", "0.5"))}),
+            "more components than n_components");
+    }
+
+    pcaDimensionTest() {
+        refused("PCA", pcaState({"components": mat(2, 2, ("1", "0", "0", "1"))}),
+            "more component rows than components");
+        refused("PCA", pcaState({"components": mat(1, 3, ("1", "0", "0"))}), "more component columns than features");
+        refused("PCA", pcaState({"mean": vec(("0", "0", "0"))}), "a mean vector larger than the features");
+        refused("PCA", pcaState({"stddev": vec(("1",))}), "a standard deviation vector smaller than the features");
+        refused("PCA", pcaState({"evr": vec(("0.5", "0.5"))}), "more explained variance ratios than components");
+        refused("PCA", pcaState({"n_features": 0, "components": mat(1, 0, ()), "mean": vec(()), "stddev": vec(())}),
+            "no features");
+    }
+
+    #! the state of a LOF model with k = 1 over 3 rows of 2 features, with the given fields replaced
+    static binary lofState(*hash<auto> opt) {
+        return i32(opt.k ?? 1) + f64(opt.threshold ?? "2") + i32(opt.n_features ?? 2)
+            + (opt.ref_data ?? mat(3, 2, ("0", "0", "1", "1", "5", "5")))
+            + (opt.k_distances ?? dblv(("1", "1", "4")))
+            + (opt.lrds ?? dblv(("1", "1", "0.25")))
+            + (opt.neighbors ?? (i32(3) + intv((1,)) + intv((0,)) + intv((1,))))
+            + (opt.field_names ?? strv(()))
+            + (opt.tail ?? binary());
+    }
+
+    lofValidTest() {
+        ML::LOF lof = cast<ML::LOF>(restore("LOF", lofState()));
+        hash<auto> r = lof.scoreMatrix(((0.5, 0.5),))[0];
+        assertEq(1.0, r.lof_score);
+        assertFalse(r.is_anomaly);
+        lof = cast<ML::LOF>(restore("LOF", lofState({"field_names": strv(("a", "b"))})));
+        assertEq(1, lof.score({"a": 0.5, "b": 0.5}).k);
+    }
+
+    lofKTest() {
+        refused("LOF", lofState({"k": 0, "neighbors": i32(3) + intv(()) + intv(()) + intv(())}), "k = 0");
+        refused("LOF", lofState({"k": 3, "neighbors": i32(3) + intv((1, 2, 0)) + intv((0, 2, 1))
+            + intv((1, 0, 2))}), "k not less than the number of rows");
+        refused("LOF", lofState({"ref_data": mat(1, 2, ("0", "0")), "k_distances": dblv(("1",)),
+            "lrds": dblv(("1",)), "neighbors": i32(1) + intv((0,))}), "one reference row");
+    }
+
+    lofRowCountTest() {
+        refused("LOF", lofState({"k_distances": dblv(("1", "1"))}), "fewer k-distances than rows");
+        refused("LOF", lofState({"lrds": dblv(("1", "1", "1", "1"))}), "more densities than rows");
+        refused("LOF", lofState({"neighbors": i32(2) + intv((1,)) + intv((0,))}), "fewer neighbor lists than rows");
+        refused("LOF", lofState({"neighbors": le(0xffffffff, 4)}), "a neighbor list count beyond the data");
+        refused("LOF", lofState({"n_features": 3}), "more features than columns");
+        refused("LOF", lofState({"n_features": 0, "ref_data": mat(3, 0, ())}), "no columns");
+    }
+
+    lofNeighborTest() {
+        refused("LOF", lofState({"neighbors": i32(3) + intv((1, 2)) + intv((0,)) + intv((1,))}),
+            "a neighbor list longer than k");
+        refused("LOF", lofState({"neighbors": i32(3) + intv((3,)) + intv((0,)) + intv((1,))}),
+            "a neighbor index beyond the rows");
+        refused("LOF", lofState({"neighbors": i32(3) + intv((-1,)) + intv((0,)) + intv((1,))}),
+            "a negative neighbor index");
+    }
+
+    lofValueTest() {
+        refused("LOF", lofState({"threshold": "0"}), "a zero threshold");
+        refused("LOF", lofState({"threshold": "-1"}), "a negative threshold");
+    }
+
+    #! the state of a HoltWinters model of period 2 after 4 values, with the given fields replaced
+    static binary holtWintersState(*hash<auto> opt) {
+        return i32(opt.period ?? 2) + f64("0.5") + f64("0.25") + f64("0.25")
+            + str(opt.seasonal_type ?? "additive") + b8(opt.damped ?? False) + f64(opt.phi ?? "1")
+            + f64(opt.level ?? "1") + f64(opt.trend ?? "0")
+            + (opt.seasonal ?? dblv(("0.5", "-1")))
+            + i32(opt.t ?? 4)
+            + (opt.tail ?? binary());
+    }
+
+    holtWintersValidTest() {
+        ML::HoltWinters hw = cast<ML::HoltWinters>(restore("HoltWinters", holtWintersState()));
+        list<float> fc = hw.forecast(2);
+        assertEq(2, fc.size());
+        assertEq(1.5, fc[0]);
+        assertEq(0.0, fc[1]);
+        hw = cast<ML::HoltWinters>(restore("HoltWinters", holtWintersState({"damped": True, "phi": "0.5",
+            "seasonal_type": "multiplicative", "seasonal": dblv(("2", "1")), "t": 5})));
+        fc = hw.forecast(2);
+        assertEq(2, fc.size());
+        assertEq(1.0, fc[0]);
+        assertEq(2.0, fc[1]);
+        # the constructor accepts a NaN phi with damping
+        hw = cast<ML::HoltWinters>(restore("HoltWinters", holtWintersState({"damped": True, "phi": "nan"})));
+        assertEq(2, hw.forecast(2).size());
+    }
+
+    holtWintersStepRangeTest() {
+        # a step counter of INT32_MAX - 1 or INT32_MAX has the seasonal phase of 4 or 5 for a period of 2
+        foreach list<int> l in ((0x7ffffffe, 4), (0x7fffffff, 5)) {
+            ML::HoltWinters near = cast<ML::HoltWinters>(restore("HoltWinters", holtWintersState({"t": l[0]})));
+            ML::HoltWinters ref = cast<ML::HoltWinters>(restore("HoltWinters", holtWintersState({"t": l[1]})));
+            assertEq(ref.forecast(2), near.forecast(2), sprintf("t = %d: forecast", l[0]));
+            for (int i = 0; i < 5; ++i) {
+                assertEq(ref.update(i + 1.0), near.update(i + 1.0), sprintf("t = %d: update %d", l[0], i));
+                assertEq(ref.forecast(3), near.forecast(3), sprintf("t = %d: forecast after update %d", l[0], i));
+            }
+            # the updated model is saved and restored again
+            ML::HoltWinters again = cast<ML::HoltWinters>(roundTrip(near));
+            assertEq(ref.forecast(3), again.forecast(3), sprintf("t = %d: forecast after a restore", l[0]));
+        }
+    }
+
+    holtWintersPeriodTest() {
+        refused("HoltWinters", holtWintersState({"period": 1, "seasonal": dblv(("0",))}), "period = 1");
+        refused("HoltWinters", holtWintersState({"period": 0x40000000}), "a period beyond the range");
+        refused("HoltWinters", holtWintersState({"seasonal": dblv(("0.5",))}), "fewer seasonal factors than period");
+        refused("HoltWinters", holtWintersState({"seasonal": dblv(("0.5", "-1", "0"))}),
+            "more seasonal factors than period");
+    }
+
+    holtWintersStepTest() {
+        refused("HoltWinters", holtWintersState({"t": -1}), "a negative step counter");
+        refused("HoltWinters", holtWintersState({"t": 3}), "a step counter below two seasonal cycles");
+    }
+
+    holtWintersOptionTest() {
+        refused("HoltWinters", holtWintersState({"seasonal_type": "other"}), "an unknown seasonal type");
+        refused("HoltWinters", holtWintersState({"phi": "0.5"}), "phi other than 1 without damping");
+        refused("HoltWinters", holtWintersState({"damped": True}), "phi = 1 with damping");
+        refused("HoltWinters", holtWintersState({"damped": True, "phi": "0"}), "phi = 0 with damping");
+    }
+
+    trailingTest() {
+        refused("NaiveBayes", naiveBayesState({"tail": i32(0)}), "4 bytes after the state");
+        refused("GMM", gmmState({"tail": i32(0)}), "4 bytes after the state");
+        refused("KMeans", kmeansState({"tail": i32(0)}), "4 bytes after the state");
+        refused("PCA", pcaState({"tail": i32(0)}), "4 bytes after the state");
+        refused("LOF", lofState({"tail": i32(0)}), "4 bytes after the state");
+        refused("HoltWinters", holtWintersState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    #! saves and restores @p model
+    static ML::AbstractMLModel roundTrip(ML::AbstractMLModel model) {
+        return ML::ml_deserialize(ML::ml_serialize(model));
+    }
+
+    naiveBayesRoundTripTest() {
+        ML::NaiveBayes nb();
+        nb.fitMatrix(((1.0, NOTHING), (2.0, 3.0), (5.0, 6.0), (6.0, 7.0)), (0, 0, 1, 1));
+        ML::NaiveBayes restored = cast<ML::NaiveBayes>(roundTrip(nb));
+        assertEq(1, restored.predictMatrix(((6.0, 7.0),)).size());
+    }
+
+    gmmRoundTripTest() {
+        ML::GMM gmm({"n_components": 1, "max_iterations": 3, "seed": 1});
+        gmm.fitMatrix(((1.0, @nan@), (2.0, 3.0), (4.0, 5.0)));
+        ML::GMM restored = cast<ML::GMM>(roundTrip(gmm));
+        assertEq(0, restored.predictMatrix(((2.0, 3.0),))[0].cluster);
+    }
+
+    kmeansRoundTripTest() {
+        ML::KMeans km({"k": 2, "init": "random", "seed": 1});
+        km.fitMatrix(((1.0, @nan@), (2.0, 3.0), (5.0, 6.0), (6.0, 7.0)));
+        ML::KMeans restored = cast<ML::KMeans>(roundTrip(km));
+        assertEq(1, restored.predictMatrix(((2.0, 3.0),)).size());
+        # updateMatrix() takes null cells as NaN
+        restored.updateMatrix(((NOTHING, 3.0),));
+        restored = cast<ML::KMeans>(roundTrip(restored));
+        assertEq(1, restored.predictMatrix(((2.0, 3.0),)).size());
+    }
+
+    lofRoundTripTest() {
+        ML::LOF lof({"k": 1});
+        lof.fitMatrix(((0.0, @nan@), (1.0, 1.0), (5.0, 5.0)));
+        ML::LOF restored = cast<ML::LOF>(roundTrip(lof));
+        assertEq(1, restored.scoreMatrix(((0.5, 0.5),))[0].k);
+    }
+
+    holtWintersRoundTripTest() {
+        ML::HoltWinters hw({"period": 2});
+        hw.fit((1.0, 2.0, @nan@, 4.0, 5.0));
+        ML::HoltWinters restored = cast<ML::HoltWinters>(roundTrip(hw));
+        assertEq(2, restored.forecast(2).size());
+    }
+
+    fieldNameWidthTest() {
+        # fitMatrix() keeps the field names of an earlier fit() of hash records
+        list<hash<auto>> records = ({"a": 1.0, "b": 2.0}, {"a": 3.0, "b": 4.0}, {"a": 5.0, "b": 7.0});
+        list<list<float>> rows = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 10.0));
+        ML::KMeans km({"k": 2, "seed": 1});
+        km.fit(records);
+        km.fitMatrix(rows);
+        ML::KMeans km2 = cast<ML::KMeans>(roundTrip(km));
+        assertEq(1, km2.predictMatrix(((1.0, 2.0, 3.0),)).size());
+        ML::PCA pca();
+        pca.fit(records);
+        pca.fitMatrix(rows);
+        ML::PCA pca2 = cast<ML::PCA>(roundTrip(pca));
+        assertEq(1, pca2.transformMatrix(((1.0, 2.0, 3.0),)).size());
+    }
+}

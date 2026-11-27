@@ -444,6 +444,25 @@ QoreLinearRegression* QoreLinearRegression::deserializeState(const uint8_t* data
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that fit() establishes (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "LinearRegression", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "LinearRegression", "the number of features", xsink)
+        || checkSize(coefficients.size(), n_features, "LinearRegression", "the number of coefficients", xsink)
+        || checkSize(feature_stds.size(), feature_means.size(), "LinearRegression",
+            "the number of feature standard deviations", xsink)
+        || (!do_normalize && checkSize(feature_means.size(), 0, "LinearRegression",
+            "the number of feature means without normalization", xsink))) {
+        return nullptr;
+    }
+    for (Eigen::Index i = 0; i < feature_stds.size(); ++i) {
+        // a standard deviation is positive (a constant feature has 1)
+        if (!(feature_stds(i) > 0.0)) {
+            stateError(xsink, "LinearRegression", "a feature standard deviation must be positive");
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreLinearRegression> obj(new QoreLinearRegression(fit_intercept, do_normalize));
     obj->n_features = n_features;
     obj->coefficients = std::move(coefficients);
