@@ -3136,6 +3136,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a binary module file that was cut short (a partial write or a bad copy) is refused on Linux with
+      \c LOAD-MODULE-ERROR, or replaced by its source module, before it is mapped, and no longer ends the process with
+      \c SIGBUS in \c dlopen() (see @ref aot_module_source_fallback;
+      <a href="https://github.com/qoretechnologies/qore/issues/7804">issue 7804</a>)
     - fixed a memory-safety issue with a class injected with @ref Qore::Program::importClass() "Program::importClass()",
       which now keeps the class that it replaces for as long as it exists; a compiled program or module in which a
       class is injected in place of itself, directly or through other classes, is no longer loaded
