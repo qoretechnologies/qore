@@ -104,12 +104,17 @@ ALLOWED = {
     ("examples/test/ir/AOTLinkDeploymentTarget.qtest", 'shellQuote(lib_dir), cmd)'):
         "run() runs qcc links (the command in cmd), checked for no linker warning and by the files they write; the "
         "executable runs through checkExecutable()",
+    ("examples/test/ir/AOTStaticModuleMetadata.qtest", '"%s %s --min-stack 2>&1", env, exe)'):
+        "the C++ host prints its minimum stack size and returns before qore_init(): no module is loaded",
+    ("examples/test/ir/AOTStaticModuleMetadata.qtest", 'env, tmp.path, exe, RegisterStackSize, kb)'):
+        "the C++ host's registration runs: its exit status, and finds and regex matches in the output, whose order of "
+        "stdout and stderr (the errors before \"registered\") the checks read",
 }
 
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 16, "PENDING_AOT3": 14, "PENDING": 46}
+SIZES = {"ALLOWED": 18, "PENDING_AOT3": 14, "PENDING": 31}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -135,21 +140,6 @@ PENDING_AOT3 = {
 PENDING = {
     # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
     # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTObjectMemberCompoundGetCrossObject.qtest": 1,
-    "examples/test/ir/AOTObjectMemberSetGet.qtest": 5,
-    "examples/test/ir/AOTObjectMemberSetGetCrossObject.qtest": 1,
-    "examples/test/ir/AOTOptionalScalarFastEntry.qtest": 2,
-    "examples/test/ir/AOTOptionalScalarSpecialization.qtest": 1,
-    "examples/test/ir/AOTReferenceFreeResult.qtest": 1,
-    "examples/test/ir/AOTRegexCaseLoadFailure.qtest": 1,
-    "examples/test/ir/AOTReturnTypeCoercion.qtest": 2,
-    "examples/test/ir/AOTRuntimeLocationCache.qtest": 1,
-    "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest": 1,
-    "examples/test/ir/AOTScalarObjectGetter.qtest": 3,
-    "examples/test/ir/AOTScalarizedAggregateReturnProjection.qtest": 1,
-    "examples/test/ir/AOTSelfCallPrivateInternal.qtest": 1,
-    "examples/test/ir/AOTStaticModuleMetadata.qtest": 2,
-    "examples/test/ir/AOTStoredCaptureCache.qtest": 2,
     "examples/test/ir/AOTStringCasePipeline.qtest": 1,
     "examples/test/ir/AOTStringOrdering.qtest": 2,
     "examples/test/ir/AOTStringSummaryCfg.qtest": 1,

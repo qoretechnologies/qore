@@ -178,8 +178,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
         # - AOTModuleMissingDependencyFallback (#7004): its checks compile modules and run drivers that load them, in
         #   child processes that set their own --exec-mode, and compiled with qcc
-        # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
-        #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - index-writer-filesystem (#6500): each execution mode runs in a child process of its own, which loads the
@@ -353,7 +351,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTModuleMissingDependencyFallback.qtest",
-                                 "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
