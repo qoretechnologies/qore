@@ -233,6 +233,7 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         addTestCase("objects of tenants", \tenantObjectTest());
         addTestCase("library module code", \libraryTest());
         addTestCase("a module that a tenant loads", \tenantModuleTest());
+        addTestCase("a module that a tenant loads with a filesystem policy", \tenantModuleAllowedTest());
         addTestCase("parse define", \defineTest());
         set_return_value(main());
     }
@@ -420,6 +421,43 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         # own code, which gets the state of its classes with the trusted forms
         assertEq("FILESYSTEM-ACCESS-DENIED", tenant_load);
         assertEq("LIB2-STATE", result);
+    }
+
+    #! a tenant whose filesystem policy allows the directory of a module loads it from a path; trusted code in a Program
+    #! of its own then requires it by name to deserialize data that names its class, which it cannot
+    tenantModuleAllowedTest() {
+        SandboxManager sm();
+        sm.addFilesystemAllowedPath(get_script_dir(), QSEC_READ);
+        Program t(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        t.setSandboxManager(sm);
+        string tenant_load;
+        try {
+            t.loadModule(get_script_dir() + "/SandboxSerializationTrustedLib3.qm");
+            tenant_load = "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            tenant_load = ex.err;
+        }
+        Program h(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        string result;
+        try {
+            h.parse("%requires SandboxSerializationTrustedLib3\n"
+                "string sub probe(binary data) {\n"
+                "    try {\n"
+                "        object o = Serializable::deserializeTrusted(data);\n"
+                "        return o.getSecret();\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        return ex.err;\n"
+                "    }\n"
+                "}\n"
+                "binary sub data() { return Serializable::serializeTrusted(new StLib3Data()); }\n", "trusted");
+            result = h.callFunction("probe", h.callFunction("data"));
+        } catch (hash<ExceptionInfo> ex) {
+            result = ex.err;
+        }
+        # the tenant loads it; trusted code cannot use a module that sandboxed code loaded from outside the module path,
+        # so the data that names its class is never deserialized with its trusted code's state
+        assertEq("OK", tenant_load);
+        assertEq("LOAD-MODULE-ERROR", result);
     }
 
     #! returns a new sandboxed Program of a tenant with the trusted classes and a function that calls a closure
