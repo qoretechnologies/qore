@@ -22,6 +22,8 @@ class I18nFailClosedTest inherits QUnit::Test {
         addTestCase("a module that registers nothing stops the source-tree check", \eagerFailure());
         addTestCase("a failed registration stops the update, the re-key and the extraction", \otherModes());
         addTestCase("a failed registration stops the extraction of modules and apps", \moduleExtraction());
+        addTestCase("a provider source of a required module that fails stops the source-tree check",
+            \inventoryFailure());
         addTestCase("a good module is checked as before", \goodModule());
         set_return_value(main());
     }
@@ -154,6 +156,33 @@ class I18nFailClosedTest inherits QUnit::Test {
             shellQuote(dir.path)), \out);
         assertEq(1, rc, "the check fails: " + out);
         checkFailure(out, "--check");
+    }
+
+    #! as in qoretechnologies/qore#7788: the owner requires a module whose action script cannot be read while it loads;
+    #! the module keeps the error for its discovery inventory provider only, and the owner registers nothing
+    inventoryFailure() {
+        TmpDir dir("i18n-fail-closed-");
+        string tree = makeTree(dir, "I18nInventoryFailingOwner", "QoreTestI18nInventoryFailing");
+        string root = join_paths(tree, "I18nInventoryFailingOwner", "i18n",
+            "data-provider." + make_base64_url_string("QoreTestI18nInventoryFailing"), "root.json");
+        string out;
+        int rc = runI18nTool(sprintf("--check-source-tree -o %s --owner I18nInventoryFailingOwner",
+            shellQuote(tree)), \out);
+        assertEq(1, rc, "the check fails: " + out);
+        assertRegex("module \"I18nInventoryFailingOwner\" registered no providers: discovery inventory source "
+            "i18n-inventory-failing-helper \\([^)]*I18nInventoryFailingHelper\\.qm\\): FIXTURE-INVENTORY-SOURCE-ERROR: ",
+            out, "the owner and the inventory source of the module that it requires: " + out);
+        checkFailure(out, "inventory");
+        assertEq("{\"schema_version\": 1, \"locales\": {\"root\": {\"messages\": {}}}}\n",
+            ReadOnlyFile::readTextFile(root), "the check writes nothing");
+        assertEq((root,), glob(dirname(root) + DirSep + "*"), "the check adds no file");
+
+        # the update fails the same way and writes nothing
+        rc = runI18nTool(sprintf("--update-source-tree -o %s --owner I18nInventoryFailingOwner", shellQuote(tree)),
+            \out);
+        assertEq(1, rc, "the update fails: " + out);
+        checkFailure(out, "inventory update");
+        assertEq((root,), glob(dirname(root) + DirSep + "*"), "the update adds no file");
     }
 
     goodModule() {
