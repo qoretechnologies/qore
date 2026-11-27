@@ -77,8 +77,9 @@ class ConnectHeaderValuesTest inherits QUnit::Test {
         # of another build (an installed one) is loaded from its source with a warning in the output (qore#6935)
         string qlib = get_script_dir() + "/../../../../../../qlib";
         string module_dir = ENV.QORE_MODULE_DIR ? qlib + ":" + ENV.QORE_MODULE_DIR : qlib;
-        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s 2>&1", libqore_dir,
-            module_dir, exe)));
+        # the executable runs in its default environment; a warning of the module loader on stderr is not output
+        checkWorkerOutput("aot", ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            libqore_dir, module_dir, exe), NOTHING, "QORE_JIT_TIMING=1").out);
     }
 
     private string getWorker() {

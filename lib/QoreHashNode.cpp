@@ -302,6 +302,8 @@ void qore_hash_member_map::reserve(size_t n) {
 namespace {
 //! the secret key of the keyed hash of hardened key maps (qore#7557); created once, by the first hardening
 uint64_t qore_hash_process_key[2] = {0, 0};
+//! the keys of the keyed folded-multiply hash (qore_keyed_fold64()), derived from the process key when it is created
+uint64_t qore_hash_fold_key[4] = {0, 0, 0, 0};
 //! true once the key was created (qore_hash_ensure_process_key())
 std::atomic<bool> qore_hash_process_key_ready{false};
 //! serializes the creation of the key
@@ -423,6 +425,13 @@ void qore_hash_ensure_process_key() {
     if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
         qore_hash_process_key[0] = k[0];
         qore_hash_process_key[1] = k[1];
+        // the keys of the folded-multiply hash: derived with SipHash, so that they tell nothing of the process key
+        // (qore#7750)
+        qore_hash_fold_key[0] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d30ull);
+        qore_hash_fold_key[1] = qore_siphash13_u64(k[0], k[1], 0x6b2d646c6f662d31ull);
+        // the factors of qore_keyed_fold64() that depend only on the keys, computed once
+        qore_hash_fold_key[2] = qore_hash_fold_key[1] ^ QORE_KEYED_FOLD_C1;
+        qore_hash_fold_key[3] = (qore_hash_fold_key[0] ^ QORE_KEYED_FOLD_C2) | 1;
         qore_hash_process_key_ready.store(true, std::memory_order_release);
     }
 }
@@ -440,6 +449,11 @@ QoreForkStdMutex qore_dbg_keyed_hash_sites_fork_handler(qore_dbg_keyed_hash_site
 const uint64_t* qore_intern_hash_process_key() {
     qore_hash_ensure_process_key();
     return qore_hash_process_key;
+}
+
+const uint64_t* qore_intern_hash_fold_key() {
+    qore_hash_ensure_process_key();
+    return qore_hash_fold_key;
 }
 
 int qore_intern_hash_process_key_check(ExceptionSink* xsink) {

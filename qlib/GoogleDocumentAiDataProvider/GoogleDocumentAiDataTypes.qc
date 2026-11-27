@@ -179,8 +179,7 @@ public class GoogleDocumentAiProcessDocumentResponseDataType inherits HashDataTy
             "document": {
                 "display_name": "Document",
                 "desc": "The parsed "
-                    "@ref GoogleDocumentAiDataProvider::GoogleDocumentAiDocumentDataType "
-                    "\"GoogleDocumentAiDocument\" — contains `text`, `pages`, "
+                    "`GoogleDocumentAiDocument` — contains `text`, `pages`, "
                     "`entities`, `mimeType`, and processor-specific extras.",
                 "type": AbstractDataProviderTypeMap."hash",
             },

@@ -49,11 +49,13 @@
 # run.sh runs LLVM's own opt on f.ll (a select feeding an "and") and instcombine_select_and.cpp, a program that makes
 # only the calls of optimizeModule() (lib/QoreJIT.cpp) on the same function.  Remove the entry when LLVM is fixed
 # (qore#7729).
-# The entry matches only InstCombine run by the JIT's optimizeModule() for compileFunctionInternal(), the same stack in
-# a background and a synchronous compile (QORE_JIT_SYNC_COMPILE=1; both run on the JIT's compile thread): the five
-# frames of libLLVM by their object, as they have no names, and the named frames down to Qore's code, eleven frames,
-# within valgrind's default --num-callers of 12 (the frames of the static optimizeModule() are those of a debug build,
-# which the CI test jobs test).
+# The entries match only InstCombine run by the JIT's optimizeModule() for compileFunctionInternal() and for
+# compileFunctionBatchInternal() (a function compiled with the functions that it calls, ex: f() calling such a g()),
+# the same stack in a background and a synchronous compile (QORE_JIT_SYNC_COMPILE=1; both run on the JIT's compile
+# thread): the five frames of libLLVM by their object, as they have no names, and the named frames down to Qore's code,
+# eleven frames, within valgrind's default --num-callers of 12 (the frames of the static optimizeModule() are those of
+# a debug build, which the CI test jobs test).  LLVM's own opt reports the same frame of InstCombine, with the same
+# origin, on the code of a Qore module compiled by qcc (the batch entry: qore#7765, seen on aarch64 only).
 {
    llvm21-instcombine-select-binop-arm64-csel
    Memcheck:Cond
@@ -68,4 +70,19 @@
    fun:_ZN4llvm11PassManagerINS_6ModuleENS_15AnalysisManagerIS1_JEEEJEE3runERS1_RS3_
    fun:_ZL14optimizeModuleRN4llvm6ModuleEiPKSt6atomicIbE
    fun:_ZN7QoreJIT23compileFunctionInternalERK14QoreIRFunctionRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEPvPKS8_
+}
+{
+   llvm21-instcombine-select-binop-arm64-csel-batch
+   Memcheck:Cond
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   fun:_ZN4llvm15InstCombinePass3runERNS_8FunctionERNS_15AnalysisManagerIS1_JEEE
+   fun:_ZN4llvm11PassManagerINS_8FunctionENS_15AnalysisManagerIS1_JEEEJEE3runERS1_RS3_
+   fun:_ZN4llvm27ModuleToFunctionPassAdaptor3runERNS_6ModuleERNS_15AnalysisManagerIS1_JEEE
+   fun:_ZN4llvm11PassManagerINS_6ModuleENS_15AnalysisManagerIS1_JEEEJEE3runERS1_RS3_
+   fun:_ZL14optimizeModuleRN4llvm6ModuleEiPKSt6atomicIbE
+   fun:_ZN7QoreJIT28compileFunctionBatchInternalERK14QoreIRFunctionRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEPvRKSt6vectorINS_11BatchCalleeESaISC_EEPS0_
 }

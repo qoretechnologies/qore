@@ -57,9 +57,9 @@ module UnstructuredDataProvider {
                 "through a workflow, run it on a schedule or on demand, and follow each run\n"
                 "- **React to finished runs** — fire an event when a workflow run completes, so "
                 "processed documents are picked up as soon as they land\n\n"
-                "Use the @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" "
+                "Use the `UnstructuredChunker` "
                 "backend for the RAG ingestion path through "
-                "@ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+                "`RagPipeline`.",
             "scheme": "unstructured",
             "processing": <DataProviderProcessingInfo>{
                 "locality": "external",

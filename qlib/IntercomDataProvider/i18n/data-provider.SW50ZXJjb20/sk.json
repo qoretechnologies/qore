@@ -204,8 +204,8 @@
           "message": "Odoslať súbor pomocou multipart/form-data"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra `FileDataType` (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",
@@ -644,8 +644,8 @@
           "message": "Vypísať kontakty v pracovnom priestore"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
-          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "Vypíše kontakty, najnovšie ako prvé.\n\nToto je exportované, aby rozbaľovacie zoznamy kontaktov mali akciu na volanie; **Search Contacts** je akcia určená na získanie podmnožiny kontaktov.\n\nPopis v Intercome nedeklaruje pre túto operáciu žiadne parametre stránkovania, hoci vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite si @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "Vypíše kontakty, najnovšie ako prvé.\n\nToto je exportované, aby rozbaľovacie zoznamy kontaktov mali akciu na volanie; **Search Contacts** je akcia určená na získanie podmnožiny kontaktov.\n\nPopis v Intercome nedeklaruje pre túto operáciu žiadne parametre stránkovania, hoci vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite si `IntercomSchema`."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
@@ -1900,8 +1900,8 @@
           "message": "Zoznam článkov centra pomoci"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
-          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
-          "message": "Zoznam článkov centra pomoci v pracovnom priestore.\n\nPopis v Intercome pre túto operáciu nedeklaruje žiadne parametre stránkovania, aj keď vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See `IntercomSchema`.",
+          "message": "Zoznam článkov centra pomoci v pracovnom priestore.\n\nPopis v Intercome pre túto operáciu nedeklaruje žiadne parametre stránkovania, aj keď vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite `IntercomSchema`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
           "source": "Page Size",
