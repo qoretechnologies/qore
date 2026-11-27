@@ -36,7 +36,8 @@ parsed from memory (`QoreZoneInfo::init()`):
   functional domain (decided by the Program's own options and sandbox managers, as the directive is processed while
   other code parses it). Code that a sandbox governs is restricted also in the host Program. A region that restricted code loads
   gets the zone of the canonical name of the file reached (the walked path with links resolved; on macOS the true
-  name from `F_GETPATH`), so the names that restricted code can add are bounded by the files of the zoneinfo
+  name from `F_GETPATH`, on other systems the stored names of the components in a directory that does not distinguish
+  case, qore#7783), so the names that restricted code can add are bounded by the files of the zoneinfo
   directory, and zone data is bounded by the identities of those files. Region names from data
   (`findDataRegion()`, `find_create_timezone()` through `findLoadDataRegion()`) follow the same rule: canonical for
   restricted code, named as given for other code, so that host data round-trips. For restricted code, a name that
@@ -57,8 +58,19 @@ parsed from memory (`QoreZoneInfo::init()`):
   unchanged (no entry name is computed for it). Debug builds have `dbg_tz_region_cache()`,
   `dbg_tz_set_spelling_limits()` and `dbg_tz_set_zoneinfo_root()` for tests; the last changes `root` under the lock
   (`loadRegion()` copies it under the read lock) and is refused for restricted code and for any code that a sandbox governs. On
-  file systems other than macOS's, an entry's name is taken as given
-  (case variants on a case-insensitive file system there count as entries); Windows registry names are not covered.
+  other systems, an entry's name is taken as given, except in a directory that does not distinguish case (case folding
+  in ext4, f2fs and tmpfs, vfat, exFAT, SMB shares; qore#7783): when the component with the case of its ASCII letters
+  swapped reaches the same file (`dir_folds_case()`), the entry's stored name is read from the directory
+  (`find_stored_entry_name()`: the component itself if it is an entry, else the entry that differs from it only in
+  ASCII case, else another name of the same file, such as the long name of a vfat short name), so that case variants
+  there are spellings too, and restricted code gets the zone of the stored names (the walked path).  Unlike macOS's
+  true name, such a stored name is not checked to be a region name (an entry whose name folds to an ASCII name in
+  Unicode, which only a zoneinfo directory that untrusted code can write has).  A directory that folds case but cannot
+  be read (execute-only) gives the name as given, as on macOS when its attribute cannot be read.  On Windows, a time zone name from the registry, whose key
+  names do not distinguish case, is a spelling when it differs from the stored name of its key under
+  `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Time Zones` (`win_stored_tz_key_name()`): it gets a zone named
+  as given only while fewer than `MaxSpellingZones` such spellings have zones (`win_spelling_zones`), after that the
+  zone of the stored name (qore#7783; unverified: no Windows build).
   On Windows, restricted code can use only
   zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names
   are at most 255 bytes, and restricted code gets the unknown-region error for any registry failure (unverified: no
@@ -91,7 +103,9 @@ parsed from memory (`QoreZoneInfo::init()`):
   that is a symbolic link is read with `readlinkat()` and followed only inside of the directory (`..` cannot go
   above it, an absolute target must be in it, at most 40 links); the file must be regular. The zone of the file is
   named by its path in the zoneinfo directory (on macOS the true name from `F_GETPATH`, as the file system does not
-  distinguish case, so every spelling of a region reaches its file; spellings share its data). Every
+  distinguish case, so every spelling of a region reaches its file; spellings share its data; on other systems the
+  path is made of the stored names of the components, which differ from them in a directory that does not
+  distinguish case, qore#7783). Every
   failure, also a file that is not a zoneinfo file, raises the same `TZINFO-ERROR`
   `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show whether a path exists.
   `checkRegion()` gives it for a region string with a NUL character, a `..` or empty component or a backslash. The

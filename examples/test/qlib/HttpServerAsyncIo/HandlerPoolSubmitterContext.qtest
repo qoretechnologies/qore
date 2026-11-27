@@ -43,11 +43,29 @@ class TestTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
 /** Called by trusted code, and by sandboxed code through an import: the submissions are then made on a thread that the
     sandbox governs, as the controller submits a request of a sandboxed listener
 */
-sub submit_bodies(HttpAsyncSocketIoController ctl, HttpAsyncTarget target, Queue q, string who, int n) {
+sub submit_bodies(DispatchSubmitController ctl, HttpAsyncTarget target, Queue q, string who, int n, bool dispatch) {
     for (int i = 0; i < n; ++i) {
-        ctl.submitToHandlerPool(target, sub () {
+        code<nothing()> body = sub () {
             q.push({"who": who, "governed": SandboxManager::isGoverned()});
-        });
+        };
+        if (dispatch) {
+            ctl.submitDispatch(target, body);
+        } else {
+            ctl.submitToHandlerPool(target, body);
+        }
+    }
+}
+
+#! A controller that also submits bodies as the work items of HTTP/1.1 dispatches, with their runner of their own
+/** (submitDispatchToHandlerPool(), qore#7769), which keeps the submitter's context as submitToHandlerPool() does
+*/
+class DispatchSubmitController inherits HttpAsyncSocketIoController {
+    constructor(AsyncSocketIoController aio, hash<auto> opts) : HttpAsyncSocketIoController(aio, NOTHING, opts) {
+    }
+
+    #! submits the body with the runner of HTTP/1.1 dispatches
+    submitDispatch(HttpAsyncTarget target, code<nothing()> body) {
+        submitDispatchToHandlerPool(target, body);
     }
 }
 
@@ -55,7 +73,7 @@ sub submit_bodies(HttpAsyncSocketIoController ctl, HttpAsyncTarget target, Queue
 /** So the test's second submission overlaps the first at the point at which a work item shared by the submissions'
     tasks would be taken by the task of the other submission
 */
-class GatedController inherits HttpAsyncSocketIoController {
+class GatedController inherits DispatchSubmitController {
     public {
         #! decremented when the first submission's task was submitted
         Counter first_submitted(1);
@@ -67,7 +85,7 @@ class GatedController inherits HttpAsyncSocketIoController {
         bool held;
     }
 
-    constructor(AsyncSocketIoController aio, hash<auto> opts) : HttpAsyncSocketIoController(aio, NOTHING, opts) {
+    constructor(AsyncSocketIoController aio, hash<auto> opts) : DispatchSubmitController(aio, opts) {
     }
 
     private submitHandlerTask(ThreadPool pool, code task) {
@@ -95,8 +113,12 @@ class GatedController inherits HttpAsyncSocketIoController {
 */
 class HandlerPoolSubmitterContextTest inherits QUnit::Test {
     constructor() : Test("HandlerPoolSubmitterContextTest", "1.0") {
-        addTestCase("a body runs with its submitter's context when submissions overlap", \heldSubmissionTest());
-        addTestCase("each body runs with its own submitter's sandbox context", \pairingTest());
+        foreach bool dispatch in ((False, True)) {
+            string runner = dispatch ? " (HTTP/1.1 dispatch runner)" : "";
+            addTestCase("a body runs with its submitter's context when submissions overlap" + runner,
+                \heldSubmissionTest(), dispatch);
+            addTestCase("each body runs with its own submitter's sandbox context" + runner, \pairingTest(), dispatch);
+        }
         set_return_value(main());
     }
 
@@ -107,13 +129,13 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
         p.importFunction("submit_bodies");
-        p.parse("sub run(object ctl, object target, Queue q, int n) {
-    submit_bodies(ctl, target, q, \"sandboxed\", n);
+        p.parse("sub run(object ctl, object target, Queue q, int n, bool dispatch) {
+    submit_bodies(ctl, target, q, \"sandboxed\", n, dispatch);
 }", "sandboxed");
         return p;
     }
 
-    heldSubmissionTest() {
+    heldSubmissionTest(bool dispatch) {
         AsyncSocketIoController aio();
         GatedController ctl(aio, {"max_handler_threads": 1});
         ctl.start();
@@ -126,7 +148,7 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         Counter sandboxed_done(1);
         background sub () {
             on_exit sandboxed_done.dec();
-            p.callFunction("run", ctl, target, results, 1);
+            p.callFunction("run", ctl, target, results, 1, dispatch);
         }();
         # the held submission is released also when the case fails
         on_exit {
@@ -136,7 +158,7 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         }
         assertEq(0, ctl.first_submitted.waitForZero(HangGuard), "the sandboxed submission is held");
         # 2: the trusted submission, made while the sandboxed one is held
-        submit_bodies(ctl, target, results, "trusted", 1);
+        submit_bodies(ctl, target, results, "trusted", 1, dispatch);
         ctl.gate.dec();
         assertEq(0, sandboxed_done.waitForZero(HangGuard), "the sandboxed submission returns");
 
@@ -149,9 +171,9 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         assertEq(False, governed.trusted, "the trusted submitter's body runs with no sandbox");
     }
 
-    pairingTest() {
+    pairingTest(bool dispatch) {
         AsyncSocketIoController aio();
-        HttpAsyncSocketIoController ctl(aio, NOTHING, {"max_handler_threads": 4});
+        DispatchSubmitController ctl(aio, {"max_handler_threads": 4});
         ctl.start();
         on_exit ctl.stop();
         TestTarget target();
@@ -164,12 +186,12 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         background sub () {
             on_exit done.dec();
             start.waitForZero(HangGuard);
-            p.callFunction("run", ctl, target, results, Rounds);
+            p.callFunction("run", ctl, target, results, Rounds, dispatch);
         }();
         background sub () {
             on_exit done.dec();
             start.waitForZero(HangGuard);
-            submit_bodies(ctl, target, results, "trusted", Rounds);
+            submit_bodies(ctl, target, results, "trusted", Rounds, dispatch);
         }();
         start.dec();
         done.waitForZero(HangGuard);

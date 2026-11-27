@@ -61,9 +61,9 @@ module LlamaParseDataProvider {
                 "- **Split** a document that holds many - a scanned batch of invoices, a loan file - "
                 "into its parts\n"
                 "- **Batch** a whole directory through any of the above in one job\n\n"
-                "Use the @ref QoreRagUtils::LlamaParseChunker \"LlamaParseChunker\" "
-                "backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported "
-                "RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+                "Use the `LlamaParseChunker` "
+                "backend in `QoreRagUtils` for the supported "
+                "RAG ingestion path through `RagPipeline`.",
             "scheme": "llamaparse",
             "processing": <DataProviderProcessingInfo>{
                 "locality": "external",

@@ -437,7 +437,7 @@ public class IntercomManifest {
                     "Contacts** is the one to reach for when the contacts wanted are a subset.\n\n"
                     "Intercom's description declares no paging arguments for this operation even though it "
                     "answers a paged envelope; `per_page` and `starting_after` are added when the schema is "
-                    "imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+                    "imported. See `IntercomSchema`.",
                 "groups": (GroupContacts,),
                 "field_order": ("per_page", "starting_after", "include_merge_history"),
                 "fields": Common + CursorPagingOverlay,
@@ -820,7 +820,7 @@ public class IntercomManifest {
                 "desc": "Lists the workspace's help center articles.\n\n"
                     "Intercom's description declares no paging arguments for this operation even though it "
                     "answers a paged envelope; `per_page` and `starting_after` are added when the schema is "
-                    "imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+                    "imported. See `IntercomSchema`.",
                 "groups": (GroupArticles,),
                 "field_order": ("per_page", "starting_after"),
                 "fields": Common + CursorPagingOverlay,
