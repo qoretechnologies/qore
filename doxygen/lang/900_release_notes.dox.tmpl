@@ -129,9 +129,9 @@
     @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
     Code with sandboxed callers cannot serialize (\c SERIALIZATION-ERROR), show with \c %%y or set by
     deserialization the non-public state of classes declared by trusted code that it has no private access to, unless
-    a class inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted hosts use
-    @ref Qore::Program::serialize() "Program::serialize()" and @ref Qore::Program::deserialize() "Program::deserialize()",
-    and a class parsed before its %Program got a sandbox counts as trusted (see @ref sandbox_serialization).
+    a class inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted code uses
+    @ref Qore::Program::serialize() "Program::serialize()" or the trusted forms of @ref Qore::Serializable "Serializable"
+    (see @ref sandbox_serialization and @ref sandbox_trusted_serialization).
 
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,

@@ -35,6 +35,32 @@
 #include "qore/intern/BinaryInputStream.h"
 #include "qore/intern/StringInputStream.h"
 #include "qore/intern/QC_TimeZone.h"
+#include "qore/intern/qore_thread_intern.h"
+
+// returns the Program of the calling code, for which the trusted forms of the serialization API serialize and
+// deserialize all state, or nullptr with a SANDBOX-ACCESS-ERROR exception if the calling code is sandboxed or acts for
+// sandboxed code, also through a call reference (qore#7146)
+static QoreProgram* serializable_trusted_program(const char* api, ExceptionSink* xsink) {
+    if (!qore_serialization_calling_code_trusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "Serializable::%s() can only be called by trusted code: "
+            "sandboxed code, and code that acts for it, cannot get or set the non-public state of classes declared by "
+            "trusted code", api);
+        return nullptr;
+    }
+    // the Program of the code that invokes the builtin, which is not sandboxed (checked above), or the current one
+    QoreProgram* pgm = qore_builtin_caller_program();
+    if (!pgm) {
+        pgm = getProgram();
+    }
+    // the classes of the data are resolved and their code runs in this Program, which must not be a sandboxed one
+    // (such as the Program that the code of a trusted class runs in for sandboxed code)
+    if (!pgm || qore_program_is_sandboxed(pgm)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "Serializable::%s() can only be called by trusted code in a "
+            "Program that is not sandboxed", api);
+        return nullptr;
+    }
+    return pgm;
+}
 
 static QoreHashNode* Serializable_serializer(const QoreObject& self, const TimeZoneData& z,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -608,4 +634,245 @@ static binary Serializable::serialize(auto value, *int flags) [flags=NAMED_ARGS]
     ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
     QoreSerializable::serialize(value, **stream, flags, xsink);
     return *xsink ? QoreValue() : stream->getData(xsink);
+}
+
+//! Serializes a value with all of its state for trusted code and returns the serialized data as a binary object
+/** @par Example:
+    @code{.py}
+binary bin = Serializable::serializeTrusted(val);
+    @endcode
+
+    The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" serializes it for
+    trusted code that no sandboxed code calls: with the non-public members and static variables of the classes declared
+    by trusted code, also when sandboxed code is in the chain of callers (see @ref sandbox_trusted_serialization).  The
+    calling code must not give the output to sandboxed code.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @return serialized data representing the value
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
+    in the chain of callers (see @ref sandbox_shared_objects)
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static binary Serializable::serializeTrusted(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (!serializable_trusted_program("serializeTrusted", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
+    QoreSerializable::serializeTrusted(value, **stream, flags, xsink);
+    return *xsink ? QoreValue() : stream->getData(xsink);
+}
+
+//! Serializes a value with all of its state for trusted code and writes the serialized data to the given output stream
+/** @par Example:
+    @code{.py}
+Serializable::serializeTrusted(val, stream);
+    @endcode
+
+    The value is serialized as with @ref Qore::Serializable::serializeTrusted(auto, *int) "Serializable::serializeTrusted()"
+    (see @ref sandbox_trusted_serialization); the calling code must not give the output to sandboxed code.
+
+    @param value the value to serialize
+    @param output_stream an output stream where the serialized data will be written
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
+    in the chain of callers (see @ref sandbox_shared_objects)
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static Serializable::serializeTrusted(auto value, OutputStream[OutputStream] output_stream, *int flags)
+        [flags=NAMED_ARGS] {
+    if (!serializable_trusted_program("serializeTrusted", xsink)) {
+        return QoreValue();
+    }
+    QoreSerializable::serializeTrusted(value, **output_stream, flags, xsink);
+}
+
+//! Converts a value with all of its state for trusted code to a serialization hash representing the value
+/** @par Example:
+    @code{.py}
+hash<SerializationInfo> h = Serializable::serializeTrustedToData(val);
+    @endcode
+
+    The value is serialized as with @ref Qore::Serializable::serializeTrusted(auto, *int) "Serializable::serializeTrusted()"
+    (see @ref sandbox_trusted_serialization); the calling code must not give the output to sandboxed code.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @return a serialization hash representing the value
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SHARED-OBJECT-ERROR an object of the value is shared by every %Program of the process and sandboxed code is
+    in the chain of callers (see @ref sandbox_shared_objects)
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static hash<SerializationInfo> Serializable::serializeTrustedToData(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (!serializable_trusted_program("serializeTrustedToData", xsink)) {
+        return QoreValue();
+    }
+    return QoreSerializable::serializeToDataTrusted(value, flags, xsink);
+}
+
+//! Deserializes data with all of its state for trusted code and returns the value represented by the data
+/** @par Example:
+    @code{.py}
+auto val = Serializable::deserializeTrusted(bin);
+    @endcode
+
+    The data is deserialized as @ref Qore::Serializable::deserialize() "Serializable::deserialize()" deserializes it
+    for trusted code that no sandboxed code calls: the non-public members and static variables of the classes declared
+    by trusted code are set as in the data, also when sandboxed code is in the chain of callers; the classes of the
+    data are resolved in the %Program of the calling code, where their code runs (see
+    @ref sandbox_trusted_serialization).  The calling code must never deserialize data that sandboxed code can
+    influence.
+
+    @param binary_data binary data representing serialized data as generated by
+    @ref Qore::Serializable::serializeTrusted(auto, *int) "Serializable::serializeTrusted()" or
+    @ref Qore::Serializable::serialize() "Serializable::serialize()"
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static auto Serializable::deserializeTrusted(binary binary_data, *int flags) [flags=NAMED_ARGS] {
+    QoreProgram* pgm = serializable_trusted_program("deserializeTrusted", xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(binary_data), xsink);
+    return QoreSerializable::deserializeForProgram(xsink, pgm, **stream, flags);
+}
+
+//! Deserializes data with all of its state for trusted code and returns the value represented by the data
+/** @par Example:
+    @code{.py}
+auto val = Serializable::deserializeTrusted(str);
+    @endcode
+
+    The data is deserialized as with @ref Qore::Serializable::deserializeTrusted(binary, *int)
+    "Serializable::deserializeTrusted()" (see @ref sandbox_trusted_serialization); the calling code must never
+    deserialize data that sandboxed code can influence.
+
+    @param string_data string data representing serialized data
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static auto Serializable::deserializeTrusted(string string_data, *int flags) [flags=NAMED_ARGS] {
+    QoreProgram* pgm = serializable_trusted_program("deserializeTrusted", xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ReferenceHolder<StringInputStream> stream(new StringInputStream(string_data), xsink);
+    return QoreSerializable::deserializeForProgram(xsink, pgm, **stream, flags);
+}
+
+//! Deserializes data from an input stream with all of its state for trusted code and returns the value represented by the data
+/** @par Example:
+    @code{.py}
+auto val = Serializable::deserializeTrusted(stream);
+    @endcode
+
+    The data is deserialized as with @ref Qore::Serializable::deserializeTrusted(binary, *int)
+    "Serializable::deserializeTrusted()" (see @ref sandbox_trusted_serialization); the calling code must never
+    deserialize data that sandboxed code can influence.
+
+    @param input_stream an input stream providing serialized binary data
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static auto Serializable::deserializeTrusted(InputStream[InputStream] input_stream, *int flags) [flags=NAMED_ARGS] {
+    QoreProgram* pgm = serializable_trusted_program("deserializeTrusted", xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return QoreSerializable::deserializeForProgram(xsink, pgm, **input_stream, flags);
+}
+
+//! Deserializes data produced with serializeTrustedToData() with all of its state for trusted code and returns the value represented by the data
+/** @par Example:
+    @code{.py}
+auto val = Serializable::deserializeTrusted(h);
+    @endcode
+
+    The data is deserialized as with @ref Qore::Serializable::deserializeTrusted(binary, *int)
+    "Serializable::deserializeTrusted()" (see @ref sandbox_trusted_serialization); the calling code must never
+    deserialize data that sandboxed code can influence.
+
+    @param serialization_info the data representing the value as generated by
+    @ref Qore::Serializable::serializeTrustedToData() "Serializable::serializeTrustedToData()"
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
+
+    @return the value represented by the data
+
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code, or sandboxed code invokes
+    the method through a call reference (see @ref sandbox_trusted_serialization)
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_SERIALIZE_TRUSTED parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+*/
+static auto Serializable::deserializeTrusted(hash<SerializationInfo> serialization_info, *int flags)
+        [flags=NAMED_ARGS] {
+    QoreProgram* pgm = serializable_trusted_program("deserializeTrusted", xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return QoreSerializable::deserializeForProgram(xsink, pgm, *serialization_info, flags);
 }

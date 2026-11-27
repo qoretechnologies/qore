@@ -536,7 +536,26 @@ authenticate();
     of its class (such as a library module's).  Code injected into a sandboxed %Program to deserialize data for the host, which runs as
     the %Program's code, cannot deserialize the classes of library modules with non-public state, such as data
     provider types or SqlUtil and connection objects; the host uses @ref Qore::Program::deserialize()
-    "Program::deserialize()" instead.  A class that a %Program parsed before it got its sandbox manager counts as
+    "Program::deserialize()" instead.
+
+    @anchor sandbox_trusted_serialization
+    Trusted code that serializes or deserializes values of its own %Program while sandboxed code calls it, for example
+    a server API that a sandboxed interface calls, which reads a cache that the trusted code wrote or passes data to
+    another process of the application, uses the trusted forms of the @ref Qore::Serializable "Serializable" API:
+    @ref Qore::Serializable::serializeTrusted(auto, *int) "Serializable::serializeTrusted()",
+    @ref Qore::Serializable::serializeTrustedToData() "Serializable::serializeTrustedToData()" and
+    @ref Qore::Serializable::deserializeTrusted(binary, *int) "Serializable::deserializeTrusted()".  They give and set
+    all state as the plain forms do for trusted code that no sandboxed code calls, with the classes of the data resolved
+    in the %Program of the calling code, where their code runs, and as @ref Qore::Program::serialize()
+    "Program::serialize()" they can only be called by trusted code (the code of a class declared by trusted code, or of
+    a trusted %Program outside a class) in a %Program that is not sandboxed, and not through a call reference that
+    sandboxed code invokes; library code that acts for its caller cannot call them when sandboxed code is in the chain
+    of callers.  The calling code must never give their output to sandboxed code, and must never deserialize data that
+    sandboxed code can influence: with such data, it would set the non-public state of objects of trusted classes
+    without their constructors as the sandboxed code chose.  The shared-object rule (see @ref sandbox_shared_objects) is
+    applied as for the plain forms.
+
+    A class that a %Program parsed before it got its sandbox manager counts as
     declared by trusted code; it inherits @ref Qore::SandboxSerializable "SandboxSerializable" if the %Program's code
     serializes it once the %Program is sandboxed.
 

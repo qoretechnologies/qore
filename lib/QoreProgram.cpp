@@ -2365,6 +2365,8 @@ void qore_program_private_base::newProgram() {
     dmap["QORE_HAS_PROGRAM_DESERIALIZE"] = true;
     // Program::serialize() and Program::serializeToData() exist (qore#7146)
     dmap["QORE_HAS_PROGRAM_SERIALIZE"] = true;
+    // Serializable::serializeTrusted(), serializeTrustedToData() and deserializeTrusted() exist (qore#7146)
+    dmap["QORE_HAS_SERIALIZE_TRUSTED"] = true;
 
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
