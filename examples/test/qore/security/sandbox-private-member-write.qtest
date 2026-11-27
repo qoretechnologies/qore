@@ -535,6 +535,20 @@ class SandboxPrivateMemberWriteTest inherits QUnit::Test {
             mode + ": a late-sandboxed tenant on A's object");
         checkUnchanged(a_obj, a, mode + ": A's object");
 
+        # a shared object: the shared-object rule answers before the owner rule, also for an object that the tenant
+        # created, and refuses the writes of public members too
+        {
+            hash<string, string> shared_err = map {$1: "SHARED-OBJECT-ERROR"}, Forms;
+            object a_shared = a.callFunction("make_target");
+            SandboxManager::shareObject(a_shared);
+            assertEq(shared_err, b.callFunction("run_all", a_shared, count), mode + ": B on A's shared object");
+            checkUnchanged(a_shared, a, mode + ": A's shared object");
+            object b_shared = b.callFunction("make_target");
+            SandboxManager::shareObject(b_shared);
+            assertEq(shared_err, b.callFunction("run_all", b_shared, count), mode + ": B on its own shared object");
+            checkUnchanged(b_shared, a, mode + ": B's shared object");
+        }
+
         # the tenant's own objects
         assertEq(expect("ok"), b.callFunction("run_all", b_obj, count), mode + ": B on its own object");
         assertEq(expect("ok"), b.callFunction("run_all", b_sub, count), mode + ": B on its own subclass object");

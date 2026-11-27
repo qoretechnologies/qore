@@ -24,7 +24,10 @@
     serializer, a class that inherits SandboxSerializable); nothing is written to a stream for a refused object.
     Trusted code serializes as before, and a deserialized object is not shared.  The objects that are not shared that
     the tenant serializes are of a trusted class that inherits SandboxSerializable: without it, the tenant cannot
-    serialize the non-public state of a trusted class (SERIALIZATION-ERROR, qore#7146), which one case checks.
+    serialize the non-public state of a trusted class (SERIALIZATION-ERROR, qore#7146), which one case checks, and
+    the tenant created them, as the owner rules of tenant isolation (qore#6842) refuse it the non-public members of an
+    object that it did not create (SERIALIZATION-ERROR).  The order of the rules: a shared object is refused with
+    SHARED-OBJECT-ERROR also if the tenant created it, and an object of the host that is not shared by the owner rules.
 
     SharedObjectSerialize.q checks these serializations; SharedObjectSerializeModules.q checks that the tenant cannot
     serialize the shared objects of the classes of the standard modules that guard their state with

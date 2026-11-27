@@ -21,7 +21,9 @@
     forwarded by a trusted helper), a closure of the class that it passes itself, a callback of the tenant, a thread
     started in the scope, another object, another trusted class and code after a scope that raised an exception cannot
     change it, SandboxManager::checkSharedObjectCallback() refuses the tenant's code, and a shared LoggerWrapper keeps
-    its logger, also through Reflection.
+    its logger, also through Reflection (SHARED-OBJECT-ERROR, also for a wrapper that the tenant created, as the
+    shared-object rule answers before the owner rule of tenant isolation, qore#6842), while the tenant replaces the
+    logger of a wrapper of its own that is not shared, but not of one of the host (SANDBOX-OBJECT-ACCESS-ERROR).
 
     SharedObjectUpdateScope.q checks these changes; its output must be the one in SharedObjectUpdateScope.expected in
     every execution mode, and in programs compiled with qcc -O0 and -O3.
