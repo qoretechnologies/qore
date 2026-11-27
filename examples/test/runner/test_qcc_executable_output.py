@@ -80,12 +80,23 @@ ALLOWED = {
     ("examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
         '%s %s -b 2>&1", env, shellQuote(exe))'):
         "a v51 image that the runtime refuses to load: exit status 2 and regex matches of the error",
+    ("examples/test/module-cpp-api/fork-exit/fork-exit.qtest", '"%s %s 2>&1; echo EXIT=$?", env, cmd)'):
+        "compile() runs qcc (the command in cmd), a compile: its exit status and the executable are checked",
+    ("examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest", 'echo status=$?", i.variant, cmd)'):
+        "checkMismatch() runs probes that fail: regex matches of the error and of a failing exit status, and no line "
+        "of a call of the operation",
+    ("examples/test/qore/parser/modern-option-consistency/modern-option-consistency.qtest",
+        '"%s %s %s 2>&1", env, reseal_bin, obj)'):
+        "runs the qore-aot-reseal tool on an object, not an executable: only its exit status is checked",
+    ("examples/test/qore/security/module-public-var-readonly.qtest",
+        'getModuleDir(tmp.path), tmp.path + DirSep + "writer")'):
+        "aotWriterTest() reads the <name>=<value> lines of the output and ignores every other line",
 }
 
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 7, "PENDING_AOT3": 14, "PENDING": 131}
+SIZES = {"ALLOWED": 11, "PENDING_AOT3": 14, "PENDING": 103}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -205,9 +216,6 @@ PENDING = {
     "examples/test/ir/on-error-rethrow/on-error-rethrow.qtest": 1,
     "examples/test/ir/qcc-load-modules.qtest": 2,
     "examples/test/ir/static-closure-class-context/static-closure-class-context.qtest": 1,
-    "examples/test/module-cpp-api/fork-exit/fork-exit.qtest": 1,
-    "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest": 1,
-    "examples/test/qlib/RpcClientHeaderValues/header-values.qtest": 1,
     "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest": 1,
     "examples/test/qore/classes/HTTPClient/connect-header-values/connect-header-values.qtest": 1,
     "examples/test/qore/classes/Program/program-get-call-reference.qtest": 1,
@@ -220,31 +228,6 @@ PENDING = {
     "examples/test/qore/classes/member-access-private-internal.qtest": 1,
     "examples/test/qore/classes/member-lookup-paths.qtest": 1,
     "examples/test/qore/classes/private-internal-redeclared-member.qtest": 1,
-    "examples/test/qore/enums/enum-softlist-release/enum-softlist-release.qtest": 1,
-    "examples/test/qore/functions/float-conversion-edges.qtest": 2,
-    "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest": 1,
-    "examples/test/qore/misc/callref-object-method-program.qtest": 1,
-    "examples/test/qore/misc/date-literal-subtypes/date-literal-subtypes.qtest": 1,
-    "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest": 1,
-    "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest": 1,
-    "examples/test/qore/misc/reflection-typed-hash-visibility.qtest": 1,
-    "examples/test/qore/misc/small-main-stack-startup.qtest": 1,
-    "examples/test/qore/misc/test-interpreter-options/test-interpreter-options.qtest": 1,
-    "examples/test/qore/operators/instanceof/aot-instanceof-type-cache.qtest": 1,
-    "examples/test/qore/operators/relative-date-multiply.qtest": 2,
-    "examples/test/qore/operators/relative-date-overflow.qtest": 2,
-    "examples/test/qore/operators/unused-post-incdec-errors/unused-post-incdec-errors.qtest": 1,
-    "examples/test/qore/operators/unused-post-increment/unused-post-increment.qtest": 1,
-    "examples/test/qore/parser/modern-option-consistency/modern-option-consistency.qtest": 1,
-    "examples/test/qore/security/module-public-var-readonly.qtest": 1,
-    "examples/test/qore/security/sandbox-timezone-path-literals.qtest": 1,
-    "examples/test/qore/stack/aot-batch-hierarchy-stack.qtest": 1,
-    "examples/test/qore/threads/background-runtime-parse-options.qtest": 1,
-    "examples/test/qore/threads/frame-check-qcc-o3.qtest": 1,
-    "examples/test/qore/vars/hash-copy.qtest": 1,
-    "examples/test/qore/vars/hash-member-order.qtest": 1,
-    "examples/test/qore/vars/union-exact-match/union-exact-match.qtest": 1,
-    "examples/test/qore/vars/weak-object-soft-list/weak-object-soft-list.qtest": 1,
 }
 
 

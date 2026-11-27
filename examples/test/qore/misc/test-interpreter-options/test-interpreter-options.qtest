@@ -10,6 +10,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 
 %exec-class TestInterpreterOptionsTest
 
@@ -83,9 +84,12 @@ class TestInterpreterOptionsTest inherits QUnit::Test {
         # an argument that looks like an interpreter option is not one; -d is left out, as it makes the runtime write
         # debug output, which would be compared with the output of the script
         foreach string args in ("", "-v", "--exec-mode=jit -v", "--enable-debug", "-b --enable-debug -v", "-G -v") {
-            out = backquote(sprintf("%s %s 2>&1", quote(exe), args), \rc);
-            assertEq(0, rc, out);
-            assertEq("compiled: True\noptions: \nmode: none\n", out, args);
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", quote(exe), args),
+                NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, r.out);
+            assertEq("compiled: True\noptions: \nmode: none\n", r.stdout, args);
+            assertEq("", r.stderr, args + ": stderr");
         }
     }
 
