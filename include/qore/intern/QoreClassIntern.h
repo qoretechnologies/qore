@@ -6299,6 +6299,15 @@ public:
     */
     DLLLOCAL bool ownedByProgram(const QoreProgram* pgm) const;
 
+    //! Returns true if the class is owned by \a pgm for a method call that runs in \a pgm
+    /** As ownedByProgram(), but false once the source Program has released the class
+        (qore_class_private::deleteClassData()): its namespace is destroyed with the Program, possibly in another
+        thread, and is not read then, as in qore_get_method_pgm_context() (qore#7543)
+    */
+    DLLLOCAL bool ownedByProgramForCall(const QoreProgram* pgm) const {
+        return !released_spgm_id.load() && ownedByProgram(pgm);
+    }
+
     DLLLOCAL const QoreMethod* getMethodForEval(const char* nme, QoreProgram* pgm,
         const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 

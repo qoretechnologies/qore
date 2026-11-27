@@ -4841,17 +4841,38 @@ int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* 
     checked against the restrictions of the caller (of the creator for a call through a call reference, which has no
     \a user_dom_code_pgm), as the domains declared on a user variant are.
 
-    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program) or that is
-    made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function and a
-    variant that module code may call without the restrictions it inherits from its caller
+    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program \a pgm) or
+    that is made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function
+    and a variant that module code may call without the restrictions it inherits from its caller
     (QCF_CALLER_RESTRICTION_RELIEF, which only static builtin methods have) are checked as before.
+
+    The uncontrolled API domain of a builtin method of a class that is owned by the Program the call runs in (\a pgm;
+    see qore_class_private::ownedByProgramForCall()) is not checked against the caller: such a class was created for
+    that Program at run time (QoreBuiltinClass(QoreProgram*, ...), or a builtin class added to a namespace of the
+    Program, as the classes of the Python objects and Java classes of a language bridge module are), so its methods
+    run that Program's foreign code, and its objects that the caller holds are
+    capabilities of that Program, as the objects of the Qore classes of that Program are (qore#5521); the domain is
+    checked against the options of that Program, as before qore#7543.  A sandbox that governs the caller still refuses
+    uncontrolled APIs to it (check_sandbox_uncontrolled_api()), and the other domains of such a method are checked
+    against the caller.  The builtin classes that no Program owns (the classes of the library and of binary modules,
+    which the Qore classes of qore#7543 inherit) are checked against the caller.
 */
 static QORE_INTERN_NOINLINE int64 qore_get_entered_builtin_method_denied_domains(
         const AbstractQoreFunctionVariant* variant, int64 vflags, const QoreParseOptions& user_dom_po,
-        const QoreProgram* user_dom_code_pgm) {
+        const QoreProgram* user_dom_code_pgm, const QoreProgram* pgm) {
     assert(vflags);
-    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF) || !variant->getClass()) {
+    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)) {
         return QDOM_DEFAULT;
+    }
+    const QoreClass* cls = variant->getClass();
+    if (!cls) {
+        return QDOM_DEFAULT;
+    }
+    if ((vflags & QDOM_UNCONTROLLED_API) && qore_class_private::get(*cls)->ownedByProgramForCall(pgm)) {
+        vflags &= ~QDOM_UNCONTROLLED_API;
+        if (!vflags) {
+            return QDOM_DEFAULT;
+        }
     }
     return user_dom_code_pgm
         ? qore_denied_domains(vflags, qore_relieve_module_declared_domains(user_dom_po, user_dom_code_pgm))
@@ -4870,7 +4891,8 @@ static QORE_INTERN_NOINLINE int64 qore_get_runtime_variant_denied_domains(const 
     // a call that did not enter another Program has the Program of the code that makes it (pgm is not nullptr, so a
     // call through a call reference, which has no user_dom_code_pgm, is included; qore#7543)
     if (user_dom_code_pgm != pgm && user_dom_po) {
-        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm);
+        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm,
+            pgm);
     }
     return denied;
 }
