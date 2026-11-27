@@ -12,16 +12,16 @@
           "message": "Connessione filesystem"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Non segna la connessione come non disponibile se la posizione del filesystem è in sola lettura; usare ad esempio se la connessione deve puntare a una directory di base in sola lettura; le directory dell'interfaccia dovrebbero normalmente essere scrivibili"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Non contrassegna la connessione come inattiva se la posizione del file system è di sola lettura, e rende di sola lettura i fornitori di dati restituiti dalla connessione: non possono creare, eliminare, spostare, copiare verso la posizione né crearvi directory; da usare ad esempio se la connessione deve puntare a una directory di base di sola lettura; le directory di interfaccia dovrebbero normalmente essere scrivibili"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "Sola lettura"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Imposta il flag di sola lettura sulla connessione"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Rende la connessione e i suoi fornitori di dati di sola lettura"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

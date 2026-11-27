@@ -12,16 +12,16 @@
           "message": "Połączenie systemu plików"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Nie oznacza połączenia jako nieaktywne, jeśli lokalizacja systemu plików jest tylko do odczytu; użyj na przykład, gdy połączenie ma wskazywać na katalog bazowy tylko do odczytu; katalogi interfejsów powinny zwykle być zapisywalne"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Nie oznacza połączenia jako niedostępnego, jeśli lokalizacja w systemie plików jest tylko do odczytu, i ustawia dostawców danych zwracanych przez połączenie jako tylko do odczytu: nie mogą tworzyć, usuwać, przenosić, kopiować do lokalizacji ani tworzyć w niej katalogów; używaj na przykład wtedy, gdy połączenie ma wskazywać katalog bazowy tylko do odczytu; katalogi interfejsów powinny zwykle być zapisywalne"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "Tylko do odczytu"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Ustawia flagę tylko do odczytu na połączeniu"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Ustawia połączenie i jego dostawców danych jako tylko do odczytu"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

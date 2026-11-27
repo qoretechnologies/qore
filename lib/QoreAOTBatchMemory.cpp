@@ -494,11 +494,14 @@ std::string qore_aot_memory_ledger_path(const std::string& domain) {
         h ^= c;
         h *= 1099511628211ull;
     }
+    // the directory of its own, which a test runner keeps shared when each test gets a TMPDIR of its own (qore#7823),
+    // or TMPDIR, or /tmp
     std::string dir;
-    {
-        QoreEnvironmentValue tmp("TMPDIR");
-        if (tmp.c_str() && *tmp.c_str()) {
-            dir = tmp.c_str();
+    for (const char* var : {"QORE_AOT_MEMORY_LEDGER_DIR", "TMPDIR"}) {
+        QoreEnvironmentValue v(var);
+        if (v.c_str() && *v.c_str()) {
+            dir = v.c_str();
+            break;
         }
     }
     if (dir.empty()) {

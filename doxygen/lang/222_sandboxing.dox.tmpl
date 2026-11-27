@@ -1364,6 +1364,13 @@ authenticate();
     as a runtime or data provider option, raises \c PERMISSION-DENIED
     (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
 
+    The @ref FileDataProvider::FileDataProvider "FileDataProvider" that
+    @ref ConnectionProvider::FilesystemConnection::getDataProvider() "FilesystemConnection::getDataProvider()"
+    returns has the connection's directory as its root and is locked to it, and it is read-only if the connection is
+    read-only, for any caller and whatever constructor options the caller gives: the code that a host lends a
+    read-only file connection to cannot create, change or delete files through its data provider
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     A sandbox's file-system and network policy also applies to the connections that are lent to the code that it
     governs, including the paths and locations that the lending host configured them with (there is no exemption for
     the creator's paths): a host that wants its tenants to use such a connection allows those paths and targets in

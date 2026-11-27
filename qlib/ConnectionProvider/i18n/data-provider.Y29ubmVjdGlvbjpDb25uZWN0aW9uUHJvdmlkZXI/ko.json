@@ -12,16 +12,16 @@
           "message": "파일 시스템 연결"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "파일 시스템 위치가 읽기 전용일 경우 연결을 다운으로 표시하지 않음; 예를 들어 연결이 읽기 전용 기본 디렉터리로 향해야 할 때 사용; 인터페이스 디렉터리는 일반적으로 쓰기 가능해야 함"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "파일 시스템 위치가 읽기 전용이어도 연결을 다운으로 표시하지 않으며, 연결이 반환하는 데이터 공급자를 읽기 전용으로 만듭니다. 데이터 공급자는 해당 위치에서 생성, 삭제, 이동, 해당 위치로의 복사 또는 디렉터리 생성을 할 수 없습니다. 예를 들어 연결이 읽기 전용 기본 디렉터리를 가리켜야 하는 경우에 사용합니다. 인터페이스 디렉터리는 일반적으로 쓰기 가능해야 합니다"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "읽기 전용"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "연결에 읽기 전용 플래그를 설정합니다"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "연결과 해당 데이터 공급자를 읽기 전용으로 만듭니다"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",
