@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-call-effect-summary-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -62,7 +72,7 @@ printf(\"reference:%d:%d\\n\", referenceMiddle(\\local_value), local_value);
 printf(\"method:%d:%d:%d\\n\", global_value, methodMiddle(mutator), global_value);
 ";
 
-string script_path = "/tmp/qore-ir-call-effect-summary-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/call-effect-summary.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -82,12 +92,12 @@ method:2:3:3
 string ast = runMode("ast");
 if (ast != expected) {
     printf("mismatch in ast\nexpected:\n%sactual:\n%s", expected, ast);
-    exit(2);
+    test_exit(2);
 }
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

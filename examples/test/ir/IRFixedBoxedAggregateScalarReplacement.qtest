@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-fixed-boxed-scalar-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -164,7 +174,7 @@ printf(\"%s:%s:%s:%d:%d:%d:%s:%s:%s:%s:%s:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     nestedHashdeclListAlias());
 ";
 
-string script_path = "/tmp/qore-ir-fixed-boxed-scalar-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/fixed-boxed-scalar.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -180,7 +190,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -191,20 +201,20 @@ foreach string name in (("hashStringQueries", "hashdeclStringQueries",
         "nestedHashExact")) {
     if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=1", name))) {
         printf("missing fixed boxed hash scalar replacement for %s:\n%s", name, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string name in (("listStringQueries", "nestedListExact")) {
     if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-lists=1", name))) {
         printf("missing fixed boxed list scalar replacement for %s:\n%s", name, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 if (!stats.regex(
         "IR-OPT: nestedHashdeclListExact:.*scalar-lists=1.*scalar-hashes=1")) {
     printf("missing iterative nested hashdecl/list scalar replacement:\n%s",
         stats);
-    exit(2);
+    test_exit(2);
 }
 foreach string name in (("hashStringExact", "hashdeclStringExact",
         "hashStringDynamic", "hashdeclStringDynamic", "hashStringMutation",
@@ -212,18 +222,18 @@ foreach string name in (("hashStringExact", "hashdeclStringExact",
         "nestedHashdeclListAlias")) {
     if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=0", name))) {
         printf("unsafe fixed boxed hash scalar replacement for %s:\n%s", name, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string name in (("listStringExact", "listStringDynamic",
         "listStringMutation", "nestedListMutation", "nestedListAlias")) {
     if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-lists=0", name))) {
         printf("unsafe fixed boxed list scalar replacement for %s:\n%s", name, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 
-string exe = "/tmp/qore-ir-fixed-boxed-scalar-" + string(getpid());
+string exe = tmp.path + "/fixed-boxed-scalar";
 string disabled = exe + "-disabled";
 string enabled_compile = backquote(sprintf(
     "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
@@ -236,7 +246,7 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(exe) || !is_file(disabled)) {
     printf("AOT compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /IR-OPT-AOT: hashStringQueries:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: listStringQueries:.*scalar-lists=1/
@@ -247,7 +257,7 @@ if (enabled_compile !~ /IR-OPT-AOT: hashStringQueries:.*scalar-hashes=1/
             /IR-OPT-AOT: nestedHashdeclListExact:.*scalar-lists=1.*scalar-hashes=1/) {
     printf("missing AOT fixed boxed aggregate scalar replacement:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string binary in ((exe, disabled)) {
     string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -255,7 +265,7 @@ foreach string binary in ((exe, disabled)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             binary, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

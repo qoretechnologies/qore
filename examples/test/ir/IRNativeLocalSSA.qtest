@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-native-local-ssa-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -184,7 +194,7 @@ printf(\"%d:%.2f:%d:%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\\n\", bra
     typedForeachInt({\"int\": 1}), typedForeachFloat());
 ";
 
-string root = "/tmp/qore-ir-native-local-ssa-" + string(getpid());
+string root = tmp.path + "/native-local-ssa";
 string source_path = root + ".qr";
 string enabled_aot = root + "-enabled";
 string disabled_aot = root + "-disabled";
@@ -201,7 +211,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -214,14 +224,14 @@ if (stats !~ /IR-OPT: branchInt:.*native-local-loads=[1-9]/
         || stats !~ /IR-OPT: branchBool:.*native-local-loads=[1-9]/
         || stats !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/) {
     printf("missing native local SSA promotion:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("branchInt", "branchFloat", "branchBool", "straightInt")) {
     if (!stats.regex(sprintf(
             "IR-OPT: %s:.*native-local-stores=[1-9]", function))) {
         printf("missing dead native local store elimination for %s:\n%s",
             function, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("maybeAssigned", "removedValue", "deletedValue",
@@ -230,7 +240,7 @@ foreach string function in (("maybeAssigned", "removedValue", "deletedValue",
             "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
         printf("unsafe native local SSA promotion for %s:\n%s",
             function, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 # the typed-foreach regression functions must exercise BOTH native local SSA
@@ -241,13 +251,13 @@ foreach string function in (("typedForeachInt", "typedForeachFloat")) {
             "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
         printf("missing native local SSA promotion across typed foreach "
             + "for %s:\n%s", function, stats);
-        exit(2);
+        test_exit(2);
     }
     if (!stats.regex(sprintf(
             "IR-OPT: %s:.*typed-foreach=[1-9]", function))) {
         printf("missing typed foreach specialization for %s:\n%s",
             function, stats);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -261,7 +271,7 @@ if (loads_only_stats
         || loads_only_stats =~ /native-local-stores=[1-9]/) {
     printf("invalid native local load-only optimization stats:\n%s",
         loads_only_stats);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_aot_o0 = root + "-enabled-o0";
@@ -281,13 +291,13 @@ foreach string executable in ((enabled_aot, enabled_aot_o0, disabled_aot)) {
     if (!is_file(executable)) {
         printf("AOT compile failed for %s:\n%s%s%s", executable,
             enabled_compile, enabled_compile_o0, disabled_compile);
-        exit(2);
+        test_exit(2);
     }
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, executable));
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             executable, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

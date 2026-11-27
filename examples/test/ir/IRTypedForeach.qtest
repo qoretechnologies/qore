@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-typed-foreach-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -462,7 +472,7 @@ printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%d:%d:%d:%d:
     returnIndex((1, 2, 3, 4)), nestedIndex((1, 2), (3, 4)));
 ";
 
-string script_path = "/tmp/qore-ir-typed-foreach-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/typed-foreach.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -476,7 +486,7 @@ string sub runMode(string mode, bool disabled, string arg, bool virtual_disabled
 }
 
 string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
-    string exe = "/tmp/qore-ir-typed-foreach-" + string(getpid())
+    string exe = tmp.path + "/typed-foreach"
         + (disabled ? "-disabled" : "")
         + (virtual_disabled ? "-virtual-disabled" : "");
     string compile_out = backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
@@ -485,7 +495,7 @@ string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s %s 2>&1",
         libqore_dir, exe, arg));
@@ -497,7 +507,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb:"
@@ -507,7 +517,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
     if (actual != basic_expected) {
         printf("disabled mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, basic_expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -518,7 +528,7 @@ if (aot != expected || virtual_disabled_aot != expected
         || disabled_aot != basic_expected) {
     printf("AOT mismatch\nexpected:\n%sAOT:\n%svirtual-disabled AOT:\n%sdisabled AOT:\n%s",
         expected, aot, virtual_disabled_aot, disabled_aot);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool", "sparse-string")) {
@@ -526,13 +536,13 @@ foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool", "sp
         string actual = runMode(mode, False, sparse_test);
         if (actual !~ /RUNTIME-TYPE-ERROR/) {
             printf("missing sparse-list error in %s/%s:\n%s", mode, sparse_test, actual);
-            exit(2);
+            test_exit(2);
         }
     }
     string sparse_aot = runAot(False, sparse_test);
     if (sparse_aot !~ /RUNTIME-TYPE-ERROR/) {
         printf("missing sparse-list AOT error in %s:\n%s", sparse_test, sparse_aot);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -558,9 +568,9 @@ if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: exceptionSnapshot:.*typed-foreach=1/
         || stats !~ /IR-OPT: nested:.*typed-foreach=2/) {
     printf("missing typed foreach lowering:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: sparseAuto:.*typed-foreach=0/) {
     printf("unsafe typed foreach lowering:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }

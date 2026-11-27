@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-constant-branch-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -52,7 +62,7 @@ int sub constantBranches(int value) {
 printf(\"%d\\n\", constantBranches(5));
 ";
 
-string script_path = "/tmp/qore-ir-constant-branch-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/constant-branch.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -64,12 +74,12 @@ string sub runMode(string mode) {
 }
 
 string sub runAot() {
-    string exe = "/tmp/qore-ir-constant-branch-" + string(getpid());
+    string exe = tmp.path + "/constant-branch";
     string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -80,11 +90,11 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 string aot = runAot();
 if (aot != expected) {
     printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
-    exit(2);
+    test_exit(2);
 }

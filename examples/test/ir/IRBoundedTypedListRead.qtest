@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-bounded-typed-list-read-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -564,7 +574,7 @@ printf(\"string-pseudo:%d:%d:%d:%s:%d:%d:%d\\n\", boundedStringSizePseudo(),
     aliasedStringPseudo());
 ";
 
-string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/bounded-typed-list-read.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -576,12 +586,12 @@ string sub runMode(string mode) {
 }
 
 string sub runAot() {
-    string exe = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid());
+    string exe = tmp.path + "/bounded-typed-list-read";
     string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -593,13 +603,13 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 string aot = runAot();
 if (aot != expected) {
     printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
-    exit(2);
+    test_exit(2);
 }
 
 string stats = ExecModeHarness::run(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
@@ -632,7 +642,7 @@ if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
         || stats !~ /IR-OPT: parameterStringPseudo:.*bounded-list=2.*boxed-direct=2/
         || stats !~ /IR-OPT: escapingString:.*bounded-list=1.*boxed-direct=0/) {
     printf("missing bounded typed-list optimization:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
         || stats !~ /IR-OPT: affinePastEnd:.*bounded-list=0/
@@ -656,5 +666,5 @@ if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
         || stats !~ /IR-OPT: mutatedStringPseudo:.*bounded-list=0/
         || stats !~ /IR-OPT: aliasedStringPseudo:.*bounded-list=0/) {
     printf("unsafe bounded typed-list selection:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
