@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 # test-platform: macos - AOT code generation and the serialized debug IR of an AOT executable
 # Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
 
@@ -14,6 +15,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class ReturnTempScopeDebugIrTest
@@ -109,17 +111,28 @@ printf(\"rv=%s log=%s stepped=%y\\n\", rv, log, r.steps > 0);
         }
 
         # the AST interpreter is the benchmark
-        string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
+        string ast_out = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s", qore_bin, src),
+            NOTHING, "QORE_JIT_TIMING=1").out;
         assertEq("rv=kb log=|~k~l|~b~a stepped=True\n", ast_out, "AST destruction order");
 
         foreach bool strip in ((False, True)) {
             string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
                 libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
             assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
-            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+            string aot_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
             assertEq(ast_out, aot_out, sprintf("the debug IR of the AOT functions destroys the locals as the AST "
                 "interpreter does (strip-source: %y)", strip));
             unlink(exe);
         }
+    }
+
+    #! runs a qcc executable and returns its output (qore#7805)
+    /** @return the output on stdout followed by the output on stderr, apart from the module loader's
+        warnings and the native compilation trace, which are not output of the program (see
+        ExecModeHarness::run_command()); the executable runs in its default environment, which only
+        traces native compilation
+    */
+    private string run_executable(string cmd) {
+        return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }
