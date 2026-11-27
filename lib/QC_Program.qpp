@@ -3454,6 +3454,9 @@ binary bin = pgm.serialize(val);
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+    The non-public members of an object that has the provenance of a sandbox are given too (see
+    @ref sandbox_object_ownership); the data keeps no provenance, so the host treats data that it produced while
+    serving a sandbox as that sandbox's data.
 
     @param value the value to serialize
     @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
@@ -3489,6 +3492,9 @@ hash<SerializationInfo> h = pgm.serializeToData(val);
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+    The non-public members of an object that has the provenance of a sandbox are given too (see
+    @ref sandbox_object_ownership); the data keeps no provenance, so the host treats data that it produced while
+    serving a sandbox as that sandbox's data.
 
     @param value the value to serialize
     @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield

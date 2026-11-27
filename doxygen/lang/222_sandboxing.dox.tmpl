@@ -536,7 +536,39 @@ authenticate();
     of its class (such as a library module's).  Code injected into a sandboxed %Program to deserialize data for the host, which runs as
     the %Program's code, cannot deserialize the classes of library modules with non-public state, such as data
     provider types or SqlUtil and connection objects; the host uses @ref Qore::Program::deserialize()
-    "Program::deserialize()" instead.  A class that a %Program parsed before it got its sandbox manager counts as
+    "Program::deserialize()" instead.
+
+    @anchor sandbox_trusted_serialization
+    Trusted code that serializes or deserializes values of its own %Program while sandboxed code calls it, for example
+    a server API that a sandboxed interface calls, which reads a cache that the trusted code wrote or passes data to
+    another process of the application, uses the trusted forms of the @ref Qore::Serializable "Serializable" API:
+    @ref Qore::Serializable::serializeTrusted(auto, *int) "Serializable::serializeTrusted()",
+    @ref Qore::Serializable::serializeTrustedToData() "Serializable::serializeTrustedToData()" and
+    @ref Qore::Serializable::deserializeTrusted(binary, *int) "Serializable::deserializeTrusted()".  They give and set
+    all state as the plain forms do for trusted code that no sandboxed code calls, with the classes of the data resolved
+    in the %Program of the calling code, where their code runs, and as @ref Qore::Program::serialize()
+    "Program::serialize()" they can only be called by trusted code (the code of a class declared by trusted code, or of
+    a trusted %Program outside a class) in a %Program that a sandbox does not restrict (a %Program that a sandbox
+    governs, whose code is trusted, can call them), and not through a call reference that restricted code invokes;
+    library code outside a class, which acts for its caller, cannot call them when restricted code is in the chain of
+    callers (library code is the code of a module loaded from a directory of the process-wide module path; a module
+    that a script finds through its own module path, such as with \c %%prepend-module-path, is the application's own
+    code, which acts for itself).  The calling code must never give their output to sandboxed code, and must never deserialize data that
+    sandboxed code can influence: with such data, it would set the non-public state of objects of trusted classes
+    without their constructors as the sandboxed code chose.  The code of a class declared by trusted code, also of a
+    library module's class, and the functions of a trusted %Program and of the application's own modules act for
+    themselves and so carry this whole responsibility: it applies the trusted forms
+    only to values of its own, never to a value or data that its caller passes in, and never returns or hands on the
+    output; a public method or a closure that applies them to its parameters gives the capability to every caller.
+    As the trusted forms give all state, they also give the non-public members of an object that has the provenance
+    of a sandbox, such as one that trusted code created while sandboxed code called it, which the plain forms withhold
+    from a caller that the object's sandbox did not create (as do @ref Qore::Program::serialize() "Program::serialize()"
+    and @ref Qore::Program::serializeToData() "Program::serializeToData()"; see @ref sandbox_object_ownership); the
+    data keeps no provenance, so trusted code treats data that it produced while serving a sandbox as that sandbox's
+    data.  The shared-object rule (see
+    @ref sandbox_shared_objects) is applied as for the plain forms.
+
+    A class that a %Program parsed before it got its sandbox manager counts as
     declared by trusted code; it inherits @ref Qore::SandboxSerializable "SandboxSerializable" if the %Program's code
     serializes it once the %Program is sandboxed.
 
@@ -963,7 +995,14 @@ authenticate();
     \c SERIALIZATION-ERROR if a non-public member has a value, as for the non-public state of the classes that trusted
     code declared (see @ref sandbox_serialization); the \c serializeMembers() method of a class is not called for such
     code, whose serialization has the automatic members only (a transient member is not serialized), and the
-    serializers of builtin classes, whose state is their own, are not affected.  A copy of an object (\c copy()) keeps the
+    serializers of builtin classes, whose state is their own, are not affected.  The trusted serialization APIs
+    (@ref Qore::Program::serialize() "Program::serialize()", @ref Qore::Program::serializeToData()
+    "Program::serializeToData()" and the trusted forms of @ref Qore::Serializable "Serializable", see
+    @ref sandbox_trusted_serialization) are exempt: they give the non-public members of any object, as only trusted
+    code can call them and their output must never reach sandboxed code.  Serialized data keeps no provenance: an
+    object deserialized from it later by trusted code that no sandboxed code calls is an ordinary object of trusted
+    code, so trusted code must treat data that it produced while serving a sandbox as that sandbox's data.  A copy of an
+    object (\c copy()) keeps the
     creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
     an object of its own with the state of an object that its sandbox did not create.
 

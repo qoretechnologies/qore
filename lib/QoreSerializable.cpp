@@ -44,6 +44,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <string>
 #include <set>
@@ -563,6 +564,18 @@ QoreHashNode* QoreSerializable::serializeToData(const QoreValue val, int64 flags
 
 QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags, true);
+    // the owner rule of the non-public members of objects with the provenance of a sandbox (qore#7033) is lifted only
+    // for calling code whose own Program no sandbox with tenant isolation governs, such as trusted code that serves a
+    // tenant; not for a governed tenant, which may use the trusted forms (or for a call reference that it invokes,
+    // whose calling Program is its own); decided once, at the start, from the Program of the calling code that the
+    // trust check resolves; fails closed (qore#7146)
+    {
+        QoreProgram* calling_pgm = qore_builtin_caller_program();
+        if (!calling_pgm) {
+            calling_pgm = getProgram();
+        }
+        context.caller.setOwnerRuleLifted(calling_pgm && !qore_program_tenant_isolated_state(calling_pgm));
+    }
     return serializeToDataIntern(val, context, xsink);
 }
 
@@ -654,8 +667,11 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     }
 
     // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
-    // created the object (qore#7033)
-    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
+    // created the object (qore#7033); a trusted API gives all state to calling code that the owner rules do not apply
+    // to, as its output is never given to sandboxed code (Program::serialize(), Serializable::serializeTrusted(),
+    // qore#7146)
+    bool non_public = context.caller.ownerRuleLifted()
+        || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);
