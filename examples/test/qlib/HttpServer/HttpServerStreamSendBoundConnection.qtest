@@ -50,7 +50,8 @@ class BodyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         hash<auto> hi = cx."header-info";
         if (hi.http3) {
-            if (hold_session) {
+            # only the test case that holds the session sets it, and it skips without a debug build of the library
+            if (hold_session && Option::HAVE_LIBRARY_DEBUGGING) {
                 call_function("dbg_quic_hold_stream_data", hi.session_id, -1);
             }
             sessions.push(hi.session_id);

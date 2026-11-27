@@ -44,7 +44,8 @@ class PipeBodyHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         hash<auto> hi = cx."header-info";
-        if (hi.http3) {
+        # the HTTP/3 test case skips without a debug build of the library
+        if (hi.http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             # the client's credit is withheld
             call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id);
         }
@@ -105,7 +106,7 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         hs.setDefaultHandler("pipe", h);
         hs.waitForAsyncIo();
         on_exit hs.stop();
-        if (http3) {
+        if (http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             on_exit call_function("dbg_quic_release_stream_data");
         }
         int port = hs.addListener(<HttpListenerOptionInfo>{
@@ -197,7 +198,7 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         }
 
         # the credit comes: the whole body arrives
-        if (http3) {
+        if (http3 && Option::HAVE_LIBRARY_DEBUGGING) {
             call_function("dbg_quic_release_stream_data");
             hash<auto> r = h3_result.get(120s);
             assertEq(NOTHING, r.err);
