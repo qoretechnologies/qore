@@ -262,9 +262,12 @@ check-build-separate-units:
 # units show warnings that the single compilation unit hides), reported by platform and build type, qore#7757: the job
 # downloads only that file of each job's artifacts, prints the warnings and keeps them as a report.  It exits with 3
 # when there are any, which is allowed, so the pipeline passes with a warning (the job is orange) and the warnings are
-# fixed in the next batch; any other failure of the check is a failure.  pipeline-passed does not need it, so it does
-# not wait for it (it waits for test-macos, which pipeline-passed also waits for).  The checker's tests:
-# examples/test/runner/test_check_build_warnings.py
+# fixed in the next batch; any other failure of the check is a failure.  It also reports the memory that the compiles of
+# the build jobs used (build/compile-memory.txt, which build.sh writes with ci-compile-memory.py, qore#7780) and exits
+# with 3 when a build's peak is above 90% of its container's memory limit less 2 GiB, before a growth of the compiles
+# gets the build killed.  pipeline-passed does not need it, so it does not wait for it (it waits for test-macos, which
+# pipeline-passed also waits for).  The checker's tests: examples/test/runner/test_check_build_warnings.py and
+# examples/test/runner/test_ci_compile_memory.py
 check-build-warnings:
   stage: test
   needs:
@@ -308,6 +311,7 @@ check-build-warnings:
     paths:
       - build-warnings.txt
       - build-warnings.json
+      - compile-memory.txt
     expire_in: 7 days
 
 # Build stage - compile once per platform, save build/ as artifact
