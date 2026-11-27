@@ -79,11 +79,12 @@ sub checks(string pfx, any v) {
         x = v;
         printf("%slocal-softlist=%s\n", pfx, desc(x));
     }
-    {
-        softlist x = (0,);
-        x := v;
-        printf("%slocal-softlist-weak-assign=%s\n", pfx, desc(x));
-    }
+    # a weak store whose softlist conversion would create a new list is an error (qore#7619): the reference to the
+    # deleted object reads as no value, which softlist converts to a new empty list
+    check(pfx + "local-softlist-weak-assign", string sub () { softlist x = (0,); x := v; return desc(x); });
+    # *softlist takes no value as it is, so no new list is needed, and the weak store of the deleted object itself is
+    # refused
+    check(pfx + "local-opt-softlist-weak-assign", string sub () { *softlist x = (0,); x := v; return desc(x); });
     {
         softlist<int> x = (0,);
         x = v;
