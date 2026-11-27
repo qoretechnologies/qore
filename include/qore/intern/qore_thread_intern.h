@@ -581,6 +581,16 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
 DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
         const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Restores the statement, location and runtime parse options that enter_compiled_body_options() saved
+/** As swap_runtime_statement_location() with them, which it is, without returning the values that it replaces (a
+    caller that restores has no use for them): a fast call does not keep them in its frame, which is on each level of
+    the IR interpreter's recursion (recursion-frame-budget.qtest)
+
+    @param xsink if not null, the stack is checked, as swap_runtime_statement_location() checks it
+*/
+DLLLOCAL void restore_compiled_body_options(ExceptionSink* xsink, const AbstractStatement* stmt,
+        const QoreProgramLocation* loc, QoreParseOptions po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()

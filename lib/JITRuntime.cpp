@@ -15148,10 +15148,7 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
     // leaves exec_fn() (native code and the IR interpreter report errors through xsink); not RAII, as it is restored
     // before the body locals are released
     if (swapped_runtime_ctx) {
-        const AbstractStatement* dummy_stmt;
-        const QoreProgramLocation* dummy_loc;
-        QoreParseOptions dummy_po;
-        swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, dummy_stmt, dummy_loc, dummy_po);
+        restore_compiled_body_options(xsink, old_stmt, old_loc, old_po);
     }
 
     if (!skip_body_locals) {
