@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -141,12 +142,16 @@ class AOTModuleHeaderRequestsTest inherits QUnit::Test {
         return "'" + replace(s, "'", "'\\''") + "'";
     }
 
-    #! runs a command and returns its output, failing on a non-zero exit status
+    #! runs a command in its default environment and returns its output, failing on a non-zero exit status
+    /** The output is the output on stdout followed by the output on stderr, trimmed, apart from the warnings of the
+        module loader, which are not output of the run (qore#7805)
+    */
     private string run(string cmd) {
-        int rc;
-        string out = trim(backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1",
-            quote(libdir), quote(libdir), quote(libdir), cmd), \rc));
-        assertEq(0, rc, cmd + ": " + out);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", quote(libdir), quote(libdir), quote(libdir), cmd), NOTHING,
+            "QORE_JIT_TIMING=1");
+        string out = trim(r.out);
+        assertEq(0, r.rc, cmd + ": " + out);
         return out;
     }
 

@@ -60,8 +60,10 @@ printf("%s %s\n", lmt.format("YYYY-MM-DD HH:mm:SS Z"), lmt.currentZoneName());
     for each use.  The names of entries always keep their names.  Restricted code always gets the canonical name of
     the file (see @ref sandbox_fs_tz_regions).
 
-    @note Case variants are recognized as spellings only on macOS; on another system whose zoneinfo directory is on
-    a file system that does not distinguish case, each case variant is treated as the name of an entry.
+    Case variants are spellings on macOS and in a zoneinfo directory on another system that does not distinguish the
+    case of names (such as a directory with case folding, vfat or an SMB share); there, restricted code too gets the
+    zone of the stored name of the entry.  On Windows, a time zone name from the registry, whose key names do not
+    distinguish case, is a spelling when it differs from the stored name of its key in case, with the same bound.
 
     @section windows_time_zones Windows Time Zone Handling
 

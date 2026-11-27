@@ -669,7 +669,15 @@ public class A2aClient {
 
     #! Destroys the client and cleans up resources
     destructor() {
-        close();
+        try {
+            close();
+        } catch (hash<ExceptionInfo> ex) {
+            # a client that restricted code which does not own its connection manager deletes does not close the
+            # manager's connections (qore#7828): the manager closes them when it is deleted
+            if (ex.err != "PERMISSION-DENIED") {
+                rethrow;
+            }
+        }
     }
 
     #! Returns the server URL

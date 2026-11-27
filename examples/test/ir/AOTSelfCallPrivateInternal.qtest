@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 #
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -9,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTSelfCallPrivateInternalTest
@@ -103,9 +105,17 @@ printf(\"from base: %%s\\n\", d.callFromBase());
         string out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, app, src));
         assertTrue(is_file(app), sprintf("compiled with base %s, derived %s: %s", base_access, derived_access,
             out));
+        # the executable and the interpreted run that its output is compared with run in their default environment;
+        # a warning of the module loader on stderr is not output (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> aot = ExecModeHarness::run_command(sprintf("%s %s", env, app), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, aot.rc, sprintf("base %s, derived %s: exit status (output: %y)", base_access, derived_access,
+            aot.out));
+        assertEq("", aot.stderr, sprintf("base %s, derived %s: stderr", base_access, derived_access));
         return {
-            "aot": backquote(sprintf("%s %s 2>&1", env, app)),
-            "interpreted": backquote(sprintf("%s %s %s 2>&1", env, qore_bin, src)),
+            "aot": aot.out,
+            "interpreted": ExecModeHarness::run_command(sprintf("%s %s %s", env, qore_bin, src), NOTHING,
+                "QORE_JIT_TIMING=1").out,
         };
     }
 }

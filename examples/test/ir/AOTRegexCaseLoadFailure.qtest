@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 # test-platform: macos - AOT code generation and linking of qcc executables and the load of their regex switch cases
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
@@ -10,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTRegexCaseLoadFailureTest
@@ -91,17 +93,19 @@ try {
 
     testRuns() {
         foreach string opt in (OptLevels) {
-            hash<auto> rv = run(getExe(opt));
+            hash<ExecModeHarness::ModeRunResult> rv = run(getExe(opt));
             assertEq(0, rv.rc, "-O" + opt + ": " + rv.out);
-            assertEq(Expected, rv.out, "-O" + opt);
+            assertEq(Expected, rv.stdout, "-O" + opt);
+            assertEq("", rv.stderr, "-O" + opt + ": stderr");
         }
     }
 
     testHookNoMatch() {
         foreach string opt in (OptLevels) {
-            hash<auto> rv = run(getExe(opt), "^no-such-case");
+            hash<ExecModeHarness::ModeRunResult> rv = run(getExe(opt), "^no-such-case");
             assertEq(0, rv.rc, "-O" + opt + ": " + rv.out);
-            assertEq(Expected, rv.out, "-O" + opt);
+            assertEq(Expected, rv.stdout, "-O" + opt);
+            assertEq("", rv.stderr, "-O" + opt + ": stderr");
         }
     }
 
@@ -153,12 +157,14 @@ try {
         return exes{opt} = exe;
     }
 
-    #! runs @a exe, with the test hook set to @a fail_pattern if given; returns the exit code and the output
-    private hash<auto> run(string exe, *string fail_pattern) {
+    #! runs @a exe, with the test hook set to @a fail_pattern if given, in its default environment
+    /** @return the result: the exit code and the output (the output on stdout followed by the output on stderr,
+        apart from the warnings of the module loader, which are not output of the run: qore#7805)
+    */
+    private hash<ExecModeHarness::ModeRunResult> run(string exe, *string fail_pattern) {
         string hook = fail_pattern ? sprintf("QORE_AOT_TEST_FAIL_REGEX_CASE=%s ", quote(fail_pattern)) : "";
-        int rc;
-        string out = backquote(sprintf("%s%s %s%s 2>&1", hook, env, timeout_prefix, quote(exe)), \rc);
-        return {"rc": rc, "out": out};
+        return ExecModeHarness::run_command(sprintf("%s%s %s%s", hook, env, timeout_prefix, quote(exe)), NOTHING,
+            "QORE_JIT_TIMING=1");
     }
 
     #! quotes @a str for the shell

@@ -12,8 +12,8 @@
           "message": "Milvus / Zilliz Cloud 오픈 소스 벡터 데이터베이스"
         },
         "app.TWlsdnVz.desc": {
-          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "10억 단위 규모의 유사도 검색을 지원하는 오픈 소스 벡터 데이터베이스인 [Milvus](https://milvus.io) 및 [Zilliz Cloud](https://zilliz.com)(관리형 Milvus)에 대한 액세스를 제공합니다.\n\n@ref QoreRagUtils::RagPipeline \"RagPipeline\"을 통해 지원되는 수집/검색 경로를 사용하려면 @ref qoreragutilsintro \"QoreRagUtils\"의 @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" 백엔드를 사용하세요."
+          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the `MilvusVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "10억 단위 규모의 유사도 검색을 지원하는 오픈 소스 벡터 데이터베이스인 [Milvus](https://milvus.io) 및 [Zilliz Cloud](https://zilliz.com)(관리형 Milvus)에 대한 액세스를 제공합니다.\n\n`RagPipeline`을 통해 지원되는 수집/검색 경로를 사용하려면 `QoreRagUtils`의 `MilvusVectorStore` 백엔드를 사용하세요."
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "multipart/form-data를 사용하여 파일 업로드"
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 `FileDataType` 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

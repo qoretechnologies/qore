@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 # test-platform: macos - macOS deployment target in the LC_BUILD_VERSION of qcc executables, modules and objects
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
@@ -9,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 %requires Util
@@ -63,7 +65,8 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
         assertTrue(is_file(exe), "qcc linked the executable: " + out);
         assertEq(-1, out.find("ld: warning"), "the link does not warn: " + out);
         assertEq(libqoreMinOS(), minOS(exe), "the executable targets libqore's macOS version");
-        assertEq("hello\n", run(shellQuote(exe)), "and runs");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", shellQuote(lib_dir), shellQuote(lib_dir),
+            shellQuote(exe)), "hello\n", "and runs");
     }
 
     module() {
@@ -158,5 +161,14 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
         f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
         f.write(body);
         f.close();
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

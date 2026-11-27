@@ -1569,7 +1569,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url, {"proxy": opts.proxy});
                 mgr = buildManager(opts, credentials, creator_proof);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
-                cookie_jar = mgr.getCookieJar();
+                cookie_jar = mgr.getCookieJar(creator_proof);
             }
 
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
@@ -1615,11 +1615,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @since RestClientIo 1.0
         */
-        bool setFirstConnectionCallback(*code<nothing()> cb) {
+        bool setFirstConnectionCallback(*code<nothing()> cb, *HttpClientIo::HttpClientCreatorProof proof) {
             if (!owns_mgr) {
                 return False;
             }
-            mgr.setFirstConnectionCallback(cb);
+            mgr.setFirstConnectionCallback(cb, proof);
             return True;
         }
 
@@ -1766,6 +1766,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** @since RestClientIo 1.0
         */
         *HttpClientIo::CookieJar getCookieJar() {
+            # the jar of a client that owns its manager is the manager's, which holds the cookies of the host for code
+            # that was lent the client: the manager refuses restricted code that does not own it
+            if (owns_mgr) {
+                mgr.getCookieJar();
+            }
             return cookie_jar;
         }
 
@@ -1844,8 +1849,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Sets the logger for this client
         setLogger(*LoggerInterface logger) {
-            self.logger = logger;
+            # the manager refuses restricted code that does not own it: set it first, so that a refusal leaves the
+            # client as it was
             mgr.setLogger(logger);
+            self.logger = logger;
         }
 
         #! Sets the per-request timeout override
@@ -5985,8 +5992,8 @@ class RestClientIoAsyncConnector {
         #! The target URL
         string url;
 
-        #! The connection handed back by the last acquisition step
-        *HttpClientIo::HttpClientConnection tracked;
+        #! The state of the connection handed back by the last acquisition step
+        *HttpClientIo::HttpClientConnectionStatus tracked;
 
         #! Failed connection attempts
         int failures = 0;
@@ -6015,8 +6022,8 @@ class RestClientIoAsyncConnector {
     */
     *EventNotifier acquire() {
         checkFailure();
-        *EventNotifier notifier = mgr.acquireConnectionAsync(url, \tracked);
-        if (!notifier && tracked && failed(tracked) && !mgr.isUnresolvedRaceLeg(tracked)) {
+        *EventNotifier notifier = mgr.acquireConnectionStatusAsync(url, \tracked);
+        if (!notifier && tracked && tracked.failed() && !tracked.isUnresolvedRaceLeg(mgr)) {
             # the connection closed synchronously, for example a refused connection to a local endpoint; the
             # next call counts the failure
             notifier = new EventNotifier();
@@ -6045,16 +6052,16 @@ class RestClientIoAsyncConnector {
         is advanced by the acquisition step itself, which starts the second protocol.
     */
     bool connectionPending() {
-        return exists tracked && !failed(tracked) && !tracked.isReady() && !mgr.isUnresolvedRaceLeg(tracked);
+        return exists tracked && !tracked.failed() && !tracked.isReady() && !tracked.isUnresolvedRaceLeg(mgr);
     }
 
     #! Counts the tracked connection as a failed attempt if it failed before it could be used
     private checkFailure() {
-        *HttpClientIo::HttpClientConnection conn = remove tracked;
-        if (!conn || !failed(conn) || mgr.isUnresolvedRaceLeg(conn)) {
+        *HttpClientIo::HttpClientConnectionStatus conn = remove tracked;
+        if (!conn || !conn.failed() || conn.isUnresolvedRaceLeg(mgr)) {
             return;
         }
-        *hash<auto> err = conn.getPollOperation().getError();
+        *hash<auto> err = conn.getError();
         # Match the synchronous connection wait: a certificate refusal or a sandbox denial must reach the caller
         # before any retry, which would be refused or denied again, or replace the reason with a timeout.
         if (HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError(err)) {
@@ -6067,14 +6074,10 @@ class RestClientIoAsyncConnector {
             sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;
     }
 
-    #! Returns @ref True if a pending connection failed
-    /** The poll operation's error is recorded before the connection is marked closed; the connection manager
-        already treats such a connection as dead and opens a new one on the next acquisition step, so it is a
-        failed attempt as well.
-    */
-    private static bool failed(HttpClientIo::HttpClientConnection conn) {
-        return conn.isClosed() || conn.getPollOperation().hasError();
-    }
+    # a connection failed if it is closed or its poll operation recorded an error (the poll operation's error is
+    # recorded before the connection is marked closed; the connection manager already treats such a connection as
+    # dead and opens a new one on the next acquisition step, so it is a failed attempt as well): see
+    # HttpClientIo::HttpClientConnectionStatus::failed()
 }
 
 #! Event-driven RestClientIo async request operation with Negotiate retry support
@@ -6257,10 +6260,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             return;
         }
 
-        auto controller = rcio.getConnectionManager().getController();
         # a request's own timeout replaces the client's
         int to_ms = request_timeout_ms ?? rcio.getTimeout();
-        controller.submit(<SocketPollOperationInfo>{
+        rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
             "spop": self,
             # a request timeout of 0 means no deadline; a negative controller timeout means none
@@ -6822,8 +6824,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 return;
             }
 
-            auto controller = rcio.getConnectionManager().getController();
-            controller.submit(<SocketPollOperationInfo>{
+            rcio.getConnectionManager().submitPollOperation(<SocketPollOperationInfo>{
                 "sock": poll_info.socket,
                 "spop": self,
                 # a request timeout of 0 means no deadline; a negative controller timeout means none
@@ -7419,10 +7420,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         *EventNotifier connection_ready_notifier;
 
         #! Connection associated with @ref connection_ready_notifier
-        *HttpClientIo::HttpClientConnection connection_ready_conn;
+        *HttpClientIo::HttpClientConnectionStatus connection_ready_conn;
 
         #! Connection associated with @ref oauth2_conn_notifier
-        *HttpClientIo::HttpClientConnection oauth2_connection_ready_conn;
+        *HttpClientIo::HttpClientConnectionStatus oauth2_connection_ready_conn;
 
         #! True after the first continuePoll() call in SPS_CONNECTING (poll info returned)
         bool waiting_for_connection = False;
@@ -7938,7 +7939,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # state polls the returned per-call notifier via the controller under
         # this op's own owner, so cancelByOwner() interrupts it immediately; the
         # race is torn down by abandonAsyncHEForUrl() in cancelPendingWork().
-        *EventNotifier rv = rcio.getConnectionManager().acquireConnectionAsync(
+        *EventNotifier rv = rcio.getConnectionManager().acquireConnectionStatusAsync(
             rcio.getUrl(), \connection_ready_conn);
         if (!rv) {
             # No notifier: the connection is either already READY (pooled) or already
@@ -7954,7 +7955,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     private *EventNotifier startOAuth2ConnectionAsync() {
         # acquireConnectionAsync(): see startMainConnectionAsync() — the OAuth2
         # token endpoint connect must also never block the ping op's thread
-        *EventNotifier rv = oauth2_rcio.getConnectionManager().acquireConnectionAsync(
+        *EventNotifier rv = oauth2_rcio.getConnectionManager().acquireConnectionStatusAsync(
             oauth2_rcio.getUrl(), \oauth2_connection_ready_conn);
         if (!rv) {
             # See startMainConnectionAsync(): record a bounded failure for the closed
@@ -7978,7 +7979,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         @return @ref True if @a tracked_conn was closed (failure recorded), @ref False
         otherwise
     */
-    private bool recordTrackedConnectionFailure(*HttpClientIo::HttpClientConnection tracked_conn,
+    private bool recordTrackedConnectionFailure(*HttpClientIo::HttpClientConnectionStatus tracked_conn,
             bool oauth2 = False) {
         if (!tracked_conn || !tracked_conn.isClosed()) {
             return False;
@@ -7993,10 +7994,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # belongs to the connection manager of the client that acquired the connection: the OAuth2 token
         # endpoint is reached with a client and a connection manager of its own (see doStartOAuth2Refresh()).
         *RestClientIo owner = oauth2 ? oauth2_rcio : rcio;
-        if (owner && owner.getConnectionManager().isUnresolvedRaceLeg(tracked_conn)) {
+        if (owner && tracked_conn.isUnresolvedRaceLeg(owner.getConnectionManager())) {
             return False;
         }
-        *hash<auto> err = tracked_conn.getPollOperation().getError();
+        *hash<auto> err = tracked_conn.getError();
         hash<ExceptionInfo> ex = err
             ? <ExceptionInfo>{
                 "err": err.err,

@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class SmallMainStackStartupTest
 
@@ -44,14 +45,16 @@ class SmallMainStackStartupTest inherits QUnit::Test {
 
     #! runs a command with the given stack limit and checks that it printed "ok" or failed with a stack error
     private checkRun(string label, string command, int kib) {
-        int rc;
-        string out = backquote(sprintf("sh -c %s 2>&1", quote(sprintf("ulimit -s %d && %s", kib, command))), \rc);
+        # the command runs in its default environment; a warning of the module loader on stderr is not output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("sh -c %s",
+            quote(sprintf("ulimit -s %d && %s", kib, command))), NOTHING, "QORE_JIT_TIMING=1");
         # a signal gives an exit status of 128 + the signal (SIGSEGV: 139)
-        assertTrue(rc < 128, sprintf("%s, %dK: exit status %d (output: %y)", label, kib, rc, out));
-        if (rc) {
-            assertRegex(StackError, out, sprintf("%s, %dK: a stack error", label, kib));
+        assertTrue(r.rc < 128, sprintf("%s, %dK: exit status %d (output: %y)", label, kib, r.rc, r.out));
+        if (r.rc) {
+            assertRegex(StackError, r.out, sprintf("%s, %dK: a stack error", label, kib));
         } else {
-            assertEq("ok\n", out, sprintf("%s, %dK", label, kib));
+            assertEq("ok\n", r.stdout, sprintf("%s, %dK", label, kib));
+            assertEq("", r.stderr, sprintf("%s, %dK: stderr", label, kib));
         }
     }
 

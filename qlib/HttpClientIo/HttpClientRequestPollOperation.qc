@@ -456,7 +456,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         *hash<SocketPollInfo> info = continuePoll();
         if (info) {
-            mgr.getController().submit(<SocketPollOperationInfo>{
+            mgr.submitPollOperation(<SocketPollOperationInfo>{
                 "sock": info.socket,
                 "spop": self,
                 # the operation raises its own timeout errors first; a negative value means no timeout
@@ -609,7 +609,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     checkDeadline();
                     self_signaled = False;
                     string origin = rf.getOrigin();
-                    *EventNotifier notifier = mgr.acquireConnectionAsync(origin, \tracked);
+                    *EventNotifier notifier = HttpClientIoSocketAccess::acquireConnectionAsync(mgr, origin, \tracked);
                     if (!notifier && tracked && HttpClientRequestPollOperation::failed(tracked)
                         && !mgr.isUnresolvedRaceLeg(tracked)) {
                         # the connection closed synchronously; the next step counts the failure
@@ -954,7 +954,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         # a proxy authentication challenge of a CONNECT request is answered once with a new connection
         if (!proxy_connect_answered
-                && mgr.processProxyConnectFailure(rf.getOrigin(), err)) {
+                && HttpClientIoSocketAccess::processProxyConnectFailure(mgr, rf.getOrigin(), err)) {
             proxy_connect_answered = True;
             return;
         }

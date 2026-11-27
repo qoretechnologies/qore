@@ -201,7 +201,15 @@ YamlRpcClientIo client({"url": "http://localhost:8080/YAML", "timeout": 30000});
 
     #! Destroys the client and cleans up resources
     destructor() {
-        close();
+        try {
+            close();
+        } catch (hash<ExceptionInfo> ex) {
+            # a client that restricted code which does not own its connection manager deletes does not close the
+            # manager's connections (qore#7828): the manager closes them when it is deleted
+            if (ex.err != "PERMISSION-DENIED") {
+                rethrow;
+            }
+        }
     }
 
     #! Calls a remote method taking all arguments after the method name for the method arguments

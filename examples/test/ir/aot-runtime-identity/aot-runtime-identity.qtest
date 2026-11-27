@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires ../../QoreBuildTree.qm
 %requires FsUtil
 
@@ -85,7 +86,8 @@ class AotRuntimeIdentityTest inherits QUnit::Test {
         # compiled for this runtime, it runs
         hash<auto> r = compileAndRun(tmp.path + "/same", src, "");
         assertEq(0, r.rc, r.out);
-        assertEq(ProgramOutput, r.out);
+        assertEq(ProgramOutput, r.stdout);
+        assertEq("", r.stderr, "stderr");
 
         # compiled for another runtime, it is refused
         r = compileAndRun(tmp.path + "/other", src, "QORE_AOT_TEST_RUNTIME_IDENTITY=" + OtherIdentity);
@@ -133,8 +135,10 @@ class AotRuntimeIdentityTest inherits QUnit::Test {
         out = backquote(sprintf("codesign -f -s - %s 2>&1", exe), \rc);
         assertEq(0, rc, "codesign: " + out);
         # the libqore is referenced by its rpath-relative install name, which no longer resolves
-        out = backquote(sprintf("env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH %s 2>&1", exe), \rc);
-        assertEq(2, rc, "refused with exit code 2, not ended by dyld: " + out);
+        hash<ExecModeHarness::ModeRunResult> hr = ExecModeHarness::run_command(sprintf("env -u DYLD_LIBRARY_PATH "
+            "-u DYLD_FALLBACK_LIBRARY_PATH %s", exe), NOTHING, "QORE_JIT_TIMING=1");
+        out = hr.out;
+        assertEq(2, hr.rc, "refused with exit code 2, not ended by dyld: " + out);
         assertEq(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled program (%s) was compiled for AOT runtime identity "
             "'%s', but the Qore library could not be loaded or predates the AOT runtime identity check of executables "
             "(it has no qore_aot_run_v4()); its native code can only be run with the Qore library of the qcc that "
@@ -168,7 +172,8 @@ int sub main() {
         compileObject(consumer_qo, consumer, "");
         hash<auto> r = linkAndRun(exe, (provider_qo, consumer_qo));
         assertEq(0, r.rc, r.out);
-        assertEq(ScriptOutput, r.out);
+        assertEq(ScriptOutput, r.stdout);
+        assertEq("", r.stderr, "stderr");
 
         # the provider compiled for another runtime is refused, and nothing of the program runs
         compileObject(provider_qo, provider, "QORE_AOT_TEST_RUNTIME_IDENTITY=" + OtherIdentity);
@@ -248,10 +253,15 @@ int main(int, char**) {
                 libqore_dir, libqore_dir, exe, libqoreTargetFlags(libqore_dir).join(" ")), \rc);
             assertEq(0, rc, "link: " + out);
 
-            out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+            # the host runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> hr = ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING,
+                "QORE_JIT_TIMING=1");
+            out = hr.out;
+            rc = hr.rc;
             if (!other) {
                 assertEq(0, rc, out);
-                assertEq(ScriptOutput, out);
+                assertEq(ScriptOutput, hr.stdout);
+                assertEq("", hr.stderr, "stderr");
                 continue;
             }
             assertEq(1, rc, "the program fails, not ended by a signal: " + out);
@@ -271,15 +281,16 @@ int main(int, char**) {
     }
 
     #! compiles \a src to the executable \a exe with the environment prefix \a extra_env and runs it
-    /** @return a hash: \c rc: the exit code of the executable; \c out: its output (stdout and stderr)
+    /** @return the result of the executable, run in its default environment (ExecModeHarness::ModeRunResult: \c rc,
+        \c out, its output on stdout followed by its output on stderr apart from the warnings of the module loader,
+        \c stdout and \c stderr; qore#7805)
     */
-    private hash<auto> compileAndRun(string exe, string src, string extra_env) {
+    private hash<ExecModeHarness::ModeRunResult> compileAndRun(string exe, string src, string extra_env) {
         int rc;
         string out = backquote(sprintf("%s %s %s -O0 -o %s %s 2>&1", extra_env, env, qcc_bin, exe, src), \rc);
         assertEq(0, rc, "qcc: " + out);
         assertTrue(is_file(exe), "qcc wrote the executable: " + out);
-        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
-        return {"rc": rc, "out": out};
+        return ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING, "QORE_JIT_TIMING=1");
     }
 
     #! compiles the script \a src to the object \a qo with the environment prefix \a extra_env
@@ -291,15 +302,14 @@ int main(int, char**) {
     }
 
     #! links the objects with qcc and runs the executable
-    /** @return a hash: \c rc: the exit code of the executable; \c out: its output (stdout and stderr)
+    /** @return the result of the executable, run in its default environment (see compileAndRun())
     */
-    private hash<auto> linkAndRun(string exe, list<string> objects) {
+    private hash<ExecModeHarness::ModeRunResult> linkAndRun(string exe, list<string> objects) {
         int rc;
         string out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, objects.join(" ")), \rc);
         assertEq(0, rc, "qcc link: " + out);
         assertTrue(is_file(exe), "qcc linked the executable: " + out);
-        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
-        return {"rc": rc, "out": out};
+        return ExecModeHarness::run_command(sprintf("%s %s", env, exe), NOTHING, "QORE_JIT_TIMING=1");
     }
 
     private static write(string path, string body) {

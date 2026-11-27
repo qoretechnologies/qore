@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -9,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTExitCleanupScalingTest
@@ -115,10 +117,16 @@ class AOTExitCleanupScalingTest inherits QUnit::Test {
         # four times the cases: linear growth gives about 4, quadratic about 16
         assertLt(6.0, ratio, "the object grows linearly with the cases");
 
-        int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", q(libqore_dir), q(libqore_dir),
-            q(large_exe)), \rc);
-        assertEq(0, rc, "the compiled program ran: " + out);
-        assertEq("errors=0\n", out, "every case returns its string");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", q(libqore_dir), q(libqore_dir),
+            q(large_exe)), "errors=0\n", "every case returns its string");
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

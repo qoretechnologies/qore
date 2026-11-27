@@ -12,8 +12,8 @@
           "message": "Векторна база даних Weaviate з відкритим вихідним кодом і гібридним пошуком"
         },
         "app.V2VhdmlhdGU.desc": {
-          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "Надає доступ до [Weaviate](https://weaviate.io) — векторної бази даних із відкритим вихідним кодом, що підтримує гібридний пошук (векторний + ключові слова), мультитенентність і широкий спектр модулів векторизації.\n\nВикористовуйте бекенд @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" у @ref qoreragutilsintro \"QoreRagUtils\" для підтримуваного шляху завантаження/отримання через @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the `WeaviateVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "Надає доступ до [Weaviate](https://weaviate.io) — векторної бази даних із відкритим вихідним кодом, що підтримує гібридний пошук (векторний + ключові слова), мультитенентність і широкий спектр модулів векторизації.\n\nВикористовуйте бекенд `WeaviateVectorStore` у `QoreRagUtils` для підтримуваного шляху завантаження/отримання через `RagPipeline`."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "Завантажити файл за допомогою multipart/form-data"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою `FileDataType` (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

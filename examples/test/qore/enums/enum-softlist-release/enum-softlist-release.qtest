@@ -79,7 +79,11 @@ class EnumSoftListReleaseTest inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 file));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            assertEq(expected, backquote(sprintf("%s %s 2>&1; echo status=$?", env, exe)), "qcc " + opt);
+            # the executable runs in its default environment; a warning of the module loader on stderr is not output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s; echo status=$?",
+                env, exe), NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(expected, r.stdout, "qcc " + opt);
+            assertEq("", r.stderr, "qcc " + opt + ": stderr");
         }
     }
 }

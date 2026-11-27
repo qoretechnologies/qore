@@ -3743,6 +3743,21 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
         return -1;
     }
 
+    // a stream that closed before its response, as when the client reset it at the deadline of its request while the
+    // handler still ran: the client takes no response on it, and nghttp3, which released the stream when it closed,
+    // refuses it with NGHTTP3_ERR_STREAM_NOT_FOUND; the response is not sent, as with HTTP/2 (qore#7803)
+    if (isClosedStreamLocked(stream_id)) {
+        ASYNC_IO_TRACE("QuicSession::submitResponse CLOSED session=%lld stream_id=%lld\n",
+            (long long)getSessionId(), (long long)stream_id);
+        printd(5, "QuicSession::submitResponse() stream_id=" QLLD " closed before the response (%s); not sent\n",
+            (int64)stream_id, describeClosedStreamLocked(stream_id).c_str());
+#ifdef DEBUG
+        // counted for dbg_quic_responses_on_closed_streams(), which only a debug build has
+        qore_dbg_quic_responses_on_closed_streams.fetch_add(1, std::memory_order_release);
+#endif
+        return 0;
+    }
+
     // Guard against a second response on the stream, streamed or not, with or without a body: a second HEADERS
     // frame is a malformed message (qoretechnologies/qore#7212), and a second body would overwrite body_data_ while
     // nghttp3 may still hold pointers to the previous one
@@ -3856,6 +3871,19 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
 
     if (!h3_conn_) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // a stream that closed before its response (see submitResponse()) is reported as a send on it is
+    // (sendStreamData()): nothing is staged for it, such as the body data or InputStream that would follow the
+    // headers, which a closed stream would never release (qore#7803)
+    if (isClosedStreamLocked(stream_id)) {
+        xsink->raiseException("QUIC-STREAM-CLOSED", "cannot submit the response on stream %" PRId64 ": the stream "
+            "closed before the response (%s)", stream_id, describeClosedStreamLocked(stream_id).c_str());
+#ifdef DEBUG
+        // counted for dbg_quic_responses_on_closed_streams(), which only a debug build has
+        qore_dbg_quic_responses_on_closed_streams.fetch_add(1, std::memory_order_release);
+#endif
         return -1;
     }
 
@@ -4946,6 +4974,20 @@ bool QuicSession::isStreamFullyAcked(int64_t stream_id) const {
     return isClosedStreamLocked(stream_id);
 }
 
+std::string QuicSession::describeClosedStreamLocked(int64_t stream_id) const {
+    auto pit = peer_reset_streams_.find(stream_id);
+    if (pit == peer_reset_streams_.end()) {
+        return "closed";
+    }
+    // a STOP_SENDING without an error is recorded with H3_NO_ERROR (recordPeerStopSending())
+    if (pit->second == NGHTTP3_H3_NO_ERROR) {
+        return "the peer stopped reading it";
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "the peer reset it with HTTP/3 error code 0x%" PRIx64, pit->second);
+    return buf;
+}
+
 void QuicSession::removeClosedStream(int64_t stream_id) {
     releaseStream(stream_id);
 }
@@ -5096,6 +5138,12 @@ void QuicSession::eraseClosedServerTunnelLocked(StreamMap::iterator it) {
     // reports the stream as closed
     releaseStream(stream_id);
     updateKeepAliveAfterStreamStateChangeLocked();
+    // the H3 server poll operation releases its registrations of the stream (qore#7802); a failure to record it only
+    // leaves them to the close of the session, as before
+    try {
+        released_server_tunnels_.push_back(stream_id);
+    } catch (std::bad_alloc&) {
+    }
 }
 
 void QuicSession::stopReadingStreamLocked(int64_t stream_id) {

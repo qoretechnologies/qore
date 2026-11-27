@@ -130,7 +130,7 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
                 "short_desc": "Filter by warehouse location",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Return only products assigned to the supplied warehouse location "
-                    "(see `locations` on @ref BaseLinkerAddInventoryProductRequestDataType for "
+                    "(see `locations` on `BaseLinkerAddInventoryProductRequestDataType` for "
                     "the location-code format).",
             },
             "include_variants": <DataProviderOptionInfo>{

@@ -51,12 +51,30 @@ cd build
 qore_qmod_cache_setup "${QORE_SRC_DIR}"
 # Compile against the native module directory of this CI image.
 QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
+# the memory of each compile is logged for check-build-warnings, which warns when the build nears the memory limit of
+# the job's container (ci-compile-memory.py, qore#7780)
+COMPILE_MEMORY_TOOL="${QORE_SRC_DIR}/test/docker_test/ci-compile-memory.py"
+COMPILE_MEMORY_ARGS=
+if command -v python3 > /dev/null 2>&1; then
+    COMPILE_MEMORY_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=${COMPILE_MEMORY_TOOL} -DCMAKE_CXX_COMPILER_LAUNCHER=${COMPILE_MEMORY_TOOL}"
+    QORE_CI_COMPILE_MEMORY_LOG="${QORE_SRC_DIR}/build/compile-memory.log"
+    rm -f "${QORE_CI_COMPILE_MEMORY_LOG}"
+    export QORE_CI_COMPILE_MEMORY_LOG
+fi
 cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} \
     "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
+    ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"} ${COMPILE_MEMORY_ARGS}
 # the compiler output is kept in build.log for check-build-warnings (see ci-build-log.sh)
 . "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"
-qore_ci_build_logged build.log make -j${MAKE_JOBS}
+build_rc=0
+qore_ci_build_logged build.log make -j${MAKE_JOBS} || build_rc=$?
+# the report is written also when the build failed, to show in the job's output what the compiles used
+if [ -n "${COMPILE_MEMORY_ARGS}" ]; then
+    python3 "${COMPILE_MEMORY_TOOL}" report "${QORE_CI_COMPILE_MEMORY_LOG}" "${QORE_SRC_DIR}/build/compile-memory.txt"
+fi
+if [ "${build_rc}" != 0 ]; then
+    exit "${build_rc}"
+fi
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
 # Remove intermediate object files to reduce artifact size
