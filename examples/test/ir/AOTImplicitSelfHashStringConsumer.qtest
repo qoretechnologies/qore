@@ -147,9 +147,9 @@ source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source_file.write(source);
 source_file.close();
 
-string ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, source_path));
+string ast = ExecModeHarness::run_command(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s",
+    libqore_dir, qore_bin, source_path), NOTHING, "QORE_JIT_TIMING=1").out;
 string enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
         + " %s -O3 -c --output-dir=%s %s 2>&1",

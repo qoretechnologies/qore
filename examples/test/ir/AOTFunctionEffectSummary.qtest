@@ -212,8 +212,8 @@ script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
 script.close();
 
-string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, script_path));
+string ast = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s",
+    libqore_dir, qore_bin, script_path), NOTHING, "QORE_JIT_TIMING=1").out;
 string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-debug-info -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, script_path));
 if (!is_file(exe_path)) {

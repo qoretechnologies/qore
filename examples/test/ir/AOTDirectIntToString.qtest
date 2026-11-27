@@ -46,9 +46,9 @@ foreach int value in (values) {
 ");
 source_file.close();
 
-string ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, source));
+string ast = ExecModeHarness::run_command(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+    libqore_dir, qore_bin, source), NOTHING, "QORE_JIT_TIMING=1").out;
 string enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, enabled, source));
@@ -67,9 +67,9 @@ string enabled_output = run_executable(
     sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, enabled));
 string disabled_output = run_executable(
     sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, disabled));
-string jit_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=jit %s 2>&1",
-    libqore_dir, qore_bin, source));
+string jit_output = ExecModeHarness::run_command(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=jit %s",
+    libqore_dir, qore_bin, source), NOTHING, "QORE_JIT_TIMING=1").out;
 if (enabled_output != ast || disabled_output != ast || jit_output != ast) {
     printf("output mismatch:\nast:\n%senabled:\n%sdisabled:\n%sjit:\n%s",
         ast, enabled_output, disabled_output, jit_output);
@@ -126,9 +126,9 @@ foreach int value in (values) {
 }
 ");
 measure_file.close();
-string measure_ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, measure_source));
+string measure_ast = ExecModeHarness::run_command(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+    libqore_dir, qore_bin, measure_source), NOTHING, "QORE_JIT_TIMING=1").out;
 string measure_enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, measure_enabled, measure_source));
@@ -179,9 +179,9 @@ int sub main() {
 main();
 ");
 facts_file.close();
-string facts_ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, facts_source));
+string facts_ast = ExecModeHarness::run_command(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+    libqore_dir, qore_bin, facts_source), NOTHING, "QORE_JIT_TIMING=1").out;
 string facts_enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, facts_enabled, facts_source));

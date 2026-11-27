@@ -352,8 +352,8 @@ combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
 combined_file.write("%modern\n%no-strict-parse-errors\n\n" + providerCode() + consumerCode() + "\nmain();\n");
 combined_file.close();
 
-string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
-    libqore_dir, qore_bin, combined_path));
+string ast = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s",
+    libqore_dir, qore_bin, combined_path), NOTHING, "QORE_JIT_TIMING=1").out;
 string provider_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, provider_path));
