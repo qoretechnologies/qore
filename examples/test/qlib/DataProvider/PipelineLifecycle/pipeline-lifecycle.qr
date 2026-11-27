@@ -35,6 +35,28 @@ class AddProc inherits DataProvider::AbstractDataProcessor {
     }
 }
 
+#! the number of threads that wait for a run in the race cases
+const RaceWaiters = 8;
+
+#! takes time for some records, so that the threads that wait for the run wait while it processes them
+class SpinProc inherits DataProvider::AbstractDataProcessor {
+    string className() {
+        return "SpinProc";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        int n = 0;
+        for (int i = 0; i < (abs(_data) % 7) * 3000; ++i) {
+            n += i;
+        }
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
 #! records the records that it gets, and the threads that it gets them in
 class SinkProc inherits DataProvider::AbstractDataProcessor {
     public {
@@ -249,6 +271,44 @@ switch (c) {
         pipe.append(new AddProc(1));
         submit_error(pipe, 1);
         print_errors();
+        break;
+    }
+
+    # threads wait in waitDone() while another thread ends the run with abort() or waitDone(); every waiter must
+    # return: a waiter that the end of the run woke after the queue threads had ended waited for a flush that no
+    # thread made
+    case "race-abort":
+    case "race-waitdone": {
+        int iters = (shift ARGV ?? 1000).toInt();
+        for (int it = 0; it < iters; ++it) {
+            DataProviderPipeline p();
+            p.append(new SpinProc());
+            for (int i = 0; i < 3; ++i) {
+                p.submit(i + it);
+            }
+            Counter waiting(RaceWaiters);
+            for (int w = 0; w < RaceWaiters; ++w) {
+                background sub () {
+                    on_exit waiting.dec();
+                    p.waitDone();
+                }();
+            }
+            if (c == "race-abort") {
+                p.abort(True);
+            } else {
+                p.waitDone();
+            }
+            waiting.waitForZero();
+            # the pipeline can run again
+            p.reset();
+            p.submit(-1);
+            p.waitDone();
+            hash<PipelineInfo> info = p.getInfo();
+            if (info.record_count != 1 || info.status != PS_IDLE) {
+                throw "RACE-ERROR", sprintf("iteration %d: the next run: %y", it, info{"record_count", "status"});
+            }
+        }
+        printf("%s: all waiters returned in %d iterations\n", c, iters);
         break;
     }
 

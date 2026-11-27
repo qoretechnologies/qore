@@ -70,7 +70,15 @@ class PipelineLifecycleTest inherits QUnit::Test {
             "callback-throws-global": "submit error: CB-ERROR: callback 1 failed\n"
                 "processing: False\n"
                 "errors logged: 1 (callback error: True)\n",
+            "race-abort": sprintf("race-abort: all waiters returned in %d iterations\n", RaceIterations),
+            "race-waitdone": sprintf("race-waitdone: all waiters returned in %d iterations\n", RaceIterations),
         };
+
+        #! the iterations of a race case
+        /** A waiter that the end of the run woke after the queue threads had ended never returned within these
+            iterations in 7 of the 8 runs (2 cases, 4 execution modes) of the code that had the bug
+        */
+        const RaceIterations = 300;
     }
 
     private {
@@ -84,6 +92,7 @@ class PipelineLifecycleTest inherits QUnit::Test {
 
         addTestCase("pipelines in global variables end with the program", \testGlobal());
         addTestCase("thread callback errors are raised", \testCallbackErrors());
+        addTestCase("waiters return when another thread ends the run", \testRunEndRace());
 
         set_return_value(main());
     }
@@ -96,11 +105,16 @@ class PipelineLifecycleTest inherits QUnit::Test {
         map runCase($1), ("callback-throws", "callback-throws-fanout", "callback-throws-global");
     }
 
-    private runCase(string c) {
+    #! qore#7771 review: threads in waitDone() while another thread ends the run with abort() or waitDone()
+    testRunEndRace() {
+        map runCase($1, RaceIterations.toString()), ("race-abort", "race-waitdone");
+    }
+
+    private runCase(string c, *string arg) {
         string script = get_script_dir() + DirSep + "PipelineLifecycle" + DirSep + "pipeline-lifecycle.qr";
         foreach string mode in (ExecModeHarness::ExecModes) {
-            string cmd = sprintf("LD_LIBRARY_PATH=%s timeout %d %s -b --enable-debug --exec-mode=%s %s %s",
-                libqore_dir, TimeLimit, qore_bin, mode, script, c);
+            string cmd = sprintf("LD_LIBRARY_PATH=%s timeout %d %s -b --enable-debug --exec-mode=%s %s %s %s",
+                libqore_dir, TimeLimit, qore_bin, mode, script, c, arg ?? "");
             hash<ModeRunResult> r = ExecModeHarness::run_command(cmd);
             ExecModeHarness::check_loader_warnings(r);
             string label = sprintf("%s (%s)", c, mode);
