@@ -26717,6 +26717,24 @@ static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* p
     return QoreValue();
 }
 
+//! Debug-only: holds the next stream queue drain of an HTTP/2 client connection at the check of a stream's end
+/** Tests use this to abort a connection after the I/O thread took the data of a stream with a listener and before it
+    checks whether the stream has ended, deterministically: the held drain goes on when an abort() of an HTTP/2
+    client operation has closed its connection, or when the hook is disarmed.  A test must disarm it (also when it
+    fails).
+ */
+static QoreValue f_dbg_h2_client_hold_drain_stream_end(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_h2_client_hold_drain_stream_end(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a drain is held by dbg_h2_client_hold_drain_stream_end(); returns false on timeout
+static QoreValue f_dbg_h2_client_wait_drain_stream_end_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_h2_client_wait_drain_stream_end_held(get_param_value(params, 0).getAsBigInt());
+}
+
 //! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, or lets them go on
 /** Tests use this to release the values of an owner (SandboxManager::releaseProgramCacheValues()) while a reader holds
     a value that it found and has not used yet, deterministically.  A test must stop holding them (also when it
@@ -39817,6 +39835,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_h2_client_hold_drain_stream_end", f_dbg_h2_client_hold_drain_stream_end,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_h2_client_wait_drain_stream_end_held", f_dbg_h2_client_wait_drain_stream_end_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_program_cache_hold_reads", f_dbg_program_cache_hold_reads,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");

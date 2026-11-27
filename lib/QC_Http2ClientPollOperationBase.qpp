@@ -48,6 +48,10 @@
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
 
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -1298,6 +1302,10 @@ void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         op->abort(xsink);
         op->deref(xsink);
     }
+#ifdef DEBUG
+    // the connection is closed: a drain held by the test hook goes on
+    dbgReleaseDrainStreamEnd();
+#endif
     clearStreamQueues(xsink);
     // Read connection_priv under stream_lock to race-free disarm against
     // closeConnection's disarmConnectionPriv (which nulls it before
@@ -1535,6 +1543,22 @@ int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQ
     return -1;
 }
 
+void Http2ClientPollOperationPriv::pushStreamFailureMarker(StreamQueueInfo& info, ExceptionSink* xsink) {
+    // an error marker instead of NOTHING, so that consumers (e.g. WebSocketClientHcioPollOp) can tell the failure of
+    // the connection from the end of the stream and from "no data available" (a timeout)
+    ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+    err_hash->setKeyValue("error", true, xsink);
+    err_hash->setKeyValue("end_stream", true, xsink);
+    // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840);
+    // the marker is pushed even if the queue is full, without waiting (issue #5859)
+    ExceptionSink push_xsink;
+    qore_queue_ops(info.queue).tryPush(&push_xsink, err_hash.release(), true);
+    push_xsink.clear();
+    if (info.notifier) {
+        info.notifier->notify();
+    }
+}
+
 void Http2ClientPollOperationPriv::markStreamQueuesRemoved() {
     // the objects given up are released after the lock, and the scanner reports them: a recursive set of this
     // object may count their references as internal (Pattern B in design/dgc.md)
@@ -1562,6 +1586,59 @@ static std::atomic<bool> dbg_hold_h2_client_stream_registrations{false};
 
 void qore_dbg_h2_client_hold_stream_registrations(bool hold) {
     dbg_hold_h2_client_stream_registrations.store(hold, std::memory_order_release);
+}
+
+namespace {
+// the state of the dbg_h2_client_hold_drain_stream_end() test hook
+struct DbgDrainStreamEndHold {
+    std::mutex m;
+    std::condition_variable cond;
+    // the next drain that reaches the check of a stream's end is held there
+    bool armed = false;
+    // a drain is held
+    bool held = false;
+    // the held drain goes on (set by an abort() that has closed its connection, or when the hook is disarmed)
+    bool released = false;
+};
+
+DbgDrainStreamEndHold dbg_drain_stream_end_hold;
+
+// The bound on the waits of the hook: a hang guard only, for a test that does not release the drain
+constexpr std::chrono::seconds DbgDrainStreamEndHoldGuard{60};
+}
+
+void qore_dbg_h2_client_hold_drain_stream_end(bool hold) {
+    std::lock_guard<std::mutex> lg(dbg_drain_stream_end_hold.m);
+    dbg_drain_stream_end_hold.armed = hold;
+    dbg_drain_stream_end_hold.released = !hold;
+    dbg_drain_stream_end_hold.cond.notify_all();
+}
+
+bool qore_dbg_h2_client_wait_drain_stream_end_held(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> ul(dbg_drain_stream_end_hold.m);
+    return dbg_drain_stream_end_hold.cond.wait_for(ul, std::chrono::milliseconds(timeout_ms),
+        [] { return dbg_drain_stream_end_hold.held; });
+}
+
+void Http2ClientPollOperationPriv::dbgHoldDrainStreamEnd() {
+    std::unique_lock<std::mutex> ul(dbg_drain_stream_end_hold.m);
+    if (!dbg_drain_stream_end_hold.armed) {
+        return;
+    }
+    dbg_drain_stream_end_hold.armed = false;
+    dbg_drain_stream_end_hold.held = true;
+    dbg_drain_stream_end_hold.cond.notify_all();
+    dbg_drain_stream_end_hold.cond.wait_for(ul, DbgDrainStreamEndHoldGuard,
+        [] { return dbg_drain_stream_end_hold.released; });
+    dbg_drain_stream_end_hold.held = false;
+}
+
+void Http2ClientPollOperationPriv::dbgReleaseDrainStreamEnd() {
+    std::lock_guard<std::mutex> lg(dbg_drain_stream_end_hold.m);
+    if (dbg_drain_stream_end_hold.held) {
+        dbg_drain_stream_end_hold.released = true;
+        dbg_drain_stream_end_hold.cond.notify_all();
+    }
 }
 #endif
 
@@ -1698,15 +1775,26 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
             continue;
         }
 
-        // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
-        if (qore_socket_object_private(sock_obj).isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
-                || qore_socket_object_private(sock_obj).isHttp2StreamClosedForAsyncPoll(stream_id)) {
-            // Push NOTHING sentinel so the handler thread knows the stream is done; it is pushed even if the queue
-            // is full, after the stream's data; a queue that refuses it ends the registration all the same, and its
-            // listener reads the error from it
-            ExceptionSink push_xsink;
-            qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
-            push_xsink.clear();
+#ifdef DEBUG
+        dbgHoldDrainStreamEnd();
+#endif
+        // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY).  The connection can be closed meanwhile by
+        // an abort() on another thread: a stream of a closed connection ends with the failure of the connection, as
+        // when clearStreamQueues() ends it, never as a stream that the peer ended, which a listener that the drain
+        // reaches first would otherwise be told (issue #7699)
+        qore_socket_object_private::Http2StreamEnd stream_end
+            = qore_socket_object_private(sock_obj).getHttp2StreamEndForAsyncPoll(stream_id);
+        if (stream_end != qore_socket_object_private::Http2StreamEnd::Open) {
+            if (stream_end == qore_socket_object_private::Http2StreamEnd::ConnectionClosed) {
+                pushStreamFailureMarker(info, xsink);
+            } else {
+                // Push NOTHING sentinel so the handler thread knows the stream is done; it is pushed even if the
+                // queue is full, after the stream's data; a queue that refuses it ends the registration all the
+                // same, and its listener reads the error from it
+                ExceptionSink push_xsink;
+                qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
+                push_xsink.clear();
+            }
             {
                 AutoLocker al(sq_lock);
                 addDataReadyStreamLocked(stream_id);
@@ -1780,20 +1868,7 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         }
     }
     for (StreamQueueInfo& info : cleared) {
-        // Push an error marker instead of NOTHING so consumers (e.g.,
-        // WebSocketClientHcioPollOp) can distinguish "connection closed"
-        // from "no data available" (timeout).
-        ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
-        err_hash->setKeyValue("error", true, xsink);
-        err_hash->setKeyValue("end_stream", true, xsink);
-        // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840);
-        // the marker is pushed even if the queue is full, without waiting (issue #5859)
-        ExceptionSink push_xsink;
-        qore_queue_ops(info.queue).tryPush(&push_xsink, err_hash.release(), true);
-        push_xsink.clear();
-        if (info.notifier) {
-            info.notifier->notify();
-        }
+        pushStreamFailureMarker(info, xsink);
     }
     releaseStreamQueueInfos(cleared, xsink);
     releaseStreamQueueInfos(replaced, xsink);
@@ -2985,8 +3060,8 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 }
 
 //! Clears all stream queue registrations
-/** Pushes NOTHING sentinels to all registered queues and notifies all
-    EventNotifiers so handler threads wake up and see the stream is closed.
+/** Pushes the failure of the connection to all registered queues (a hash with \c error and \c end_stream set) and
+    notifies all EventNotifiers so handler threads wake up and see the stream is closed.
 
     @since %Qore 3.0
 */
