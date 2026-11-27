@@ -16,11 +16,23 @@
 
 %exec-class ReferenceBindHeldLockTest
 
-#! Binding a reference element while the assignment holds the lock of the referenced lvalue (qore#7380)
+#! Binding a reference element of a value stored into a locked lvalue (qore#7380, qore#7391)
 /** The type check of an assignment runs with the lock of its target held.  A \c reference<T> element whose variable
-    has a wider declared type is bound there, which reads and can write the referenced lvalue; when that lvalue is
-    guarded by the same lock (a member of the same object, an element of the same global or closure-bound variable),
-    the thread locked it twice.  Every mode, qcc executables included, must print the output of the AST.
+    has a wider declared type is bound, which reads and can write the referenced lvalue; when that lvalue is guarded by
+    the same lock (a member of the same object, an element of the same global or closure-bound variable), binding it
+    under the lock locked it twice.  The check now records the reference, the store is abandoned, the reference is
+    bound with no lock held, and the store is made again: a value that the bind converts is converted and written back,
+    a value that it refuses raises \c RUNTIME-TYPE-ERROR and leaves the target and the referenced value as they were,
+    and member notifications run outside the lock.  The program also stores through a local variable that holds a
+    reference (a parameter, the variable of a foreach loop) and casts lists whose elements are references (qore#7377).
+    It covers the other operations that store values into a container (push, unshift, splice, extract, +=, list
+    assignment, object merges, foreach by reference), the keys of a path that are evaluated once when the store is made
+    again (by each store site, a weak assignment included), a local index that the retry reads again, an assignment to
+    NOTHING, container operations through a weak reference to a list, the containers created for a refused store, and
+    a hashdecl member initializer that binds a reference while the check of a store holds its lock, which is refused
+    (qore#7391).  In a debug build, the program arms
+    dbg_reference_bind_strict(), so that a bind made with an lvalue write lock held shows as \c DBG-REFERENCE-BIND-HELD
+    in its output.  Every mode, qcc executables included, must print the output of the AST.
 
     The program is in \c reference-bind-held-lock/.
 */
@@ -80,9 +92,11 @@ class ReferenceBindHeldLockTest inherits QUnit::Test {
                     testSkip("qcc is not available or cannot compile " + name + ": " + out);
                 }
                 # -b must be the first argument of a compiled program
-                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
-                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
-                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+                hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", exe));
+                assertEq(0, res.rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, res.out));
+                assertEq(expected(name), res.stdout, sprintf("%s -O%s", name, opt));
+                # the native compilation trace and the module loader's warnings are not output of the program
+                assertEq("", res.stderr, sprintf("%s -O%s: stderr", name, opt));
             }
         }
     }

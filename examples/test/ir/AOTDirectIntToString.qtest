@@ -1,9 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes or are qcc executables
 
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -51,10 +63,10 @@ if (!is_file(enabled) || !is_file(disabled)) {
     exit(2);
 }
 
-string enabled_output = backquote(
-    sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled));
-string disabled_output = backquote(
-    sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled));
+string enabled_output = run_executable(
+    sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, enabled));
+string disabled_output = run_executable(
+    sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, disabled));
 string jit_output = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --exec-mode=jit %s 2>&1",
     libqore_dir, qore_bin, source));
@@ -125,10 +137,10 @@ string measure_disabled_compile = backquote(sprintf(
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, measure_disabled, measure_source));
 string measure_enabled_output = is_file(measure_enabled)
-    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    ? run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
         libqore_dir, measure_enabled)) : "";
 string measure_disabled_output = is_file(measure_disabled)
-    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    ? run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
         libqore_dir, measure_disabled)) : "";
 string measure_enabled_undefined = is_file(measure_enabled)
     ? backquote(sprintf("nm -u %s 2>&1", measure_enabled)) : "";
@@ -179,10 +191,10 @@ string facts_disabled_compile = backquote(sprintf(
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, facts_disabled, facts_source));
 string facts_enabled_output = is_file(facts_enabled)
-    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    ? run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
         libqore_dir, facts_enabled)) : "";
 string facts_disabled_output = is_file(facts_disabled)
-    ? backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    ? run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
         libqore_dir, facts_disabled)) : "";
 string facts_enabled_measure = is_file(facts_enabled)
     ? backquote(sprintf(

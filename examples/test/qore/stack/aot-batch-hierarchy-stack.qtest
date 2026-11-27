@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation, linking and loading with a small main thread stack (ulimit -s)
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class AotBatchHierarchyStackTest
+
+#! The AOT images of a batch import inherited members in one order across the images (qore#7591)
+/** A multi-source executable (<tt>qcc -o exe main.q chain.q</tt>) loads its script objects as one batch, in the order
+    of its sources; a class of the first object inherits the most derived class of a deep hierarchy (Depth classes) of
+    the second one.  The members of the base classes were imported image by image, so the import of the class of the
+    first image recursed through the whole hierarchy of the second one, which had not imported its members yet, and in
+    a main thread with a small stack the load failed with \c PARSE-STACK-LIMIT-EXCEEDED although the batch was valid
+    (qore#7591).  The classes of all the images are imported in one topological order now, so the executable loads
+    with each of the stack sizes StackSizesKb.
+
+    With the largest stack, the executable constructs an object of the derived class, which has the member of the
+    root class.  The same objects are preloaded as a batch by a compile whose \c -L directories hold them, the
+    derived one first (<tt>qcc -c -L d1 -L d2 target.q</tt>), with the default stack: the recursion that checks the
+    generic parent classes of the hierarchy in its parse needs a large stack (qore#7539).
+*/
+class AotBatchHierarchyStackTest inherits QUnit::Test {
+    public {
+        #! the number of classes in the hierarchy
+        const Depth = 4000;
+
+        #! the stack sizes of the main thread of the executable, in KB; the load failed at 320KB and 512KB with a
+        #! debug build (qore#7591)
+        const StackSizesKb = (320, 512, 8192);
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string timeout_cmd;
+        TmpDir tmp("qore-aot-batch-hierarchy-");
+    }
+
+    constructor() : QUnit::Test("AotBatchHierarchyStackTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+
+        writeFile("chain.q", getChainSource());
+        # constructing an object of X runs the constructors of the whole hierarchy, which needs the stack of a deep
+        # recursion; it is done only with the largest stack
+        writeFile("main.q", sprintf("%%modern\nclass X inherits C%d {\n    int get() { return m0; }\n}\n\n"
+            "sub main() {\n    if (ENV.CONSTRUCT) {\n        X x();\n        printf(\"X: %%d\\n\", x.get());\n"
+            "    } else {\n        print(\"loaded\\n\");\n    }\n}\n", Depth - 1));
+        writeFile("target.q", "%modern\nX x();\nprintf(\"X: %d\\n\", x.get());\n");
+
+        addTestCase("multi-source executable", \testExecutable());
+        addTestCase("compile preloading the objects", \testPreload());
+
+        set_return_value(main());
+    }
+
+    #! returns the source of the hierarchy: C0 with a member, and Depth - 1 classes, each inheriting the previous one
+    private static string getChainSource() {
+        string code = "%modern\nclass C0 {\n    public {\n        int m0 = 7;\n    }\n}\n";
+        for (int i = 1; i < Depth; ++i) {
+            code += sprintf("class C%d inherits C%d {}\n", i, i - 1);
+        }
+        return code;
+    }
+
+    private writeFile(string name, string src) {
+        File f();
+        f.open2(tmp.path + DirSep + name, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+
+    #! returns the command prefix that bounds a child process's run time
+    private string prefix() {
+        return timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "300") : "";
+    }
+
+    #! runs a command with the main thread stack size given and returns its output and exit status
+    private string run(string cmd, *int kb) {
+        string limit = kb ? sprintf("ulimit -s %d && ", kb) : "";
+        return backquote(sprintf("cd %s && %senv LD_LIBRARY_PATH=%s QORE_LIBDIR=%s sh -c '%s%s' 2>&1; echo EXIT=$?",
+            tmp.path, prefix(), libqore_dir, libqore_dir, limit, cmd));
+    }
+
+    private checkQcc() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        if (!is_file(qcc_bin) && !strlen(backquote("command -v qcc 2>/dev/null || true"))) {
+            testSkip("qcc is not available");
+        }
+    }
+
+    testExecutable() {
+        checkQcc();
+        # the sources in this order make the object of the derived class the first image of the batch
+        string out = run(sprintf("%s -O3 -o exe main.q chain.q", qcc_bin));
+        assertRegex("\nEXIT=0\n$", "\n" + out, "compile: " + out);
+        foreach int kb in (StackSizesKb) {
+            out = run("./exe", kb);
+            assertEq("loaded\nEXIT=0\n", out, sprintf("%dK", kb));
+        }
+        # the derived class has the member of the root class of the hierarchy
+        out = run("CONSTRUCT=1 ./exe", StackSizesKb.last());
+        assertEq("X: 7\nEXIT=0\n", out, "constructing the derived class");
+    }
+
+    testPreload() {
+        checkQcc();
+        mkdir(tmp.path + DirSep + "d1");
+        mkdir(tmp.path + DirSep + "d2");
+        string out = run(sprintf("%s -O0 -c -o d2/chain.qo chain.q && %s -O0 -c -L d2 -o d1/main.qo main.q", qcc_bin,
+            qcc_bin));
+        assertRegex("\nEXIT=0\n$", "\n" + out, "objects: " + out);
+        # the -L directories in this order make the object of the derived class the first image of the batch
+        out = run(sprintf("%s -O0 -c -L d1 -L d2 -o target.qo target.q", qcc_bin));
+        assertRegex("\nEXIT=0\n$", "\n" + out, "target: " + out);
+        assertTrue(is_file(tmp.path + DirSep + "target.qo"), "target object");
+    }
+}

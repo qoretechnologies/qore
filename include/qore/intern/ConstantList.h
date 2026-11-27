@@ -371,7 +371,11 @@ public:
         @param compiled_define the value of the constant's parse define in code compiled ahead of time; see
         getParseDefineValue(); ownership is taken
     */
-    DLLLOCAL void setRuntimeDependent(std::string path, QoreValue compiled_define);
+    DLLLOCAL void setRuntimeDependent(std::string path, QoreValue compiled_define, int64 domain);
+
+    DLLLOCAL int64 getDomain() const { return domain; }
+    DLLLOCAL bool runtimeAllowsDomain() const;
+    DLLLOCAL bool checkRuntimeDomain(ExceptionSink* xsink) const;
 
     //! Returns the value the constant's parse define takes in a Program created in this process; borrowed
     /** Parse defines are decided when code is parsed, which for code compiled ahead of time is in the compiler.
@@ -390,7 +394,7 @@ public:
     /** This is the value, except for a runtime-dependent builtin, where it is the shared reference node that
         evaluates the value when the code runs; see setRuntimeDependent().
     */
-    DLLLOCAL QoreValue getParseValue() const;
+    DLLLOCAL QoreValue getParseValue(const QoreProgramLocation* consumer_loc) const;
 
     //! Releases the reference node of a runtime-dependent builtin
     DLLLOCAL void delRuntimeRef();
@@ -415,7 +419,7 @@ public:
         qore_aot_record_folded_constant_import(loc, this, ptr);
 
         constantTypeInfo = getParseTypeInfo();
-        return getParseValue();
+        return getParseValue(loc);
     }
 
     DLLLOCAL const QoreProgramLocation* getLocation() const {
@@ -509,6 +513,8 @@ protected:
 
     //! the fully-qualified path of a runtime-dependent builtin constant; see setRuntimeDependent()
     std::string runtime_dependent_path;
+    //! Functional domain required when the builtin constant is read
+    int64 domain = 0;
     //! the reference a parse-time reference to a runtime-dependent builtin resolves to; owned by this entry
     RuntimeConstantRefNode* runtime_ref = nullptr;
     //! the parse define value of a runtime-dependent builtin in code compiled ahead of time
@@ -806,6 +812,9 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        if (ce->getDomain() && !ce->checkRuntimeDomain(xsink)) {
+            return QoreValue();
+        }
         // A forward read must commit the dependency's value before returning it. Evaluating its saved
         // expression inline would construct a second object when the normal constant sweep reaches it,
         // leaving aliases and containing constants attached to a different object.
@@ -1004,10 +1013,6 @@ DLLLOCAL inline const RuntimeConstantRefNode* qore_get_runtime_constant_ref_node
         : nullptr;
     assert(rv == dynamic_cast<const RuntimeConstantRefNode*>(n));
     return rv;
-}
-
-inline QoreValue ConstantEntry::getParseValue() const {
-    return runtime_ref ? QoreValue(static_cast<AbstractQoreNode*>(runtime_ref)) : val;
 }
 
 #endif // _QORE_CONSTANTLIST_H

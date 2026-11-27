@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - it parses code with defines in a Program of its own
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -7,6 +8,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %exec-class DefineValuesTest
 
 #! the values of parse defines (issues #6530, #6564): a number is decimal, also with a leading zero, an integer stays an
@@ -75,7 +77,7 @@ class DefineValuesTest inherits QUnit::Test {
             # single quotes keep the double quotes of a string value for qcc
             string out = backquote(sprintf("%s '--define=%s' -o %s %s 2>&1", qcc_bin, def, exe, src), \rc);
             assertEq(0, rc, def + ": " + out);
-            assertEq("x\n", backquote(sprintf("%s -b 2>&1", exe)), def);
+            checkExecutable(exe, def);
         }
         int rc;
         string out = backquote(sprintf("%s --define=X=1-2 -o %s/bad %s 2>&1", qcc_bin, tmp.path, src), \rc);
@@ -89,7 +91,19 @@ class DefineValuesTest inherits QUnit::Test {
         string exe = tmp.path + "/last";
         out = backquote(sprintf("%s --define=X=1 --define=Y --define=Y=2 -o %s %s 2>&1", qcc_bin, exe, src), \rc);
         assertEq(0, rc, out);
-        assertEq("x\n", backquote(sprintf("%s -b 2>&1", exe)));
+        checkExecutable(exe, "last definition");
+    }
+
+    #! checks that an executable compiled from the source prints "x"
+    /** The module loader's warnings and the native compilation trace on stderr are not output of the program (see
+        ExecModeHarness::run_command())
+    */
+    private checkExecutable(string exe, string label) {
+        # -b must be the first argument of a compiled program
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", exe));
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", label, res.out));
+        assertEq("x\n", res.stdout, label);
+        assertEq("", res.stderr, label + ": stderr");
     }
 
     #! returns the description of the parse error of the code, or NOTHING

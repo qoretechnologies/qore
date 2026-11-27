@@ -361,6 +361,14 @@ string secret = ENV.PROBE_SECRET; # live-provider-optin: a fake value that the p
 
 SandboxManager sm();
 sm.setFilesystemDefaultPolicy(False);
+# the module files that the sandboxed code loads are read with the policy of its sandbox, which must allow them
+# (qore#7518)
+if (attacker) {
+    sm.addFilesystemAllowedPath(attacker, QSEC_READ);
+}
+if (other) {
+    sm.addFilesystemAllowedPath(other, QSEC_READ);
+}
 
 string sub err(hash<ExceptionInfo> ex) {
     return sprintf(\"%s: %s\", ex.err, ex.desc);

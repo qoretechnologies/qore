@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,9 @@
 #ifndef _QORE_QOREASSIGNMENTOPERATORNODE_H
 #define _QORE_QOREASSIGNMENTOPERATORNODE_H
 
+class LValueHelper;
+class QoreMutationOperandHolder;
+
 class QoreAssignmentOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
 public:
@@ -50,11 +53,19 @@ protected:
     bool ident = false;
     //! whether a weak assignment makes the container of its source unique (see
     //! qore_weak_assignment_source_made_unique()), found when it is first evaluated: 0 not known yet, 1 no, 2 yes
-    //! (qore#7242); the source does not change after the parse
+    //! (qore#7242), 3 if the source is a ?: or ?? operator that chooses such a source when it runs
+    //! (qore_weak_assignment_source_chooses(), qore#7342); the source does not change after the parse
     mutable std::atomic<signed char> weak_source_unique{0};
+    //! how the assignment resolves its lvalue path, decided when it first runs, with StoreBrokenInt (qore#7391)
+    /** Its normal path tests that the byte is QoreStorePathMode::Known alone, the test that replaces that of
+        broken_int, which is a flag of the byte: any other assignment is made out of line (evalStoreSlow())
+    */
+    QoreStorePathMode store_mode;
+    //! the flag of store_mode set for an assignment with broken_int
+    static constexpr uint8_t StoreBrokenInt = QoreStorePathMode::SiteFlag;
 
-    //! returns true if a weak assignment makes the container of its source unique (see weak_source_unique)
-    DLLLOCAL bool weakSourceMadeUnique() const;
+    //! returns the state of weak_source_unique, finding it the first time
+    DLLLOCAL signed char weakSourceState() const;
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
@@ -66,6 +77,27 @@ protected:
     //! (evalInternWeak(), evalLexicalWeak()) are their own, so that the other assignments keep their code (qore#7085)
     template <bool Lexical, bool Weak>
     DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    //! makes an assignment whose lvalue path is not resolved as on the normal path of evalInternImpl(), out of line
+    /** For the first run of the assignment, which decides store_mode, an assignment with broken_int, and an assignment
+        whose path has key expressions that are evaluated first (QoreStorePathKeys), after the operand, as the helper of
+        the normal path evaluates them (qore#7391)
+    */
+    template <bool Lexical, bool Weak>
+    DLLLOCAL QoreValue evalStoreSlow(QoreMutationOperandHolder& new_value, AssignmentMode mode,
+            ExceptionSink* xsink) const;
+
+    //! makes the retries of an assignment whose first round left its helper \a v pending (qore#7391)
+    /** Out of line and cold: the helper is released with its locks, the reference elements that the check recorded are
+        bound with no lvalue lock held (QoreBindRetry::again()), and the target is resolved again in it for each round,
+        with \a keys if the assignment evaluated the keys of its path first; the store assigns the value that the last
+        round converted
+
+        @return the value of the assignment with a reference if ref_rv is true and the store was made, otherwise no
+        value
+    */
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalBindRetry(LValueHelper& v, AssignmentMode mode, const QoreStorePathKeys* keys) const;
 
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
@@ -104,6 +136,10 @@ static inline bool qore_weak_source_type_may_hold_container(const QoreTypeInfo* 
     variable or the path are left as they are (qore#5756, qore#5847)
 */
 DLLLOCAL bool qore_weak_assignment_source_made_unique(const QoreValue& right);
+//! returns true if the source of a weak assignment is a ?: or ?? operator, also nested, an operand of which that can be
+//! its value is a source that is made unique (qore_weak_assignment_source_made_unique()): the operand that is chosen
+//! when it runs is that source, and any other one an expression (qore#7342)
+DLLLOCAL bool qore_weak_assignment_source_chooses(const QoreValue& right);
 
 class QoreWeakAssignmentOperatorNode : public QoreAssignmentOperatorNode {
 OP_COMMON

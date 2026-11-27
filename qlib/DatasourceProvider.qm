@@ -70,6 +70,32 @@ public *hash<string, string> sub get_mod_ds_hash() {}
     For \c get_mod_ds_string(), if the string argument is not a valid identifier for a datasource, the function should
     throw an exception (any exception; the exception is not displayed by default).
 
+    @subsubsection datasourceprovider_caller_scoped Datasource Provider Modules and Restricted Callers
+
+    The datasources of a datasource provider module belong to the host that configures the module, so code that may
+    not receive the host's secrets (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()": code that
+    a sandbox governs, or code restricted from external information with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets no datasource from it by
+    @ref DatasourceProvider::get_ds_string() "get_ds_string()" or @ref DatasourceProvider::get_ds_hash() "get_ds_hash()".
+
+    A datasource provider module that resolves names for the calling code itself, and returns to every caller only
+    the datasources that the caller may use and read (its own, for example), declares it with a public function named
+    as given by @ref DatasourceProvider::CallerScopedProviderFunction "CallerScopedProviderFunction" that returns
+    @ref True "True", as in this example:
+    @code{.py}
+# declares that every datasource that the module returns is one that the calling code may use and read
+public bool sub get_mod_caller_scoped() {
+    return True;
+}
+    @endcode
+
+    Only such a module is used for code that may not receive the host's secrets; its datasource strings are returned
+    to that code as to any other code, with their passwords.  Trusted code can use the datasources of every module for
+    restricted code with a policy barrier
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()") or a capability
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()").
+
     Datasource provider modules declared in the \c "QORE_DATASOURCE_PROVIDERS" environment variable must
     be separated by the platform-specific @ref Qore::PathSep "PathSep" character as in the following
     examples:
@@ -92,6 +118,11 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
     @section datasourceproviderrelnotes Release Notes
 
     @subsection datasourceprovider_1_2 DatasourceProvider 1.2
+    - code that may not receive the host's secrets (code that a sandbox governs, or code restricted from external
+      information) gets the datasources of only the datasource provider modules that resolve names for the calling
+      code themselves (see @ref datasourceprovider_caller_scoped): a lookup of any other datasource fails as for an
+      unknown identifier, and @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" leaves such datasources out
+      (<a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
       output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
       @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code or the code that calls
@@ -113,6 +144,15 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
 
 #! The DatasourceProvider namespace contains all the objects in the DatasourceProvider module
 public namespace DatasourceProvider {
+    #! The name of the function that declares that a datasource provider module resolves names for the calling code
+    /** A datasource provider module that returns to every caller only the datasources that the caller may use and
+        read declares it with a public function of this name that takes no argument and returns @ref True; only such
+        a module is used for code that may not receive the host's secrets (see @ref datasourceprovider_caller_scoped)
+
+        @since DatasourceProvider 1.2
+    */
+    public const CallerScopedProviderFunction = "get_mod_caller_scoped";
+
     #! Returns a datasource connection string
     /** @par Example:
         @code{.py}
@@ -135,19 +175,29 @@ string connstr = get_ds_string(str);
         @note
         - datasource provider modules are processed in the order they are declared with the \c QORE_DATASOURCE_PROVIDERS environment variable; datasource provider modules must be separated with @ref Qore::PathSep "PathSep" characters
         - no database connection is attempted with this function call
+        - code that may not receive the host's secrets (see
+          @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()")
+          gets a datasource only from a datasource provider module that resolves names for the calling code (see
+          @ref datasourceprovider_caller_scoped); for any other identifier, \c DATASOURCE-ERROR is raised as for an
+          unknown identifier, without the modules; a datasource string with a driver is returned as it is
 
         @see @ref datasourceprovider_modules
      */
     public string sub get_ds_string(string str, *bool verbose) {
         # check for a driver
         bool driver = (str =~ /^.+:/);
+        # decided here, where the code that calls the module is the caller (qore#6844)
+        bool host = SandboxManager::callerMayReceiveHostSecrets();
 
         # process datasource provider modules in declaration order
         if (ENV.QORE_DATASOURCE_PROVIDERS) {
             list<string> pl = ENV.QORE_DATASOURCE_PROVIDERS.split(PathSep);
             foreach string mod in (pl) {
                 try {
-                    return try_get_ds_string(mod, str);
+                    *string rv = try_get_ds_string(mod, str, host);
+                    if (exists rv) {
+                        return rv;
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # the stdout constant needs terminal I/O only when it is written, so that the module can be
                     # loaded by code without it; such code gets no output (qore#6438)
@@ -159,20 +209,33 @@ string connstr = get_ds_string(str);
                     # otherwise ignore exceptions
                 }
             }
-            if (!driver)
+            if (!driver) {
+                if (!host) {
+                    throw_unknown_ds(str);
+                }
                 throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; tried the following datasource provider modules: %y", get_ds_desc(str), pl);
+            }
         }
 
-        if (!driver)
+        if (!driver) {
+            if (!host) {
+                throw_unknown_ds(str);
+            }
             throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; there is no driver specification in the string (ex: \"driver:...\") and no datasource provider modules are set in the QORE_DATASOURCE_PROVIDERS environment variable", get_ds_desc(str));
+        }
         return str;
     }
 
     #! Returns all datasource supported with their connection strings prefixed by \c "db://"
     /** @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
             displayed when the module's code or the code that calls it has no terminal I/O (see get_ds_string())
+
+        @note code that may not receive the host's secrets gets only the datasources of the datasource provider
+        modules that resolve names for the calling code, which it may read (see @ref datasourceprovider_caller_scoped)
     */
     public *hash<string, string> sub get_ds_hash(*bool verbose) {
+        # decided here, where the code that calls the module is the caller (qore#6844)
+        bool host = SandboxManager::callerMayReceiveHostSecrets();
         hash<string, string> rv;
 
         # process datasource provider modules in declaration order
@@ -180,7 +243,7 @@ string connstr = get_ds_string(str);
             list<string> pl = ENV.QORE_DATASOURCE_PROVIDERS.split(PathSep);
             foreach string mod in (pl) {
                 try {
-                    rv += try_get_ds_hash(mod);
+                    rv += try_get_ds_hash(mod, host);
                 } catch (hash<ExceptionInfo> ex) {
                     # see get_ds_string()
                     if (verbose && SandboxManager::isTerminalIoAllowed()) {
@@ -214,20 +277,62 @@ namespace Priv {
             : sprintf("(the text of the error is not shown, as it can show the datasource string %s)", desc);
     }
 
-    string sub try_get_ds_string(string mod, string str) {
-        Program p();
-        p.loadModule(mod);
-        # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-        # the script path appears in exception locations (issue #6988)
-        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod, get_ds_desc(str)));
-        return p.callFunction("get_mod_ds_string", str);
+    # the error that code that may not receive the host's secrets gets for a datasource that it may not use: the
+    # same as for an unknown identifier, without the host's modules (qore#6844)
+    sub throw_unknown_ds(string str) {
+        throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource",
+            get_ds_desc(str));
     }
 
-    *hash<string, string> sub try_get_ds_hash(string mod) {
+    # returns True if the module loaded in the Program declares that it resolves names for the calling code
+    # (qore#6844); fails closed: a module without the declaration, or whose declaration fails or returns anything
+    # else, does not
+    bool sub is_caller_scoped(Program p) {
+        if (!p.existsFunction(DatasourceProvider::CallerScopedProviderFunction)) {
+            return False;
+        }
+        try {
+            return p.callFunction(DatasourceProvider::CallerScopedProviderFunction) === True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    # loads the module in a Program of its own; for code that may not receive the host's secrets, returns the
+    # Program only for a module that resolves names for the calling code, and gives no error of the other modules,
+    # which are the host's (qore#6844)
+    *Program sub load_provider(string mod, string script_path, bool host) {
         Program p();
-        p.loadModule(mod);
-        # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s)", mod));
-        return p.callFunction("get_mod_ds_hash");
+        if (host) {
+            p.loadModule(mod);
+            # we cannot make the following call before the Program::loadModule() call or it will break loading
+            # modules from relative paths
+            p.setScriptPath(script_path);
+            return p;
+        }
+        try {
+            p.loadModule(mod);
+            p.setScriptPath(script_path);
+            if (is_caller_scoped(p)) {
+                return p;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of a module that the calling code may not use is the host's
+        }
+    }
+
+    # returns the datasource string from the module; for code that may not receive the host's secrets, only from a
+    # module that resolves names for the calling code, otherwise NOTHING
+    *string sub try_get_ds_string(string mod, string str, bool host) {
+        # the script path appears in exception locations (issue #6988)
+        *Program p = load_provider(mod, sprintf("Qore::DatasourceProvider(%s,%s)", mod, get_ds_desc(str)), host);
+        return p ? p.callFunction("get_mod_ds_string", str) : NOTHING;
+    }
+
+    # returns the datasource strings of the module; for code that may not receive the host's secrets, only those of
+    # a module that resolves names for the calling code
+    *hash<string, string> sub try_get_ds_hash(string mod, bool host) {
+        *Program p = load_provider(mod, sprintf("Qore::DatasourceProvider(%s)", mod), host);
+        return p ? p.callFunction("get_mod_ds_hash") : NOTHING;
     }
 }

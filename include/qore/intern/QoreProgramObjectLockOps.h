@@ -485,18 +485,6 @@ public:
         rdlockImpl(b);
     }
 
-    //! grabs the write lock unless a reference bind of this thread already holds it; returns true if it was grabbed
-    DLLLOCAL static bool wrlockUnlessHeldForBindImpl(QoreVarRWLock* b, const void* vl);
-    DLLLOCAL bool wrlockUnlessHeldForBind(const void* vl) {
-        return wrlockUnlessHeldForBindImpl(b, vl);
-    }
-
-    //! returns true if the helper of a reference bind resolves an lvalue guarded by a lock that this thread holds
-    DLLLOCAL static bool heldForBindImpl(const QoreVarRWLock* b, const void* vl);
-    DLLLOCAL bool heldForBind(const void* vl) const {
-        return heldForBindImpl(b, vl);
-    }
-
     //! grabs the write lock
     DLLLOCAL static void wrlockImpl(QoreVarRWLock* b);
     DLLLOCAL void wrlock() {

@@ -150,13 +150,12 @@ sub scans() {
     # an object added to the list that its member holds: the cycle is collected
     {
         Tracked c("cycle");
+        # the member is given the list before a weak reference designates it, as a container that a weak reference
+        # designates is a value of its own that the member takes a copy of (qore#7342)
         list<auto!> inner = (NOTHING,);
-        auto w;
-        w := inner;
-        w[0] := inner;
-        remove w;
         c.holder = {"inner": inner};
         remove inner;
+        c.holder.inner[0] := c.holder.inner;
         push c.holder.inner[0], c;
     }
     printf("cycle destroyed: %y\n", destroyed);
@@ -248,7 +247,8 @@ sub hash_under_list_ops() {
     printf("freed hash splice: %s\n", run(string sub () { splice hw, 0, 1; return "spliced"; }));
 }
 
-#! a copy that shares the container (b = a) sees the changes made through the weak reference
+#! a variable given the container (b = a) takes a copy of its own, which the changes made through the weak
+#! reference do not reach (qore#7342)
 sub shared_copy() {
     list<auto> a = (1, 2);
     auto w;
