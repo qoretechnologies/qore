@@ -22,9 +22,16 @@ job runs this script with --fetch: it downloads that file of each of these jobs 
 the warnings that gcc and clang report for files of the Qore tree (not for bundled third-party code or system
 headers), prints them and writes them to a report.  Local logs are checked with --log LABEL=PATH.
 
+It also reports the memory of the compiles of the build jobs (build/compile-memory.txt, which build.sh writes with
+ci-compile-memory.py, qore#7780: the peak memory and the limit of the job's container and its largest compiles), and
+warns when a build's peak is above 90% of its container's limit minus 2 GiB (MEMORY_LIMIT_FRACTION,
+MEMORY_HEADROOM_BYTES), before a growth of a compile gets the job killed; local reports are checked with
+--memory LABEL=PATH.  A build whose limit is not known is reported without a check.
+
 Exit codes:
-- 0: no warning in Qore's own sources (also when no build log was found: the build jobs were skipped)
-- 3 (WARNINGS_FOUND): there are warnings; the CI job allows this exit code only, so that the pipeline passes with a
+- 0: no warning in Qore's own sources and no build near its memory limit (also when no build log was found: the build
+  jobs were skipped)
+- 3 (WARNINGS_FOUND): there are warnings, or a build's memory is near its limit; the CI job allows this exit code only, so that the pipeline passes with a
   warning and any other failure of the check is a failure
 - 1: the check itself failed (an unreadable log, the GitLab API could not be used)
 - 2: wrong arguments
@@ -56,6 +63,21 @@ BUILD_JOBS = {
     "ubuntu-amd64-non-scu-debug": ("check-build-separate-units", "build-separate-units/build.log"),
     "ubuntu-amd64-release": ("build-perf", "build/build.log"),
 }
+
+# the jobs whose compile memory is checked (build.sh), by label, with the path of the report in their artifacts
+MEMORY_JOBS = {
+    "ubuntu-amd64-debug": ("build-ubuntu-amd64", "build/compile-memory.txt"),
+    "ubuntu-arm64-debug": ("build-ubuntu-arm64", "build/compile-memory.txt"),
+    "alpine-amd64-debug": ("build-alpine-amd64", "build/compile-memory.txt"),
+    "alpine-arm64-debug": ("build-alpine-arm64", "build/compile-memory.txt"),
+}
+
+# a build's memory is near its limit above this fraction of the limit less the headroom
+MEMORY_LIMIT_FRACTION = 0.9
+MEMORY_HEADROOM_BYTES = 2 << 30
+
+# the largest compiles that a warning about a build's memory names
+MEMORY_TOP_COMPILES = 3
 
 # the first line of a log that ci-build-log.sh writes: the source directory of the build
 LOG_HEADER_RE = re.compile(r"^qore-ci-build-log source-dir=(?P<dir>.*)$")
@@ -152,6 +174,66 @@ def parse_log(text, log_source_dir, source_dir=None):
     return rv
 
 
+def gib(n):
+    """Returns a size in bytes as GiB for the report"""
+    return f"{n / (1 << 30):.1f} GiB"
+
+
+def parse_memory(text):
+    """Returns the compile memory report of a build (ci-compile-memory.py): {"peak": bytes or None, "limit": bytes or
+    None, "compiles": count, "top": [(bytes, seconds, output)...]}; raises ValueError for a malformed report"""
+    rv = {"peak": None, "limit": None, "compiles": 0, "top": []}
+    for line in text.splitlines():
+        if not line:
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            raise ValueError(f"malformed compile memory report line: {line!r}")
+        if key == "peak_bytes":
+            rv["peak"] = int(value)
+        elif key == "limit_bytes":
+            rv["limit"] = int(value)
+        elif key == "compiles":
+            rv["compiles"] = int(value)
+        elif key == "compile":
+            parts = value.split("\t", 2)
+            if len(parts) != 3:
+                raise ValueError(f"malformed compile memory report line: {line!r}")
+            rv["top"].append((int(parts[0]), float(parts[1]), parts[2]))
+    return rv
+
+
+def memory_threshold(limit):
+    """Returns the memory above which a build with the given limit is near it"""
+    return int(limit * MEMORY_LIMIT_FRACTION) - MEMORY_HEADROOM_BYTES
+
+
+def check_memory(label, mem):
+    """Returns (the report line of a build's compile memory, True if it is near its limit)
+
+    The build's peak is that of its container (cgroup); without it, that of its largest compile.
+    """
+    top = mem["top"]
+    peak = mem["peak"] if mem["peak"] is not None else (top[0][0] if top else None)
+    if peak is None:
+        return f"{label}: no compile memory recorded", False
+    what = "peak" if mem["peak"] is not None else "largest compile"
+    largest = ", ".join(f"{Path(out).name} {gib(rss)}" for rss, _, out in top[:MEMORY_TOP_COMPILES])
+    text = f"{label}: {what} {gib(peak)}"
+    near = False
+    if mem["limit"] is None:
+        text += " (limit unknown)"
+    else:
+        threshold = memory_threshold(mem["limit"])
+        near = peak > threshold
+        text += f" of {gib(mem['limit'])} (warning above {gib(threshold)})"
+        if near:
+            text += ": NEAR THE LIMIT"
+    if largest:
+        text += f"; largest compiles: {largest}"
+    return text, near
+
+
 def api_request(url, headers, opener):
     """Returns the body of a GET request"""
     request = urllib.request.Request(url, headers=headers)
@@ -190,8 +272,8 @@ def api_get(url, opener, missing_ok=False):
     raise RuntimeError(f"GitLab API request failed: {url}: {last_error}")
 
 
-def fetch_logs(directory, opener=urllib.request.urlopen):
-    """Downloads build/build.log of each build job of the pipeline into the directory; returns {label: path}"""
+def pipeline_jobs(opener):
+    """Returns the jobs of the pipeline by name"""
     api = os.environ.get("CI_API_V4_URL")
     project = os.environ.get("CI_PROJECT_ID")
     pipeline = os.environ.get("CI_PIPELINE_ID")
@@ -207,22 +289,43 @@ def fetch_logs(directory, opener=urllib.request.urlopen):
         if len(batch) < 100:
             break
         page += 1
+    return jobs
+
+
+def fetch_artifacts(directory, job_files, suffix, opener=urllib.request.urlopen, jobs=None):
+    """Downloads a file of the artifacts of each job of job_files ({label: (job name, path)}) of the pipeline into the
+    directory as <job name><suffix>; returns {label: path}"""
+    api = os.environ.get("CI_API_V4_URL")
+    project = os.environ.get("CI_PROJECT_ID")
+    if jobs is None:
+        jobs = pipeline_jobs(opener)
     rv = {}
-    for label, (name, log_path) in BUILD_JOBS.items():
+    for label, (name, log_path) in job_files.items():
         job = jobs.get(name)
         if not job or job.get("status") not in DONE_STATUSES:
             state = f"is {job.get('status', '?')}" if job else "is not in the pipeline"
-            print(f"{label}: no build log ({name} {state})")
+            print(f"{label}: no {Path(log_path).name} ({name} {state})")
             continue
         body = api_get(f"{api}/projects/{project}/jobs/{job['id']}/artifacts/{log_path}", opener, missing_ok=True)
         if body is None:
             # the job ended before its build (the tree had already passed, see tree-tested-skip.sh), or failed in it
-            print(f"{label}: no build log in {name}")
+            print(f"{label}: no {Path(log_path).name} in {name}")
             continue
-        path = Path(directory) / f"{name}.log"
+        path = Path(directory) / f"{name}{suffix}"
         path.write_bytes(body)
         rv[label] = path
     return rv
+
+
+def fetch_logs(directory, opener=urllib.request.urlopen, jobs=None):
+    """Downloads the build log of each build job of the pipeline into the directory; returns {label: path}"""
+    return fetch_artifacts(directory, BUILD_JOBS, ".log", opener, jobs)
+
+
+def fetch_memory(directory, opener=urllib.request.urlopen, jobs=None):
+    """Downloads the compile memory report of each build job of the pipeline into the directory; returns
+    {label: path}"""
+    return fetch_artifacts(directory, MEMORY_JOBS, "-compile-memory.txt", opener, jobs)
 
 
 def write_report(warnings_by_label, report):
@@ -249,42 +352,71 @@ def main(argv=None):
                         help="the source directory of the builds, as their logs name it (default: CI_PROJECT_DIR)")
     parser.add_argument("--source-dir", default=None,
                         help="the source tree, to map generated files to their sources (default: the log source dir)")
+    parser.add_argument("--memory", action="append", default=[], metavar="LABEL=PATH",
+                        help="a local compile memory report (ci-compile-memory.py), by its label")
     parser.add_argument("--report", default="build-warnings.txt", help="the report to write")
+    parser.add_argument("--memory-report", default="compile-memory.txt",
+                        help="the report of the compile memory of the builds to write")
     parser.add_argument("--download-dir", default="build-logs", help="where --fetch saves the logs")
     args = parser.parse_args(argv)
-    if not args.fetch and not args.log:
+    if not args.fetch and not args.log and not args.memory:
         parser.print_usage(sys.stderr)
         return 2
     source_dir = args.source_dir or args.log_source_dir
     logs = {}
+    memory = {}
     try:
-        for spec in args.log:
-            label, sep, path = spec.partition("=")
-            if not sep or not label or not path:
-                print(f"invalid --log argument: {spec!r}", file=sys.stderr)
-                return 2
-            if not Path(path).is_file():
-                print(f"{label}: no build log ({path})")
-                continue
-            logs[label] = Path(path)
+        for arg_name, specs, files, what in (("--log", args.log, logs, "build log"),
+                                             ("--memory", args.memory, memory, "compile memory report")):
+            for spec in specs:
+                label, sep, path = spec.partition("=")
+                if not sep or not label or not path:
+                    print(f"invalid {arg_name} argument: {spec!r}", file=sys.stderr)
+                    return 2
+                if not Path(path).is_file():
+                    print(f"{label}: no {what} ({path})")
+                    continue
+                files[label] = Path(path)
         if args.fetch:
             Path(args.download_dir).mkdir(parents=True, exist_ok=True)
-            logs.update(fetch_logs(args.download_dir))
+            jobs = pipeline_jobs(urllib.request.urlopen)
+            logs.update(fetch_logs(args.download_dir, jobs=jobs))
+            memory.update(fetch_memory(args.download_dir, jobs=jobs))
         warnings_by_label = {}
         for label, path in logs.items():
             warnings_by_label[label] = parse_log(path.read_text(errors="replace"), args.log_source_dir,
                                                        source_dir)
+        memory_by_label = {}
+        for label, path in memory.items():
+            memory_by_label[label] = parse_memory(path.read_text())
     except (OSError, RuntimeError, ValueError) as e:
         print(f"check-build-warnings: {e}", file=sys.stderr)
         return 1
+    rv = 0
+    memory_lines = []
+    near = 0
+    for label, mem in memory_by_label.items():
+        line, is_near = check_memory(label, mem)
+        memory_lines.append(line)
+        near += is_near
+    if args.memory_report:
+        # written also without a report, so that it never keeps that of an earlier check
+        Path(args.memory_report).write_text("".join(line + "\n" for line in memory_lines))
+    if memory_by_label:
+        print("compile memory of the builds:")
+        for line in memory_lines:
+            print(line)
+        if near:
+            print(f"{near} build(s) near the memory limit of the job's container (qore#7780)")
+            rv = WARNINGS_FOUND
     text = write_report(warnings_by_label, args.report)
     count = sum(len(w) for w in warnings_by_label.values())
     if not logs:
         print("no build log to check")
-        return 0
+        return rv
     if not count:
         print(f"no compiler warning in Qore's own sources ({', '.join(logs)})")
-        return 0
+        return rv
     print(f"{count} compiler warning(s) in Qore's own sources:")
     print(text, end="")
     return WARNINGS_FOUND

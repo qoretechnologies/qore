@@ -3337,6 +3337,9 @@ examples/test/qore/security/function-call-context-deopt.qtest	2.0	2.0	-	-	-	1.0	
 examples/test/qore/security/function-call-context.qtest	22.0	26.0	-	-	-	16.0	-	-	-	28.0	27.0
 examples/test/qore/security/identifier-nul.qtest	0.0	0.0	-	0.0	1.0	-	-	0.0	-	1.0	1.0
 examples/test/qore/security/keyword-nul.qtest	0.0	1.0	-	0.0	0.0	-	-	0.0	-	0.0	0.0
+examples/test/qore/security/lazy-shared-values/LazySharedValuesTest-1.qtest	55.0	72.0	-	-	-	26.0	-	-	-	-	35.0
+examples/test/qore/security/lazy-shared-values/LazySharedValuesTest-2.qtest	32.0	42.0	-	-	-	15.0	-	-	-	-	21.0
+examples/test/qore/security/lazy-shared-values/LazySharedValuesTest-3.qtest	33.0	42.0	-	-	-	15.0	-	-	-	-	21.0
 examples/test/qore/security/library-info-restriction.qtest	0.0	1.0	-	1.0	1.0	-	-	1.0	-	1.0	0.0
 examples/test/qore/security/method-call-program-context.qtest	2.0	2.0	-	-	-	2.0	-	-	-	2.0	2.0
 examples/test/qore/security/module-io-sandbox-manager.qtest	0.0	0.0	-	0.0	0.0	-	-	0.0	-	0.0	1.0

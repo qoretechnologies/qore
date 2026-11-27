@@ -283,6 +283,54 @@ class TenantPersistProbe inherits AbstractHttpRequestHandler {
 AbstractHttpRequestHandler sub get_handler() {
     return new TenantPersistProbe();
 }
+
+# the helper of a Program that a trusted sandbox governs, which the test gives to the tenant
+our *code helper;
+
+class TenantHelperProbe inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string key = hdr.\"x-key\";
+        string close1 = helper(listener, \"close\", key);
+        string remove_r = helper(listener, \"remove\", \"1000000\");
+        return makeResponse(200, close1 + \"/\" + remove_r);
+    }
+}
+
+AbstractHttpRequestHandler sub get_helper_handler(code h) {
+    helper = h;
+    return new TenantHelperProbe();
+}
+
+# runs the helper of another tenant in a thread of this tenant: the sandboxes of both tenants govern the helper's code
+class TenantThreadHelperProbe inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string key = hdr.\"x-key\";
+        Queue q();
+        background sub () {
+            q.push(try_it(sub () { helper(listener, \"close\", key); }) + \"/\"
+                + try_it(sub () { helper(listener, \"remove\", \"1000000\"); }));
+        }();
+        return makeResponse(200, q.get(30s));
+    }
+}
+
+AbstractHttpRequestHandler sub get_thread_helper_handler(code h) {
+    helper = h;
+    return new TenantThreadHelperProbe();
+}
+
+class TenantRemoveProbe inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, \"remove_other=\" + try_it(sub () { listener.removeExternalDedicatedSocket(1000000); }));
+    }
+}
+
+AbstractHttpRequestHandler sub get_view_handler() {
+    return new TenantRemoveProbe();
+}
 ";
 
         #! a tenant's handler that registers a queue on its own connection's key, then reports what it received
@@ -538,6 +586,12 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         addTestCase("the server takes only the objects of its own listeners", \sendHttpErrorTest());
         addTestCase("a handler closes, takes over and ends only its own persistent session", \persistentTest());
         addTestCase("a sandboxed socket handler removes only its own connection", \dedicatedTest());
+        addTestCase("the variants without a handler are refused to restricted and tenant code only",
+            \anyOwnerTest());
+        addTestCase("a tenant cannot use the variants without a handler through a trusted Program's code",
+            \anyOwnerHelperTest());
+        addTestCase("code of two tenants together cannot use the variants without a handler",
+            \anyOwnerMixedTenantTest());
         addTestCase("HTTP/1.1: a handler cannot take over the requests of its own connection", \ownKeyTest(), "1.1");
         addTestCase("HTTP/2: a handler cannot take over the requests of its own connection", \ownKeyTest(), "2.0");
         addTestCase("HTTP/3: a handler cannot take over the requests of its own connection", \ownKeyTest(), "3.0");
@@ -567,7 +621,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
             "string_name": "METHOD-DOES-NOT-EXIST",
             "call_reference": "OBJECT-METHOD-REFERENCE-ERROR",
             "socket": "METHOD-DOES-NOT-EXIST",
-            # sandboxed code can remove only the connection of its own handler
+            # restricted code can remove only the connection of its own handler
             "remove_other": "HTTPLISTENER-ACCESS-ERROR",
             # the methods of the interface work
             "iface": "yes",
@@ -704,7 +758,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
             r{op} = tc.send(NOTHING, "GET", "/t/" + op, {"x-key": key}).body;
         }
         assertEq({
-            # the variant without the handler is refused to sandboxed code
+            # the variant without the handler is refused to restricted code
             "close1": "HTTPLISTENER-ACCESS-ERROR",
             # with its own handler, it does not close a session that another handler registered
             "close2": "ok",
@@ -854,13 +908,204 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
     }
 
     #! Returns a sandboxed Program with the given source
-    private Program getTenantProgram(string source) {
+    /** @param source the source of the Program
+        @param trusted the sandbox allows uncontrolled APIs: it governs trusted code (qore#7737)
+        @param domain the isolation domain (the tenant) of the sandbox
+    */
+    private Program getTenantProgram(string source, bool trusted = False, *string domain) {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.parse(source, "tenant");
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
+        if (trusted) {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        if (domain) {
+            sm.setIsolationDomain(domain);
+        }
         p.setSandboxManager(sm);
         return p;
+    }
+
+    #! The variants without a handler through a thread of a Program that a trusted sandbox governs (qore#7816)
+    /** A helper of the trusted Program runs the variants in a thread that it starts for its caller: the code that the
+        helper creates while it serves a restricted caller keeps that caller's restrictions, so restricted code cannot
+        use the variants through it, and trusted code that a sandbox governs can
+    */
+    anyOwnerHelperTest() {
+        # the helper: a Program that a trusted sandbox (no isolation domain) governs
+        Program trusted(PO_NO_CHILD_PO_RESTRICTIONS);
+        trusted.parse("%modern
+%requires HttpServerUtil
+code sub get_helper() {
+    # the call runs in a thread of the trusted Program, which the tenant's call starts: the thread carries the
+    # tenant's sandbox, though no code of the tenant is on its stack
+    return string sub (HttpListenerInterface l, string op, string arg) {
+        Queue q();
+        background sub () {
+            try {
+                if (op == \"close\") {
+                    l.signalPersistentSessionClose(arg);
+                } else {
+                    l.removeExternalDedicatedSocket(arg);
+                }
+                q.push(\"ok\");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        # bounded: a thread that does not report makes the request fail, not wait for the client's timeout
+        return q.get(30s);
+    };
+}
+", "trusted-helper");
+        SandboxManager tsm();
+        tsm.setNetworkDefaultPolicy(True);
+        tsm.setUncontrolledApiPolicy(True);
+        trusted.setSandboxManager(tsm);
+        code helper = trusted.callFunction("get_helper");
+
+        # [tenant kind, trusted, isolation domain, expected result of each variant without a handler]
+        list<list<auto>> kinds = (
+            ("restricted", False, NOTHING, "HTTPLISTENER-ACCESS-ERROR"),
+            ("restricted tenant", False, "tenant-a", "HTTPLISTENER-ACCESS-ERROR"),
+            ("trusted", True, NOTHING, "ok"),
+        );
+        foreach list<auto> kind in (kinds) {
+            Program tenant = getTenantProgram(TenantPersistSource, kind[1], kind[2]);
+            AbstractHttpRequestHandler probe = tenant.callFunction("get_helper_handler", helper);
+            PersistHandler owner();
+            HttpServer server(<HttpServerOptionInfo>{});
+            on_exit delete server;
+            server.setHandler("p", "/p", NOTHING, owner);
+            server.setHandler("t", "/t", NOTHING, probe);
+            int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+            server.waitForAsyncIo();
+            string url = "http://127.0.0.1:" + port;
+
+            HTTPClient oc({"url": url, "timeout": 10s});
+            oc.connect();
+            on_exit oc.disconnect();
+            string key = oc.send(NOTHING, "GET", "/p/start")."x-key";
+
+            HTTPClient tc({"url": url, "timeout": 10s});
+            string r = tc.send(NOTHING, "GET", "/t/x", {"x-key": key}).body;
+            assertEq(kind[3] + "/" + kind[3], r, kind[0]
+                + ": the variants without a handler, through the trusted Program's helper");
+            if (kind[3] == "ok") {
+                # trusted code closed the session that another handler registered
+                assertTrue(owner.closed.get(HangGuard), kind[0] + ": the owner's session is closed");
+            } else {
+                assertEq("continued", oc.send(NOTHING, "GET", "/p/continue").body, kind[0]
+                    + ": the owner's session goes on");
+                assertEq(0, owner.closed.size(), kind[0] + ": the session was not closed");
+                owner.kept.signalPersistentSessionClose(key, owner);
+                assertTrue(owner.closed.get(HangGuard), kind[0] + ": the owner closes its own session");
+            }
+        }
+    }
+
+    #! Code that the sandboxes of two tenants govern together belongs to no tenant: the variants are refused (qore#7816)
+    /** A closure of tenant B's Program runs in a thread that tenant A's code starts, so that
+        SandboxManager::getCallerIsolationDomain() raises SANDBOX-ISOLATION-ERROR; both tenants' sandboxes trust their
+        code, so only the check of the isolation domain refuses it
+    */
+    anyOwnerMixedTenantTest() {
+        Program b(PO_NO_CHILD_PO_RESTRICTIONS);
+        b.parse("%modern
+%requires HttpServerUtil
+code sub get_helper() {
+    return sub (HttpListenerInterface l, string op, string arg) {
+        if (op == \"close\") {
+            l.signalPersistentSessionClose(arg);
+        } else {
+            l.removeExternalDedicatedSocket(arg);
+        }
+    };
+}
+", "tenant-b");
+        SandboxManager bsm();
+        bsm.setNetworkDefaultPolicy(True);
+        bsm.setUncontrolledApiPolicy(True);
+        bsm.setIsolationDomain("tenant-b");
+        b.setSandboxManager(bsm);
+
+        Program tenant = getTenantProgram(TenantPersistSource, True, "tenant-a");
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_thread_helper_handler",
+            b.callFunction("get_helper"));
+        PersistHandler owner();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("p", "/p", NOTHING, owner);
+        server.setHandler("t", "/t", NOTHING, probe);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string url = "http://127.0.0.1:" + port;
+
+        HTTPClient oc({"url": url, "timeout": 10s});
+        oc.connect();
+        on_exit oc.disconnect();
+        string key = oc.send(NOTHING, "GET", "/p/start")."x-key";
+
+        HTTPClient tc({"url": url, "timeout": 10s});
+        assertEq("HTTPLISTENER-ACCESS-ERROR/HTTPLISTENER-ACCESS-ERROR",
+            tc.send(NOTHING, "GET", "/t/x", {"x-key": key}).body, "the variants without a handler");
+        assertEq("continued", oc.send(NOTHING, "GET", "/p/continue").body, "the owner's session goes on");
+        assertEq(0, owner.closed.size(), "the session was not closed");
+        owner.kept.signalPersistentSessionClose(key, owner);
+        assertTrue(owner.closed.get(HangGuard), "the owner closes its own session");
+    }
+
+    #! The variants without a handler follow the owner rule (qore#7816)
+    /** Restricted code and the code of a tenant (also one whose sandbox allows uncontrolled APIs) are refused; trusted
+        code that a sandbox governs only for its policy is not: it closes another handler's persistent session
+    */
+    anyOwnerTest() {
+        # [sandbox kind, trusted, isolation domain, expected result of each variant without a handler]
+        list<list<auto>> kinds = (
+            ("restricted", False, NOTHING, "HTTPLISTENER-ACCESS-ERROR"),
+            ("restricted tenant", False, "tenant-a", "HTTPLISTENER-ACCESS-ERROR"),
+            ("trusted tenant", True, "tenant-a", "HTTPLISTENER-ACCESS-ERROR"),
+            ("trusted", True, NOTHING, "ok"),
+        );
+        foreach list<auto> kind in (kinds) {
+            Program tenant = getTenantProgram(TenantPersistSource, kind[1], kind[2]);
+            AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+            PersistHandler owner();
+            HttpServer server(<HttpServerOptionInfo>{});
+            on_exit delete server;
+            server.setHandler("p", "/p", NOTHING, owner);
+            server.setHandler("t", "/t", NOTHING, probe);
+            int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+            server.waitForAsyncIo();
+            string url = "http://127.0.0.1:" + port;
+
+            # the owner's persistent session, on its own connection
+            HTTPClient oc({"url": url, "timeout": 10s});
+            oc.connect();
+            on_exit oc.disconnect();
+            string key = oc.send(NOTHING, "GET", "/p/start")."x-key";
+
+            # the probe's handler, on another connection, tries to close the owner's session without a handler
+            HTTPClient tc({"url": url, "timeout": 10s});
+            string close1 = tc.send(NOTHING, "GET", "/t/close1", {"x-key": key}).body;
+            assertEq(kind[3], close1, kind[0] + ": signalPersistentSessionClose(softstring)");
+            if (kind[3] == "ok") {
+                # trusted code closed the session that another handler registered
+                assertTrue(owner.closed.get(HangGuard), kind[0] + ": the owner's session is closed");
+            } else {
+                # the owner's session is still the owner's
+                assertEq("continued", oc.send(NOTHING, "GET", "/p/continue").body, kind[0]
+                    + ": the owner's session goes on");
+                assertEq(0, owner.closed.size(), kind[0] + ": the session was not closed");
+                owner.kept.signalPersistentSessionClose(key, owner);
+                assertTrue(owner.closed.get(HangGuard), kind[0] + ": the owner closes its own session");
+            }
+
+            # and to remove a connection that is not its own handler's: refused, or nothing to remove
+            hash<string, string> r = getResult(tenant.callFunction("get_view_handler"));
+            assertEq(kind[3], r.remove_other, kind[0] + ": removeExternalDedicatedSocket(softstring)");
+        }
     }
 
     #! runs one request with the given handler and returns what it found

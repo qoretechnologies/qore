@@ -27278,6 +27278,8 @@ static std::string dbg_aot_mem_str(const QoreHashNode* h, const char* key, const
     - \c estimate_lowered (\c gov, \c bytes: an LLVM instruction count, \c sq: the sum of the squared
       instruction counts of the functions): the lowered unit estimate
     - \c stats (\c gov): the governor's counts
+    - \c ledger_path (\c domain): the path of the domain's ledger as a batch process takes it from the environment
+      (\c QORE_AOT_MEMORY_LEDGER_DIR, \c TMPDIR or \c /tmp; qore#7823)
 
     @return a list with the result of each operation (NOTHING for those with none)
 */
@@ -27365,6 +27367,11 @@ static QoreValue f_dbg_aot_batch_memory(const QoreListNode* params, RuntimeConfi
             src.domain = "dbg";
             govs[gname] = std::make_unique<QoreAOTBatchMemoryGovernor>(std::move(src), model, ledger);
             rv->push(govs[gname]->hasLedger(), xsink);
+            continue;
+        }
+        // the path of the ledger of the domain named by \c domain, as a batch process takes it from the environment
+        if (name == "ledger_path") {
+            rv->push(new QoreStringNode(qore_aot_memory_ledger_path(dbg_aot_mem_str(op, "domain", "host"))), xsink);
             continue;
         }
         if (name == "join") {

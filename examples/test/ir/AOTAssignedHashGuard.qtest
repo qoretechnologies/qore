@@ -1,9 +1,32 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-assigned-hash-guard-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -13,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-assigned-hash-guard-" + string(getpid());
+string root = tmp.path + "/assigned-hash-guard";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -70,32 +93,33 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         !~ /assignedAccess.*assigned-hash-guards-elided=[1-9][0-9]*/
         || disabled_compile =~ /assigned-hash-guards-elided=/) {
     printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
-string ast = backquote(sprintf("%s %s %s 2>&1", env, qore_bin, source_path));
-string jit = backquote(sprintf("%s %s --exec-mode=jit %s 2>&1",
+# the qore runs that the executables' output is compared with run the same way
+string ast = run_executable(sprintf("%s %s %s", env, qore_bin, source_path));
+string jit = run_executable(sprintf("%s %s --exec-mode=jit %s",
     env, qore_bin, source_path));
-string jit_disabled = backquote(sprintf(
+string jit_disabled = run_executable(sprintf(
     "%s QORE_DISABLE_IR_ASSIGNED_HASH_GUARD_ELISION=1"
-        " %s --exec-mode=jit %s 2>&1",
+        " %s --exec-mode=jit %s",
     env, qore_bin, source_path));
-string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
-string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
+string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
 if (!ast || ast !~ /:True:True\n$/
         || jit != ast || jit_disabled != ast
         || enabled != ast || disabled != ast) {
     printf("execution mismatch:\nAST:\n%sJIT:\n%sJIT disabled:\n%s"
         "AOT:\n%sAOT disabled:\n%s",
         ast, jit, jit_disabled, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }
 
 unlink(enabled_exe);

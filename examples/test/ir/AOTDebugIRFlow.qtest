@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc executables and in child processes that set their own execution mode
 # Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
 # test-platform: macos - AOT code generation and linking of the debug IR of a program that a debugger runs
 
@@ -20,6 +21,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %exec-class AOTDebugIRFlowTest
 
 class AOTDebugIRFlowTest inherits QUnit::Test {
@@ -85,7 +87,8 @@ class AOTDebugIRFlowTest inherits QUnit::Test {
         foreach list<auto> c in (Cases) {
             string args = sprintf("%s %s %d %d", c[0], c[1], tags{c[2]}, c[3]);
             # the AST interpreter is the reference
-            string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s %s 2>&1", qore_bin, src, args));
+            string ast_out = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s %s", qore_bin, src, args),
+                NOTHING, "QORE_JIT_TIMING=1").out;
             assertRegex("^RESULT:", ast_out, sprintf("%s: AST", args));
             assertEq(ast_out, run(exe, args), sprintf("%s: AOT code takes the request as the AST interpreter", args));
             # the debug IR of outlined code is that of the function as it was (#6201)
@@ -130,8 +133,10 @@ class AOTDebugIRFlowTest inherits QUnit::Test {
         return exe;
     }
 
+    #! runs the executable in its default environment: its output on stdout followed by its output on stderr, apart
+    #! from the warnings of the module loader, which are not output of the run (qore#7805)
     private string run(string exe, string args) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir, libqore_dir, exe,
-            args));
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, exe, args), NOTHING, "QORE_JIT_TIMING=1").out;
     }
 }

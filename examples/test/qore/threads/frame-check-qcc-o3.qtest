@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class FrameCheckQccO3Test
@@ -120,11 +121,14 @@ public class FrameCheckQccO3Test inherits QUnit::Test {
         assertTrue(is_file(exe), "the executable: " + out);
         assertTrue(out =~ /frame check: [^\n]*big[^\n:]*\.own\.[^\n:]*: [0-9]+ bytes: thunk/,
             "the copy of the fast entry without its unused parameter has a thunk: " + out);
-        string run = backquote(sprintf("ulimit -c 0; LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", quote(libdir),
-            quote(libdir), quote(exe)), \status);
-        assertEq(0, status, "the executable ends normally: " + run);
-        assertEq("ex: STACK-LIMIT-EXCEEDED made: True live: 0\n", run,
+        # the executable runs in its default environment; a warning of the module loader on stderr is not output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("ulimit -c 0; "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", quote(libdir), quote(libdir), quote(exe)), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "the executable ends normally: " + r.out);
+        assertEq("ex: STACK-LIMIT-EXCEEDED made: True live: 0\n", r.stdout,
             "the deep recursion raises STACK-LIMIT-EXCEEDED and every object is destroyed");
+        assertEq("", r.stderr, "the executable writes nothing to stderr");
     }
 
     private modesTest() {

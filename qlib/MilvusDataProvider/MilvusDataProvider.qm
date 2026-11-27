@@ -49,10 +49,9 @@ module MilvusDataProvider {
                 "[Zilliz Cloud](https://zilliz.com) (managed Milvus) — an "
                 "open-source vector database supporting billion-scale similarity "
                 "search.\n\n"
-                "Use the @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" "
-                "backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported "
-                "ingest/retrieve path through @ref QoreRagUtils::RagPipeline "
-                "\"RagPipeline\".",
+                "Use the `MilvusVectorStore` "
+                "backend in `QoreRagUtils` for the supported "
+                "ingest/retrieve path through `RagPipeline`.",
             "scheme": "milvus",
             "logo": MilvusLogo,
             "logo_file_name": "milvus-logo.svg",

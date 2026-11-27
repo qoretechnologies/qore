@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore FilesystemConnection class definition
 
-/*  FilesystemConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  FilesystemConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,8 +28,15 @@ public namespace ConnectionProvider {
 /** this can be used to monitor filesystem free space or to ensure a network filesystem is mounted, for example
 
     supports the following option:
-    - \c "readonly": does not mark the connection as down if the directory is read-only; use for example if the
-      connection should point to a read-only base directory; interface directories should normally be writable
+    - \c "readonly": does not mark the connection as down if the directory is read-only, and makes the data
+      providers that the connection returns read-only; use for example if the connection should point to a
+      read-only base directory; interface directories should normally be writable
+
+    The connection defines the location and the access of its data providers: the
+    @ref FileDataProvider::FileDataProvider "FileDataProvider" that getDataProvider() returns has the connection's
+    directory as its root and is locked to it, and it is read-only if the connection is read-only; constructor
+    options that the caller gives cannot change them (a caller may make the data provider of a writable connection
+    read-only with the \c "readonly" constructor option)
 
     @note the path will be subject to environment variable substitutions
 */
@@ -54,11 +61,12 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
             "options": {
                 "readonly": <ConnectionOptionInfo>{
                     "display_name": "Read-Only",
-                    "short_desc": "Sets the read-only flag on the connection",
+                    "short_desc": "Makes the connection and its data providers read-only",
                     "type": "bool",
-                    "desc": "Does not mark the connection as down if the filesystem location is read only; use for "
-                        "example if the connection should point to a read-only base directory; interface directories "
-                        "should normally be writable",
+                    "desc": "Does not mark the connection as down if the filesystem location is read only, and makes "
+                        "the data providers that the connection returns read-only: they cannot create, delete, move, "
+                        "copy to or make directories in the location; use for example if the connection should point "
+                        "to a read-only base directory; interface directories should normally be writable",
                     "default_value": False,
                 },
             },
@@ -138,9 +146,12 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
     }
 
     #! Returns a data provider object for this connection
-    /** @param constructor_options any additional constructor options for the data provider
+    /** @param constructor_options any additional constructor options for the data provider; the \c "root" and
+        \c "lock" options are ignored, and the \c "readonly" option is ignored if the connection is read-only
 
-        @return a data provider object for this connection
+        @return a @ref FileDataProvider::FileDataProvider "FileDataProvider" whose root is the connection's directory,
+        which is locked to it, and which is read-only if the connection is read-only (or if \a constructor_options
+        sets \c "readonly")
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         # the data provider is created from the connection's members and its constructor options: for restricted code
@@ -148,10 +159,17 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         # (qore#7327)
         AbstractConnection src = getLentDataProviderSource(constructor_options);
         load_module("FileDataProvider");
-        return create_object("FileDataProvider", {
+        # the connection defines the location and the access of the data provider: its directory is the root that the
+        # provider is locked to, and a read-only connection gives a read-only provider; the caller's options cannot
+        # change them (qore#7806)
+        hash<auto> dp_opts = constructor_options + {
             "root": src.urlh.path ?? "/",
-            "readonly": False,
-        } + constructor_options);
+            "lock": True,
+        };
+        if (src.opts.readonly) {
+            dp_opts.readonly = True;
+        }
+        return create_object("FileDataProvider", dp_opts);
     }
 
     #! Returns a \c "file" scheme redirect for the given path
@@ -269,11 +287,13 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         if (subtype_info{subtype}.path && !constructor_options.path) {
             constructor_options.path = urlh.path;
         }
-        if (subtype_info{subtype}.readonly && !exists constructor_options.readonly) {
+        # a subtype with a "readonly" option is read-only unless the caller makes it writable, and always for a
+        # read-only connection (qore#7806); no subtype has the option at present (the file poller only reads)
+        if (subtype_info{subtype}.readonly && (opts.readonly || !exists constructor_options.readonly)) {
             constructor_options.readonly = True;
         }
-        hash<auto> opts = getSubtypeOptions(subtype_info{subtype}, constructor_options);
-        return create_object(conf."class", opts);
+        hash<auto> dp_opts = getSubtypeOptions(subtype_info{subtype}, constructor_options);
+        return create_object(conf."class", dp_opts);
     }
 
     #! Returns a hash of data provider constructor option info, if applicable

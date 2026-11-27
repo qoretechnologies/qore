@@ -1101,4 +1101,63 @@ public class HttpClientConnectionView {
     }
 }
 
+#! The state of a pooled connection that the connection manager is establishing, for the code that waits for it (qore#7813)
+/** A connection of a manager is shared by the requests of every caller of the manager, so
+    @ref HttpClientConnectionManager::acquireConnectionAsync() gives the connection itself only to code that no sandbox
+    restricts or that owns the manager.  The code that only waits for a connection to be established, and counts the
+    attempts that fail, uses @ref HttpClientConnectionManager::acquireConnectionStatusAsync(), which gives the state of
+    the connection with these methods and nothing that acts on it: such code does not need more, and restricted code that
+    does not own the manager gets no handle on the connection that it could close or lease while a request of another
+    caller uses it.
+
+    Not constructible by other code (the constructor takes the token of this module).
+*/
+public class HttpClientConnectionStatus {
+    private:internal {
+        #! the connection
+        HttpClientConnection conn;
+    }
+
+    #! Creates the status; reserved for the code of this module (HttpClientConnectionManager::acquireConnectionStatusAsync())
+    constructor(object access, HttpClientConnection conn) {
+        HttpClientIoSocketAccess::check(access);
+        self.conn = conn;
+    }
+
+    #! Returns the protocol identifier: \c "h1", \c "h2" or \c "h3"
+    string getProtocol() {
+        return conn.getProtocol();
+    }
+
+    #! Returns @ref True if the connection is ready for requests
+    bool isReady() {
+        return conn.isReady();
+    }
+
+    #! Returns @ref True if the connection is closed
+    bool isClosed() {
+        return conn.isClosed();
+    }
+
+    #! Returns @ref True if the connection failed: it is closed, or its poll operation recorded an error
+    /** The poll operation's error is recorded before the connection is marked closed
+    */
+    bool failed() {
+        return conn.isClosed() || conn.getPollOperation().hasError();
+    }
+
+    #! Returns the error that the connection's poll operation recorded, if any
+    *hash<auto> getError() {
+        return conn.getPollOperation().getError();
+    }
+
+    #! Returns @ref True if the connection is a candidate of a happy-eyeballs race of the given manager that is still unresolved
+    /** @param mgr the connection manager that gave the status; see
+        @ref HttpClientConnectionManager::isUnresolvedRaceLeg()
+    */
+    bool isUnresolvedRaceLeg(HttpClientConnectionManager mgr) {
+        return mgr.isUnresolvedRaceLeg(conn);
+    }
+}
+
 } # namespace HttpClientIo

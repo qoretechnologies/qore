@@ -12,16 +12,16 @@
           "message": "З’єднання з файловою системою"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Не позначає з’єднання як недоступне, якщо розташування файлової системи тільки для читання; використовувати, наприклад, якщо з’єднання має вказувати на каталог тільки для читання; інтерфейсні каталоги зазвичай мають бути доступними для запису"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Не позначає з'єднання як недоступне, якщо розташування у файловій системі доступне лише для читання, і робить постачальників даних, яких повертає з'єднання, доступними лише для читання: вони не можуть створювати, видаляти, переміщувати, копіювати до розташування чи створювати в ньому каталоги; використовуйте, наприклад, якщо з'єднання має вказувати на базовий каталог лише для читання; каталоги інтерфейсів зазвичай мають бути доступними для запису"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "Тільки для читання"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Встановлює прапор тільки для читання на з’єднанні"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Робить з'єднання та його постачальників даних доступними лише для читання"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AotStandaloneFormatFloorTest
@@ -237,8 +238,10 @@ class AotStandaloneFormatFloorTest inherits QUnit::Test {
             out = backquote(sprintf("codesign -f -s - %s 2>&1", shellQuote(exe)), \rc);
             assertEq(0, rc, "codesign: " + out);
         }
-        out = backquote(sprintf("%s %s 2>&1", env, shellQuote(exe)), \rc);
-        return {"version": version, "rc": rc, "out": out};
+        # the image runs in its default environment; a warning of the module loader on stderr is not output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, shellQuote(exe)),
+            NOTHING, "QORE_JIT_TIMING=1");
+        return {"version": version, "rc": r.rc, "out": r.out};
     }
 
     # Each fixture embeds one QORD image. Ignore occurrences of the magic outside plausible headers.
@@ -268,13 +271,20 @@ class AotStandaloneFormatFloorTest inherits QUnit::Test {
             shellQuote(dir + "/aot-standalone-format-floor.q")), \rc);
         assertEq(0, rc, "qcc: " + out);
         assertTrue(is_file(exe), "qcc wrote the executable: " + out);
-        out = backquote(sprintf("%s %s 2>&1", env, shellQuote(exe)), \rc);
-        assertEq(0, rc, out);
-        assertEq("standalone program ran: 42\n", out);
+        checkExecutable(sprintf("%s %s", env, shellQuote(exe)), "standalone program ran: 42\n", "the executable");
     }
 
     #! returns the little-endian u16 at the offset of the binary
     private static int getU16(binary b, int offset) {
         return get_byte(b, offset) | (get_byte(b, offset + 1) << 8);
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

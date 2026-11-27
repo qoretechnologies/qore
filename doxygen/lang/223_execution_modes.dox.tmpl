@@ -655,8 +655,10 @@ warning: a debugger is attached while code compiled without debugging (qcc -g) i
       the inactive file cache that the kernel reclaims first, or the host's available memory if that is less or there
       is no limit; on macOS and other systems, the host's available memory
     - each batch process records the memory it has reserved and not used yet in a ledger file shared with the other
-      batch processes of the same domain (\c qore-aot-memory-<em>uid</em>-<em>hash</em>.ledger in \c TMPDIR or
-      \c /tmp, removed by the last process to leave it), and every admission deducts the reservations of all of
+      batch processes of the same domain (\c qore-aot-memory-<em>uid</em>-<em>hash</em>.ledger in the directory named by
+      \c QORE_AOT_MEMORY_LEDGER_DIR, or else in \c TMPDIR or \c /tmp, removed by the last process to leave it; set
+      \c QORE_AOT_MEMORY_LEDGER_DIR to keep processes with different temporary directories in one ledger), and every
+      admission deducts the reservations of all of
       them, so that two processes compiling at the same time do not count the same free memory; a reservation counts
       as used as the process's resident memory grows
     - an object is first admitted with an estimate from the size of its source; once its code is lowered to %Qore

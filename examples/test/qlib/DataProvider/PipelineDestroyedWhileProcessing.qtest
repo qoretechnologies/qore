@@ -229,6 +229,8 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
             \throwingLogErrorTest());
         addTestCase("a pipeline whose last reference a fan-out queue thread's call of a child queue holds is destroyed "
             "in that thread", \fanOutDestroyedTest());
+        addTestCase("a pipeline whose last reference a child queue's thread holds after the fan-out queue thread has "
+            "released its own is destroyed in the child queue's thread", \childQueueDestroyedTest());
         set_return_value(main());
     }
 
@@ -343,11 +345,19 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
     #! (qore#7509)
     /** Queue 0's thread calls the pipeline through the child queue (with the pipeline's lock held), and that call
         holds the last reference: the pipeline is destroyed in queue 0's thread, once the thread has released the lock
+
+        The child queue's thread can take the lock as soon as queue 0's thread releases it to release its reference,
+        and its own reference, which its log of the record's output takes, would be the last one if it took it before
+        queue 0's thread released its own (see childQueueDestroyedTest()); its processor therefore holds the record
+        until the pipeline has been destroyed
     */
     fanOutDestroyedTest() {
         Queue events();
         ShutdownCollector collector(events);
-        ThreadProcessor proc(False);
+        HoldingProcessor proc(False);
+        on_exit if (proc.go.getCount()) {
+            proc.go.dec();
+        }
         Counter in_log(1);
         Counter go(1);
         on_exit if (go.getCount()) {
@@ -381,6 +391,101 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         hash<auto> ev = events.get(HangTimeout);
         assertEq("destroyed", ev.event, "the pipeline is destroyed");
         assertEq(tid, ev.tid, "queue 0's thread destroys the pipeline");
+        # the child queue's thread processes the record, unless the destructor has stopped its queue first, and the
+        # destructor waits for it
+        proc.go.dec();
+        assertEq("collector shut down", events.get(HangTimeout).event,
+            "the destructor does not wait for the queue thread that runs it");
+    }
+
+    #! The program releases the pipeline while queue 0's thread logs its submission of a record to a child queue, and
+    #! the child queue's thread takes its reference to the pipeline before queue 0's thread releases its own
+    #! (qore#7509)
+    /** The debug-only release hook of the pipeline holds queue 0's thread, with the pipeline's lock released, before
+        it releases its reference, until the child queue's thread holds its own reference in its log of the record's
+        output: the child queue's thread holds the last reference, and the pipeline is destroyed in it once it has
+        processed the record and released the lock
+    */
+    childQueueDestroyedTest() {
+        Queue events();
+        ShutdownCollector collector(events);
+        ThreadProcessor proc(False);
+        Counter in_log(1);
+        Counter go(1);
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
+        Counter child_in_log(1);
+        Counter child_go(1);
+        on_exit if (child_go.getCount()) {
+            child_go.dec();
+        }
+        Counter released(1);
+        bool armed = True;
+        bool child_armed = True;
+        bool release_armed = True;
+        int main_tid = gettid();
+        Queue log_tid();
+
+        code release_hook = sub (int id, code release) {
+            if (id || !release_armed) {
+                return;
+            }
+            # queue 0's thread releases its reference once the child queue's thread holds its own
+            release_armed = False;
+            on_exit if (child_go.getCount()) {
+                child_go.dec();
+            }
+            if (child_in_log.waitForZero(HangTimeout)) {
+                return;
+            }
+            release();
+            released.dec();
+        };
+        try {
+            call_static_method("DataProvider::DataProviderPipeline", "setTestHooks", NOTHING, NOTHING, release_hook);
+        } catch (hash<ExceptionInfo> ex) {
+            # a module that was not built with QoreDebug has no test hooks
+            testSkip(sprintf("the pipeline has no test hooks: %s: %s", ex.err, ex.desc));
+        }
+        on_exit call_static_method("DataProvider::DataProviderPipeline", "setTestHooks");
+
+        {
+            ReportingPipeline pipe(<PipelineOptionInfo>{
+                "name": "destroyed-in-child-queue",
+                "metrics_collector": collector,
+                "debug_log": sub (string fmt, ...) {
+                    if (gettid() == main_tid) {
+                        return;
+                    }
+                    if (armed && fmt =~ /data submission/) {
+                        # the log of the submission to the child queue in queue 0's thread
+                        armed = False;
+                        log_tid.push(gettid());
+                        in_log.dec();
+                        go.waitForZero(HangTimeout);
+                    } else if (child_armed && fmt =~ /data processor %y output/) {
+                        # the log of the record's output in the child queue's thread, which holds the pipeline
+                        child_armed = False;
+                        child_in_log.dec();
+                        child_go.waitForZero(HangTimeout);
+                    }
+                },
+            }, events);
+            int id = pipe.appendQueue(0);
+            pipe.append(id, proc);
+            pipe.submit({"a": 1});
+            assertEq(0, in_log.waitForZero(HangTimeout), "queue 0's thread logs the submission to the child queue");
+        }
+        # the program has released the pipeline: the call of queue 0's thread holds it
+        int tid = log_tid.get();
+        go.dec();
+        assertEq(0, released.waitForZero(HangTimeout), "queue 0's thread releases its reference");
+        int child_tid = proc.tids.get(HangTimeout);
+        assertNeq(tid, child_tid, "the child queue's thread processes the record");
+        hash<auto> ev = events.get(HangTimeout);
+        assertEq("destroyed", ev.event, "the pipeline is destroyed");
+        assertEq(child_tid, ev.tid, "the child queue's thread destroys the pipeline");
         assertEq("collector shut down", events.get(HangTimeout).event,
             "the destructor does not wait for the queue thread that runs it");
     }

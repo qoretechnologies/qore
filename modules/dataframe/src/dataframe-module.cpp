@@ -9,6 +9,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "QC_DataFrame.h"
 #include "QC_DataFrameExpr.h"
@@ -57,6 +58,12 @@ const TypedHashDecl* hashdeclParquetReadOptions;
 const TypedHashDecl* hashdeclParquetWriteOptions;
 
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    // the hash tables of the module that are keyed by values use the keyed hash of the process; its key is created
+    // here, where a failure is reported, so that constructing such a table later cannot fail (qore#7750)
+    if (qore_intern_hash_process_key_check(&xsink)) {
+        return;
+    }
+
     // Phase 1: Pre-init classes
     preinitDataFrameClass();
     preinitColumnRefClass();

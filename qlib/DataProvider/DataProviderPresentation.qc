@@ -67,6 +67,53 @@ public class DataProviderPresentation {
             @since %DataProvider 3.11
         */
         const PresentationFields = ("display_name", "short_desc", "desc", "validation_regex_desc");
+
+        #! The documentation (Doxygen) commands that are not allowed in presentation texts
+        /** A presentation text is shown as plain text or Markdown by a user interface, which shows a documentation
+            command such as <tt>\@ref Class "Class"</tt> verbatim.  @ref findDocumentationMarkup() finds these
+            commands, written with \c \@ or with a backslash, in a text.
+
+            @since %DataProvider 3.13
+        */
+        const DocumentationMarkupCommands = ("ref", "see", "sa", "a", "c", "p", "b", "e", "em", "arg", "li",
+            "code", "endcode", "verbatim", "endverbatim", "htmlonly", "endhtmlonly", "note", "since", "deprecated",
+            "param", "return", "returns", "retval", "throw", "throws", "exception", "link", "endlink", "brief",
+            "details", "par", "parblock", "endparblock", "warning", "remark", "remarks", "pre", "post", "todo",
+            "attention", "anchor", "copydoc", "internal", "section", "subsection", "image");
+    }
+
+    private {
+        #! A documentation command: not after a word, and followed by a space or the end (or \c \@code by a brace)
+        const DocumentationMarkupPattern = "(?<![\\w@\\\\])([@\\\\](?:" + DocumentationMarkupCommands.join("|")
+            + ")(?=\\s|$)|@code(?=\\{))";
+    }
+
+    #! Returns the first documentation command in a presentation text, if any
+    /** The texts of the provider presentation (labels and descriptions; see @ref PresentationFields) are shown to a
+        person as plain text or Markdown, so they must not contain the commands of the documentation of the source
+        (see @ref DocumentationMarkupCommands), which would be shown verbatim; ex: write
+        <tt>"the `FileDataType` structure"</tt>, not <tt>"the \@ref DataProvider::FileDataType "FileDataType"
+        structure"</tt>.
+
+        A command is found when it is written with \c \@ or with a backslash after a space, a punctuation character
+        or the start of the text and is followed by a space or the end of the text (\c \@code also by a brace, as in
+        <tt>\@code{.py}</tt>), as a documentation command is written.  So an e-mail address
+        (<tt>"user\@example.com"</tt>), a field reference (<tt>"exists \@a.b"</tt>, <tt>"\@b[0]"</tt>), a name such
+        as <tt>"\@type"</tt>, an escape such as <tt>"\\n"</tt> and a regular expression such as
+        <tt>"\\p{L}"</tt> are not commands.  Text in a Markdown code span (between backquotes) is literal and is
+        not searched.
+
+        @param text the presentation text
+
+        @return the first documentation command found in the text, ex: <tt>"\@ref"</tt>, or @ref nothing if there is
+        none
+
+        @since %DataProvider 3.13
+    */
+    static *string findDocumentationMarkup(string text) {
+        # Markdown code spans are literal text
+        text =~ s/`[^`]*`/ /g;
+        return regex_extract(text, DocumentationMarkupPattern)[0];
     }
 
     #! Returns the default catalog domain for an exact app identifier
@@ -712,7 +759,10 @@ public class DataProviderPresentation {
         path is schema-validated and checked against the current producer
         messages. Partial catalogs and translations identical to their source
         are valid. This method does not infer a language from translated text
-        and does not contain a locale or language-pair allowlist.
+        and does not contain a locale or language-pair allowlist.  A translated
+        message that contains a documentation command (see
+        @ref findDocumentationMarkup()) is an issue, as a user interface shows
+        it verbatim.
 
         @param domain native catalog domain
         @param root_messages generated root-catalog message map
@@ -938,6 +988,10 @@ string desc = DataProviderPresentation::describeMessageId(
         }
         if (entry.message.typeCode() != NT_STRING || !entry.message.val()) {
             return "translation message must be a non-empty string";
+        }
+        if (*string markup = findDocumentationMarkup(entry.message)) {
+            return sprintf("translation message contains the documentation command %y, which a user interface shows "
+                "verbatim", markup);
         }
         return "";
     }

@@ -1,9 +1,32 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-cross-object-aggregate-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -118,8 +141,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-cross-object-aggregate-projection-"
-    + string(getpid());
+string root = tmp.path + "/cross-object-aggregate-projection";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -140,7 +162,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string provider_index = backquote(sprintf(
@@ -159,7 +181,7 @@ if (provider_index
         || provider_index
             !~ /crossComputed\([^\n]*\"aggregate_return_value_selects\": \[\{\"value_index\": 0, \"condition_param\": 0, \"true_kind\": 5, \"true_param\": 1, \"true_int\": 1[^\n]*\"false_kind\": 5, \"false_param\": 1, \"false_int\": 2/) {
     printf("provider aggregate metadata mismatch:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 # The consumer must rely only on the provider's serialized metadata.
@@ -178,7 +200,7 @@ string sub compileConsumer(string output_dir, string env) {
         consumer_path));
     if (!is_file(output_dir + "/consumer.qo")) {
         printf("consumer compile failed:\n%s", output);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -196,12 +218,12 @@ foreach string function in (("crossRowProjection", "crossFloatProjection",
             function))) {
         printf("missing cross-object projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("disabled cross-object projection:\n%s", disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_qo = enabled_dir + "/consumer.qo";
@@ -218,7 +240,7 @@ if (enabled_undefined
         || disabled_undefined !~ /crossComputed[^\n]*_fast/) {
     printf("cross-object call elimination mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string sub link(string output, string consumer_qo) {
@@ -227,7 +249,7 @@ string sub link(string output, string consumer_qo) {
         libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
     if (!is_file(output)) {
         printf("cross-object link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -236,11 +258,11 @@ string enabled_exe = link(root + "/enabled-exe", enabled_qo);
 string disabled_exe = link(root + "/disabled-exe", disabled_qo);
 string expected = "12:True:True:True:right:506500:3:True:False:7:6\n";
 foreach string path in ((enabled_exe, disabled_exe)) {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    string actual = run_executable(sprintf(
+        "LD_LIBRARY_PATH=%s %s", libqore_dir, path));
     if (actual != expected) {
         printf("cross-object output mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

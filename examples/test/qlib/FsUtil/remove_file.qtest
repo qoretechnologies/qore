@@ -75,6 +75,7 @@ public class RemoveFileTest inherits QUnit::Test {
 
         # now let's create a directory (not a file)...
         string dir_path = make_tmp_dir();
+        on_exit remove_tree(dir_path);
         assertTrue(is_dir(dir_path));
 
         # ...and try and remove it with remove_file which only removes files and symlinks

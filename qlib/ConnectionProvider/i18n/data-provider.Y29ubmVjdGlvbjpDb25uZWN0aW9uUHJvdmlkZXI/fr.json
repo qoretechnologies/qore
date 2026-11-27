@@ -12,16 +12,16 @@
           "message": "Connexion système de fichiers"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Ne marque pas la connexion comme inactive si l'emplacement du système de fichiers est en lecture seule ; à utiliser par exemple si la connexion doit pointer vers un répertoire de base en lecture seule ; les répertoires d'interface doivent normalement être modifiables"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Ne marque pas la connexion comme indisponible si l'emplacement du système de fichiers est en lecture seule, et rend en lecture seule les fournisseurs de données que la connexion renvoie : ils ne peuvent pas créer, supprimer, déplacer, copier vers l'emplacement ni y créer de répertoires ; à utiliser par exemple si la connexion doit pointer vers un répertoire de base en lecture seule ; les répertoires d'interface doivent normalement être accessibles en écriture"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "En lecture seule"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Définit le drapeau en lecture seule sur la connexion"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Rend la connexion et ses fournisseurs de données en lecture seule"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

@@ -5,6 +5,17 @@
 %modern
 %no-child-restrictions
 %requires ../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-closure-aggregate-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -93,7 +104,7 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     removedProjection(), capturedProjection(), sideEffectProjection());
 ";
 
-string root = "/tmp/qore-aot-closure-aggregate-projection-" + string(getpid());
+string root = tmp.path + "/closure-aggregate-projection";
 string src = root + ".qr";
 string enabled = root + "-enabled";
 string disabled = root + "-disabled";
@@ -108,7 +119,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed for %s:\n%s", out, compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -123,7 +134,7 @@ foreach string function in (("stableProjection", "immediateProjection")) {
             function))) {
         printf("missing closure aggregate projection for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -131,7 +142,7 @@ if (enabled_compile
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled closure aggregate projection:\n%s%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "20:11:4:5:-1:4:-1:9:41\n";
@@ -140,6 +151,6 @@ foreach string exe in ((enabled, disabled)) {
     if (out != expected) {
         printf("closure aggregate projection mismatch for %s:\nexpected: %sactual: %s",
             exe, expected, out);
-        exit(2);
+        test_exit(2);
     }
 }

@@ -12,8 +12,8 @@
           "message": "Unstructured.io のドキュメント分割と取り込みワークフロー"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.desc": {
-          "source": "Provides access to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\n- **Partition documents** — break PDFs, Office files, HTML, images and emails into a typed element tree (`Title` / `NarrativeText` / `ListItem` / `Table` / ...), with optional OCR, table-structure inference and retrieval-sized chunking\n- **Build ingestion pipelines** — connect a source system to a vector store through a workflow, run it on a schedule or on demand, and follow each run\n- **React to finished runs** — fire an event when a workflow run completes, so processed documents are picked up as soon as they land\n\nUse the @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" backend for the RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "[Unstructured.io](https://unstructured.io) へのアクセスを提供します。ドキュメントを AI アプリケーションが利用できるデータに変換するサービスです。\n\n- **ドキュメントの分割** — PDF、Office ファイル、HTML、画像、メールを型付きの要素ツリー（`Title` / `NarrativeText` / `ListItem` / `Table` / ...）に分解します。OCR、表構造の推定、検索に適したサイズへのチャンク分割も選べます\n- **取り込みパイプラインの構築** — ソースシステムとベクトルストアをワークフローでつなぎ、スケジュールまたは任意のタイミングで実行して、各実行を追跡します\n- **完了した実行への対応** — ワークフローの実行が完了したときにイベントを発火し、処理済みのドキュメントを到着後ただちに引き取れるようにします\n\n@ref QoreRagUtils::RagPipeline \"RagPipeline\" を介した RAG 取り込みパスには @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" バックエンドを使用してください。"
+          "source": "Provides access to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\n- **Partition documents** — break PDFs, Office files, HTML, images and emails into a typed element tree (`Title` / `NarrativeText` / `ListItem` / `Table` / ...), with optional OCR, table-structure inference and retrieval-sized chunking\n- **Build ingestion pipelines** — connect a source system to a vector store through a workflow, run it on a schedule or on demand, and follow each run\n- **React to finished runs** — fire an event when a workflow run completes, so processed documents are picked up as soon as they land\n\nUse the `UnstructuredChunker` backend for the RAG ingestion path through `RagPipeline`.",
+          "message": "[Unstructured.io](https://unstructured.io) へのアクセスを提供します。ドキュメントを AI アプリケーションが利用できるデータに変換するサービスです。\n\n- **ドキュメントの分割** — PDF、Office ファイル、HTML、画像、メールを型付きの要素ツリー（`Title` / `NarrativeText` / `ListItem` / `Table` / ...）に分解します。OCR、表構造の推定、検索に適したサイズへのチャンク分割も選べます\n- **取り込みパイプラインの構築** — ソースシステムとベクトルストアをワークフローでつなぎ、スケジュールまたは任意のタイミングで実行して、各実行を追跡します\n- **完了した実行への対応** — ワークフローの実行が完了したときにイベントを発火し、処理済みのドキュメントを到着後ただちに引き取れるようにします\n\n`RagPipeline` を介した RAG 取り込みパスには `UnstructuredChunker` バックエンドを使用してください。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "multipart/form-dataを使用してファイルをアップロード"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは`FileDataType`構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

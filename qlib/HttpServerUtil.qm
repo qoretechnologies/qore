@@ -2352,6 +2352,10 @@ public class HttpListenerInterface inherits AbstractLogger {
     }
 
     #! Removes a dedicated socket handler from the listener
+    /** @note The object of the listener that handlers get refuses this variant to restricted code and to the code of a
+        tenant (a sandbox with an isolation domain governs it), which cannot tell whose connection it removes; such
+        code uses removeExternalDedicatedSocket(softstring, AbstractHttpSocketHandlerInterface) with its own handler
+    */
     removeExternalDedicatedSocket(softstring id) {
         throw "UNIMPLEMENTED";
     }
@@ -2437,6 +2441,10 @@ public class HttpListenerInterface inherits AbstractLogger {
 
         @param uh the session token of the persistent session to close (\c cx.session_token in the request context
             of its requests); any other value, such as the internal key of a connection, closes nothing
+
+        @note The object of the listener that handlers get refuses this variant to restricted code and to the code of a
+        tenant (a sandbox with an isolation domain governs it), which cannot tell whose session it closes; such code
+        uses signalPersistentSessionClose(softstring, AbstractHttpRequestHandler) with its own handler
     */
     signalPersistentSessionClose(softstring uh) {
         # no implementation in the base class — listeners that support

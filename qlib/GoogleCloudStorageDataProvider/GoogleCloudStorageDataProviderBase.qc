@@ -83,7 +83,7 @@ public class GoogleCloudStorageDataProviderBase inherits DataProvider::AbstractD
                     DTT_FromLocation: True,
                 }),
                 "desc": "Location of a GCP service-account JSON key file for JWT-bearer auth, read "
-                    "via the @ref filelocationhandlerintro \"FileLocationHandler\" module (a bare "
+                    "via the `FileLocationHandler` module (a bare "
                     "path or any registered scheme: `file://`, `http(s)://`, `sftp://`, ...).  When "
                     "omitted, Application Default Credentials are used.",
             },
