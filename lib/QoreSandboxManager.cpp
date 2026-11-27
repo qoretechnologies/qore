@@ -2558,6 +2558,24 @@ int qore_program_restricted_state(const QoreProgram* pgm) {
     }
 }
 
+int qore_program_tenant_isolated_state(const QoreProgram* pgm) {
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
+        return 0;
+    }
+    try {
+        // a composition has the strictest level of its members
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
+        if (!sm) {
+            // no sandbox that could be asked: fails closed
+            return 1;
+        }
+        return sm->getEnforcementLevel() == QSEL_CODE_SAFETY ? 0 : 1;
+    } catch (std::bad_alloc&) {
+        return -1;
+    }
+}
+
 bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
     if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), &id)) {
         return true;

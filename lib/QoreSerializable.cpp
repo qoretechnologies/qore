@@ -44,7 +44,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
-#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <string>
 #include <set>
@@ -546,9 +546,17 @@ QoreHashNode* QoreSerializable::serializeToData(const QoreValue val, int64 flags
 QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags, true);
     // the owner rule of the non-public members of objects with the provenance of a sandbox (qore#7033) is lifted only
-    // for calling code that the owner rules do not apply to: not for code that a sandbox with tenant isolation
-    // governs, such as a governed tenant, which may use the trusted forms; decided once, at the start (qore#7146)
-    context.caller.setOwnerRuleLifted(!qore_caller_tenant_isolated());
+    // for calling code whose own Program no sandbox with tenant isolation governs, such as trusted code that serves a
+    // tenant; not for a governed tenant, which may use the trusted forms (or for a call reference that it invokes,
+    // whose calling Program is its own); decided once, at the start, from the Program of the calling code that the
+    // trust check resolves; fails closed (qore#7146)
+    {
+        QoreProgram* calling_pgm = qore_builtin_caller_program();
+        if (!calling_pgm) {
+            calling_pgm = getProgram();
+        }
+        context.caller.setOwnerRuleLifted(calling_pgm && !qore_program_tenant_isolated_state(calling_pgm));
+    }
     return serializeToDataIntern(val, context, xsink);
 }
 

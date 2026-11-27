@@ -8,8 +8,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %prepend-module-path "${SCRIPT_DIR}"
-%requires ./SandboxSerializationTrustedLib.qm
+%requires SandboxSerializationTrustedLib
 
 %exec-class SandboxSerializationTrustedTest
 
@@ -160,7 +161,8 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         p.setSandboxManager(manager);
         p.importClass("StOrderData");
         p.importClass("StCache");
-        p.parse("string sub call(string m) {\n"
+        p.parse("%requires SandboxSerializationTrustedLib\n"
+            "string sub call(string m) {\n"
             "    switch (m) {\n"
             "        case \"storePlain\": return StCache::storePlain();\n"
             "        case \"storeTrusted\": return StCache::storeTrusted();\n"
@@ -300,7 +302,7 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         # owner rule of the non-public members of objects is not lifted for it (it is the only rule that decides here)
         Program a = newTenant();
         StOrderData oa = a.callFunction("call", object sub () { return new StOrderData(); });
-        assertRegex("^SERIALIZATION-ERROR|^NO-STATE", g.callFunction("other", oa));
+        assertEq("SERIALIZATION-ERROR", g.callFunction("other", oa));
     }
 
     #! the rule of shared objects applies to the trusted forms as to the plain forms (qore#7673)
@@ -342,11 +344,10 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         # an object that tenant A's own code created
         object own = a.callFunction("make");
         # tenant B: trusted code that serves it
-        Program b = newTenant();
-        b.parse("string sub trusted_obj(object o) { return StCache::serTrustedObj(o); }\n"
+        Program b = newTenant("string sub trusted_obj(object o) { return StCache::serTrustedObj(o); }\n"
             "string sub plain_obj(object o) { return StCache::serPlainObj(o); }\n"
             "string sub format_obj(object o) { return StCache::formatObj(o); }\n"
-            "string sub program_obj(Program pg, object o) { return StCache::serProgramObj(pg, o); }\n", "b");
+            "string sub program_obj(Program pg, object o) { return StCache::serProgramObj(pg, o); }\n");
 
         # trusted code that no sandboxed code calls
         assertEq("STATE", StCache::serTrustedObj(oa));
@@ -370,44 +371,65 @@ public class SandboxSerializationTrustedTest inherits QUnit::Test {
         assertRegex("^SERIALIZATION-ERROR|^NO-STATE", b.callFunction("plain_obj", copy));
     }
 
-    #! the code of a library module's class acts for itself; its code outside a class acts for its caller
+    #! a module that the script finds through its own module path is the application's code, which acts for itself;
+    #! a module from a directory of the process-wide module path is library code: the code of its functions acts for
+    #! its caller, the code of its classes acts for itself
     libraryTest() {
+        # the application's module: in this Program
         assertEq("LIB-STATE", p.callFunction("lib_class"));
-        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("lib_function"));
-        # without a sandboxed caller
-        assertEq("LIB-STATE", st_lib_round_trip());
+        assertEq("LIB-STATE", p.callFunction("lib_function"));
+        # library code: in a child process with the directory of the module in the process-wide module path
+        string dir = get_script_dir();
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/SandboxSerializationTrusted/library-caller.q 2>&1",
+            dir, TestInterpreter::qore_interpreter(), dir));
+        assertEq("function: SANDBOX-ACCESS-ERROR\nclass: LIB-STATE\nhost: LIB-STATE\n", out);
     }
 
     #! a module that a tenant loads from a path that it chose: trusted code that loads it by name later never gets the
     #! state of the trusted forms through its code
     tenantModuleTest() {
+        # a tenant loads the module from a path that it chose
         Program t = newTenant();
         string path = get_script_dir() + "/SandboxSerializationTrustedLib2.qm";
+        string tenant_load;
         try {
             t.loadModule(path);
+            tenant_load = "OK";
         } catch (hash<ExceptionInfo> ex) {
-            # the tenant cannot load it: the refusal of the sandbox is all there is to check
-            assertRegex("SANDBOX|ACCESS", ex.err, ex.desc);
-            return;
+            tenant_load = ex.err;
         }
+        # trusted code in a Program of its own requires it by name and deserializes data that names its class
+        Program h(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         string result;
         try {
-            load_module("SandboxSerializationTrustedLib2");
-            result = call_static_method("StLib2Cache", "roundTrip");
+            h.parse("%requires SandboxSerializationTrustedLib2\n"
+                "string sub probe(binary data) {\n"
+                "    try {\n"
+                "        object o = Serializable::deserializeTrusted(data);\n"
+                "        return o.getSecret();\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        return ex.err;\n"
+                "    }\n"
+                "}\n"
+                "binary sub data() { return Serializable::serializeTrusted(new StLib2Data()); }\n", "trusted");
+            result = h.callFunction("probe", h.callFunction("data"));
         } catch (hash<ExceptionInfo> ex) {
             result = ex.err;
         }
-        assertNeq("LIB2-STATE", result);
+        # a tenant cannot load a module from a path that it chose, so trusted code loads the module itself later, as its
+        # own code, which gets the state of its classes with the trusted forms
+        assertEq("FILESYSTEM-ACCESS-DENIED", tenant_load);
+        assertEq("LIB2-STATE", result);
     }
 
     #! returns a new sandboxed Program of a tenant with the trusted classes and a function that calls a closure
-    private Program newTenant() {
+    private Program newTenant(*string extra) {
         Program t(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         t.setSandboxManager(new SandboxManager());
         t.importClass("StOrderData");
         t.importClass("StCache");
         t.parse("auto sub call(code c) { return c(); }\n"
-            "object sub make() { return new StOrderData(); }\n", "tenant");
+            "object sub make() { return new StOrderData(); }\n" + (extra ?? ""), "tenant");
         return t;
     }
 }
