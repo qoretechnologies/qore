@@ -157,6 +157,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>,
     <a href="https://github.com/qoretechnologies/qore/issues/7572">issue 7572</a>).
 
+    @par A Weak Assignment That a softlist Lvalue Would Wrap in a New List Is an Error
+    A @ref weak_assignment_operator "weak assignment (:=)" of a value that is not a list, or of
+    @ref nothing "NOTHING" or @ref null "NULL", to a \c softlist lvalue, which made it a new list that the weak
+    reference designated, is refused (see @ref weak_assignment_wrap;
+    <a href="https://github.com/qoretechnologies/qore/issues/7619">issue 7619</a>).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or

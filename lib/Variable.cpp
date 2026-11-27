@@ -4711,6 +4711,54 @@ QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_typ
         weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type, weak ? "weak" : "opaque", value_type);
 }
 
+QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_type, const char* target_type,
+        QoreWeakWrapKind kind) {
+    const char* op_desc = weak ? "weak" : "opaque";
+    const char* op = weak ? ":=" : "@=";
+    switch (kind) {
+        case QoreWeakWrapKind::NoValue:
+            return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of "
+                "type '%s' in an lvalue of type '%s': the lvalue's type converts no value to a new empty list, so the "
+                "%s reference would designate that list, a temporary, instead of the value assigned; declare the lvalue "
+                "with a type that keeps no value as it is, such as 'auto' or '*softlist', or assign a list, such as a "
+                "'list<auto>'", op_desc, op, value_type, target_type, op_desc);
+        case QoreWeakWrapKind::Either:
+            return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of "
+                "type '%s' in an lvalue of type '%s': the lvalue's type wraps a value in a new list, and converts no "
+                "value to a new empty list, so the %s reference would designate that list, a temporary, instead of the "
+                "value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto' or the "
+                "value's own type '%s', or assign a list that holds the value, such as a 'list<auto>'", op_desc, op,
+                value_type, target_type, op_desc, value_type);
+        default:
+            break;
+    }
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type wraps the value in a new list, so the %s reference would "
+        "designate that list, a temporary, instead of the value assigned; declare the lvalue with a type that keeps "
+        "the value as it is, such as 'auto' or the value's own type '%s', or assign a list that holds the value, such "
+        "as a 'list<auto>'", op_desc, op, value_type, target_type, op_desc, value_type);
+}
+
+QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type) {
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type builds a new list from the iterator, so the %s reference would "
+        "designate that list, a temporary, instead of the value assigned; assign a list instead, or declare the lvalue "
+        "with type 'auto' to keep the iterator", weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type,
+        weak ? "weak" : "opaque");
+}
+
+bool qore_weak_value_may_wrap(qore_type_t value_type) {
+    switch (value_type) {
+        case NT_LIST:
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+        case NT_REFERENCE:
+            return false;
+        default:
+            return true;
+    }
+}
+
 bool qore_lvalue_vivifies_untyped_list(const QoreTypeInfo* ti) {
     return !ti || ti == anyTypeInfo || ti == listTypeInfo || ti == listOrNothingTypeInfo || ti == softListTypeInfo
         || ti == softListOrNothingTypeInfo;
@@ -4953,11 +5001,9 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (QoreTypeInfo::mayBindReferenceCached(typeInfo)) [[unlikely]] {
             int rc;
             if constexpr (Lexical) {
-                rc = checkTypesMayBind<Lexical, Native>(n, desc, policy, weak_source,
-                    mode == AssignmentMode::Weak);
+                rc = checkTypesMayBind<Lexical, Native>(n, desc, policy, weak_source, mode);
             } else {
-                rc = checkTypesMayBind<Lexical, Native>(n, desc, LexicalSemanticPolicy(), weak_source,
-                    mode == AssignmentMode::Weak);
+                rc = checkTypesMayBind<Lexical, Native>(n, desc, LexicalSemanticPolicy(), weak_source, mode);
             }
             if (rc) {
                 // the reference of a weakly assigned container is released after the locks, as the value is
@@ -4969,9 +5015,15 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
                 return -1;
             }
         } else {
-            // check type for assignment
+            // check type for assignment; the conversion of a weak or opaque assignment refuses to wrap the value in a
+            // new list (qore#7619)
             if constexpr (Native) {
                 QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+            } else if constexpr (WeakOrOpaque && Lexical) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, policy, mode == AssignmentMode::Weak,
+                    this);
+            } else if constexpr (WeakOrOpaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, mode == AssignmentMode::Weak, this);
             } else if constexpr (Lexical) {
                 QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
             } else {
@@ -5091,14 +5143,25 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
 
 template <bool Lexical, bool Native>
 QORE_INTERN_NOINLINE QORE_INTERN_COLD int LValueHelper::checkTypesMayBind(QoreValue& n, const char* desc,
-        LexicalSemanticPolicy policy, const QoreValue& weak_source, bool weak) {
+        LexicalSemanticPolicy policy, const QoreValue& weak_source, AssignmentMode mode) {
+    const bool weak = mode == AssignmentMode::Weak;
+    // the conversion of a weak or opaque assignment refuses to wrap the value in a new list (qore#7619)
+    const bool weak_or_opaque = weak || mode == AssignmentMode::Opaque;
     auto check = [&]() {
         if constexpr (Native) {
             QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
         } else if constexpr (Lexical) {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+            if (weak_or_opaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, policy, weak, this);
+            } else {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+            }
         } else {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+            if (weak_or_opaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, weak, this);
+            } else {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+            }
         }
     };
 

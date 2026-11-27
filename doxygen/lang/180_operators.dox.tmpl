@@ -2585,6 +2585,27 @@ if (x || y)
     \c PARSE-TYPE-ERROR when the types of a stripping lvalue and of a typed value are known at parse time, and with
     \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value.  An lvalue of a type that keeps the value (\c auto,
     <tt>hash&lt;auto&gt;</tt>, <tt>list&lt;auto&gt;</tt> or the value's own type) takes the weak reference to it.\n<br>
+    @anchor weak_assignment_wrap Likewise, a weak assignment of a value that is not a list (an object, a scalar value or
+    a hash, also one that a weak reference designates) to a \c softlist, \c *softlist or
+    <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt> lvalue, also as a member of a union type (ex:
+    <tt>union&lt;softlist, string&gt;</tt> for an integer), is an error, as the lvalue's type wraps the value in a new
+    list, which the weak reference would designate instead of the value assigned; so is a weak assignment of
+    @ref nothing "NOTHING" or @ref null "NULL" to a \c softlist or <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt>
+    lvalue, whose type converts it to a new list: an empty one, or one that holds @ref null "NULL" for a
+    <tt>softlist&lt;</tt><em>type</em><tt>&gt;</tt> whose element type takes it (ex: <tt>softlist&lt;*int&gt;</tt>).  A
+    \c *softlist lvalue keeps @ref nothing "NOTHING", and converts @ref null "NULL" to it, except a
+    <tt>*softlist&lt;</tt><em>type</em><tt>&gt;</tt> whose element type takes @ref null "NULL" (ex:
+    <tt>*softlist&lt;*int&gt;</tt>), which wraps it in a new list and refuses it as well.  The assignment is refused
+    with \c PARSE-TYPE-ERROR when the type of the value is known at parse time not to be a list (and, for a
+    \c *softlist lvalue, not to be @ref nothing "NOTHING" or @ref null "NULL"; for a union, when each of its members
+    that can accept the value wraps it), and with \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value;
+    declare the lvalue with a type that keeps the value as it is (\c auto or the value's own type), or assign a list
+    (ex: a <tt>list&lt;auto&gt;</tt>) that holds the value.  A list assigned to a \c softlist lvalue is not wrapped,
+    and the rules above apply to it.  Likewise, a weak assignment of an iterator to a
+    <tt>list&lt;</tt><em>type</em><tt>&gt;</tt> lvalue, whose type builds a new list from the iterator, is refused
+    with \c RUNTIME-TYPE-ERROR before the iterator is iterated (in every
+    @ref exec_mode_overview "execution mode"); assign a list instead, or declare the lvalue as \c auto to keep the
+    iterator.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
@@ -2695,7 +2716,9 @@ if (x || y)
     ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
     still in use; a mistake with \c \@= leaks one.\n<br>
     As for the weak assignment operator, an opaque assignment of a hash or a list to an lvalue whose type converts it
-    to a copy of its own is an error (see @ref weak_assignment_conversion).
+    to a copy of its own is an error (see @ref weak_assignment_conversion), as is an opaque assignment of a value that
+    a \c softlist lvalue wraps in a new list or converts to a new empty list, or of an iterator that a list lvalue
+    builds a new list from (see @ref weak_assignment_wrap).
 
     @par Warning
     <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value
