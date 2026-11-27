@@ -80,6 +80,14 @@ class HttpClientIoSocketAccess {
         return mgr.acquireConnectionAsyncFor(token, url, \conn_out);
     }
 
+    #! Processes the proxy challenge of a connection error for the code of this module (qore#7830)
+    /** The public processProxyConnectFailure() refuses code that a sandbox restricts and that does not own the manager:
+        this module's code acts for the request that such code makes with the manager
+    */
+    static bool processProxyConnectFailure(HttpClientConnectionManager mgr, string url, *hash<auto> err) {
+        return mgr.processProxyConnectFailureFor(token, url, err);
+    }
+
     #! Creates the status of a pooled connection for the code that waits for it (qore#7813)
     static HttpClientConnectionStatus newStatus(HttpClientConnection conn) {
         return new HttpClientConnectionStatus(token, conn);

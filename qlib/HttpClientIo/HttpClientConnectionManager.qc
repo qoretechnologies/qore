@@ -787,7 +787,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns the cookie jar (NOTHING if cookies are disabled)
     /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
     */
-    *CookieJar getCookieJar() {
+    *CookieJar getCookieJar(*HttpClientCreatorProof proof) {
+        checkStateCaller("take the cookie jar of", proof);
         return cookie_jar;
     }
 
@@ -938,7 +939,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
     */
-    private:internal checkStateCaller() {
+    private:internal checkStateCaller(string what = "change the state of the connections of",
+                                      *HttpClientCreatorProof proof) {
         bool restricted;
         try {
             restricted = SandboxManager::isRestricted();
@@ -948,10 +950,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (!restricted) {
             return;
         }
+        # the proof that the host's connection or client holds is given by the module code that creates and watches the
+        # client for the code that the connection is lent to; that code cannot take it, and a proof is the host's only
+        # if its owner is the manager's (qore#7262)
+        if (proof && exists owner_pgm_id && HttpClientCreatorProof::genuine(proof)
+            && proof.getOwnerProgramId() == owner_pgm_id) {
+            return;
+        }
         *int caller = SandboxManager::getCallerProgramId();
         if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
-            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot change the state of the connections of a "
-                "connection manager that it does not own";
+            throw "PERMISSION-DENIED", sprintf("code that a sandbox restricts cannot %s a connection manager that it does "
+                "not own", what);
         }
     }
 
@@ -1127,7 +1136,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @since HttpClientIo 1.0
     */
-    setFirstConnectionCallback(*code<nothing()> cb) {
+    setFirstConnectionCallback(*code<nothing()> cb, *HttpClientCreatorProof proof) {
+        checkStateCaller("set the first connection callback of", proof);
         AutoLock al(first_connection_lock);
         first_connection_callback = cb;
     }
@@ -1810,7 +1820,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     #! Returns the authenticator for the credentials in the proxy URL, if any
     /** @since HttpClientIo 1.0
     */
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7830):
+        the authenticator gives the credentials of the proxy
+    */
     *HttpAuthenticator getProxyAuthenticator() {
+        checkStateCaller("take the proxy credentials of");
         return proxy_auth;
     }
 
@@ -1827,6 +1841,32 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     bool processProxyConnectFailure(string url, *hash<auto> err) {
+        checkStateCaller("change the proxy authentication of");
+        return processProxyConnectFailureIntern(url, err);
+    }
+
+    #! Processes the proxy challenge for the code of this module, which acts for the request that it makes (qore#7830)
+    /** The public method, processProxyConnectFailure(), refuses code that a sandbox restricts and that does not own the
+        manager, as it changes the state of the proxy authentication that all callers share.  Reserved for the code of
+        this module (see HttpClientIoSocketAccess::processProxyConnectFailure())
+
+        @param access the token of the module
+        @param url the URL of the request
+        @param err the error of the connection
+
+        @return as processProxyConnectFailure()
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final bool processProxyConnectFailureFor(object access, string url, *hash<auto> err) {
+        HttpClientIoSocketAccess::check(access);
+        return processProxyConnectFailureIntern(url, err);
+    }
+
+    #! The body of processProxyConnectFailure(), for the callers that were checked
+    private:internal bool processProxyConnectFailureIntern(string url, *hash<auto> err) {
         if (!proxy_auth || err.status_code != 407) {
             return False;
         }
@@ -2222,7 +2262,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # a proxy that refused the CONNECT request with an authentication challenge is answered once with a
                 # new connection
                 if (ex.err == "HTTPCLIENT-CONNECT-ERROR" && !proxy_connect_retried
-                        && processProxyConnectFailure(url, ex.arg)) {
+                        && processProxyConnectFailureIntern(url, ex.arg)) {
                     proxy_connect_retried = True;
                     log(LoggerLevel::DEBUG, "answering the authentication challenge of the proxy for %s", url);
                     evictDeadConnections(url);
@@ -6159,6 +6199,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Sets the logger for this connection manager
     setLogger(*LoggerInterface logger) {
+        checkStateCaller("set the logger of");
         self.logger = logger;
     }
 
@@ -6170,6 +6211,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     setConnectTimeout(timeout ct) {
+        checkStateCaller("set the connect timeout of");
         opts.connect_timeout = ct;
     }
 
@@ -6185,6 +6227,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     setRequestTimeout(timeout rt) {
+        checkStateCaller("set the request timeout of");
         opts.request_timeout = rt;
     }
 

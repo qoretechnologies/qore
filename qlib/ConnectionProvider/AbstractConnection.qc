@@ -1122,9 +1122,9 @@ conn.checkSandboxAccess(True);
             handleConnected();
         };
         if (o instanceof HttpClientIo::HttpClientConnectionManager) {
-            cast<HttpClientIo::HttpClientConnectionManager>(o).setFirstConnectionCallback(cb);
+            cast<HttpClientIo::HttpClientConnectionManager>(o).setFirstConnectionCallback(cb, creator_proof);
         } else if (o.hasCallableMethod("setFirstConnectionCallback")) {
-            call_object_method(o, "setFirstConnectionCallback", cb);
+            call_object_method(o, "setFirstConnectionCallback", cb, creator_proof);
         }
     }
 
