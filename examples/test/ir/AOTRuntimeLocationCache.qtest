@@ -3,7 +3,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-runtime-location-cache-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -13,7 +24,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-runtime-location-cache-" + string(getpid());
+string root = tmp.path + "/runtime-location-cache";
 mkdir(root);
 string source_path = root + "/case.qr";
 string exe_path = root + "/case";
@@ -49,11 +60,11 @@ string compile_out = backquote(sprintf(
     env, qcc_bin, exe_path, source_path));
 if (!is_file(exe_path)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 string output = backquote(sprintf("%s %s 2>&1", env, exe_path));
 if (output != "LOCATION-TEST:6:2\n") {
     printf("stripped AOT location mismatch:\nexpected:\nLOCATION-TEST:6:2\nactual:\n%s", output);
-    exit(2);
+    test_exit(2);
 }

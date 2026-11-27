@@ -8,6 +8,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-shared-map-args-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 # Shared implicit map arguments must survive every use, including calls that
 # normally consume their argument temporaries. Reproduces the Qorus startup UAF.
@@ -115,7 +125,7 @@ caught: EXPECTED
 1:10;2:20;3:30;
 ";
 
-string root = "/tmp/qore-aot-shared-map-args-" + string(getpid());
+string root = tmp.path + "/shared-map-args";
 string source_path = root + ".qr";
 # File/process access is required to compile and execute the isolated test program.
 on_exit {
@@ -138,7 +148,7 @@ string sub run(string command) {
     }
     if (r.rc) {
         printf("command failed (status %d): %s\n%s", r.rc, command, r.out);
-        exit(2);
+        test_exit(2);
     }
     return r.out;
 }
@@ -148,7 +158,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         quote(libqore_dir), quote(qore_bin), mode, quote(source_path)));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -157,12 +167,12 @@ foreach int level in ((0, 3)) {
         quote(libqore_dir), quote(qcc_bin), level, quote(root), quote(source_path)));
     if (!is_file(root)) {
         printf("AOT compile failed (-O%d):\n%s", level, compile_out);
-        exit(2);
+        test_exit(2);
     }
     string actual = run(sprintf("LD_LIBRARY_PATH=%s %s", quote(libqore_dir), quote(root)));
     if (actual != expected) {
         printf("AOT mismatch (-O%d)\nexpected:\n%sactual:\n%s", level, expected, actual);
-        exit(2);
+        test_exit(2);
     }
     unlink(root);
 }

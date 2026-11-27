@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-private-static-closure-context-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -64,7 +74,7 @@ printf(\"%s|%s\\n\", exists nothing_result ? \"value\" : \"nothing\",
     string_result.decoded);
 ";
 
-string script_path = "/tmp/qore-aot-private-static-closure-context-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/private-static-closure-context.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -80,21 +90,21 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
-string exe_path = "/tmp/qore-aot-private-static-closure-context-" + string(getpid());
+string exe_path = tmp.path + "/private-static-closure-context";
 string compile_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, script_path));
 if (!is_file(exe_path)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
 if (actual != expected) {
     printf("AOT mismatch\nexpected:\n%sactual:\n%s", expected, actual);
-    exit(2);
+    test_exit(2);
 }

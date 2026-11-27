@@ -3,7 +3,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-transform-consumer-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -310,7 +321,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-string-transform-consumer-" + string(getpid());
+string root = tmp.path + "/string-transform-consumer";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
 string native_disabled_dir = root + "/native-disabled";
@@ -347,17 +358,17 @@ if (!is_file(enabled_qo) || !is_file(disabled_qo)
         || !is_file(native_disabled_qo)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%snative disabled:\n%s",
         enabled_compile, disabled_compile, native_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /transformEqualityKinds.*string-transform-consumers=4/) {
     printf("string transform-consumer fusion mismatch:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /transformOrderingKinds.*string-transform-consumers=8/) {
     printf("string transform-ordering fusion mismatch:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
@@ -379,7 +390,7 @@ if (enabled_undefined !~ /qore_rt_pseudo_string_case_measure_native_noguard/
     printf("string transform-consumer helper mismatch:\nenabled:\n%sdisabled:\n%s"
         + "native disabled:\n%s",
         enabled_undefined, disabled_undefined, native_disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -398,7 +409,7 @@ if (!is_file(enabled_exe) || !is_file(disabled_exe)
         || !is_file(native_disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%snative disabled:\n%s",
         enabled_link, disabled_link, native_disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = backquote(sprintf(
@@ -411,5 +422,5 @@ if (ast != enabled || ast != disabled || ast != native_disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s"
         + "Native disabled:\n%s",
         ast, enabled, disabled, native_disabled);
-    exit(2);
+    test_exit(2);
 }

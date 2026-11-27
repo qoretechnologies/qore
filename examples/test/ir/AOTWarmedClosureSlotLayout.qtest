@@ -20,6 +20,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-warmed-closure-slots-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -71,7 +81,7 @@ int sub getWarmup() {
 printf(\"warmup=%d\\n\", getWarmup());
 ";
 
-string script_path = sprintf("/tmp/qore-aot-warmed-closure-slots-%d.qr", getpid());
+string script_path = tmp.path + "/warmed-closure-slots.qr";
 {
     File script();
     script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -91,7 +101,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         libqore_dir, libqore_dir, qore_bin, mode, script_path));
     if (actual != expected) {
         printf("mismatch in %s mode\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -99,7 +109,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
 #    regression) and when it was not
 foreach string warm in (("QORE_IR_THRESHOLD=1 ", "")) {
     string label = warm ? "warmed" : "cold";
-    string exe_path = sprintf("/tmp/qore-aot-warmed-closure-slots-%s-%d", label, getpid());
+    string exe_path = sprintf("%s/warmed-closure-slots-%s", tmp.path, label);
     on_exit {
         unlink(exe_path);
     }
@@ -107,13 +117,13 @@ foreach string warm in (("QORE_IR_THRESHOLD=1 ", "")) {
         warm, libqore_dir, libqore_dir, qcc_bin, exe_path, script_path));
     if (!is_file(exe_path)) {
         printf("AOT compile (%s closure) failed:\n%s", label, compile_out);
-        exit(2);
+        test_exit(2);
     }
     string aot_actual = run_executable(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
         libqore_dir, libqore_dir, exe_path));
     if (aot_actual != expected) {
         printf("AOT result mismatch (%s closure)\nexpected:\n%sactual:\n%s", label, expected, aot_actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

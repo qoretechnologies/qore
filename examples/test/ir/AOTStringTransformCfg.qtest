@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-transform-cfg-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -113,7 +123,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-string-transform-cfg-" + string(getpid());
+string root = tmp.path + "/string-transform-cfg";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
 mkdir(root);
@@ -139,7 +149,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -157,7 +167,7 @@ string disabled_qo = disabled_dir + "/source.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 foreach string function in (("selectedContains", "selectedStartsWith",
         "selectedEndsWith", "selectedFind", "selectedRFind",
@@ -168,7 +178,7 @@ foreach string function in (("selectedContains", "selectedStartsWith",
             function))) {
         printf("missing CFG string transform fusion for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -176,7 +186,7 @@ if (enabled_compile
         || disabled_compile =~ /string-transform-consumers=[1-9]/) {
     printf("unsafe or disabled CFG string transform fusion:\nenabled:\n%s"
         + "disabled:\n%s", enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
@@ -192,7 +202,7 @@ if (enabled_undefined
             =~ /qore_rt_string_case_compare_native_noguard/) {
     printf("CFG string transform helper mismatch:\nenabled:\n%s"
         + "disabled:\n%s", enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string sub link(string output, string qo) {
@@ -201,7 +211,7 @@ string sub link(string output, string qo) {
         libqore_dir, qcc_bin, output, qo));
     if (!is_file(output)) {
         printf("link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -214,8 +224,8 @@ foreach string path in ((
     if (actual != expected) {
         printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
-exit(0);
+test_exit(0);

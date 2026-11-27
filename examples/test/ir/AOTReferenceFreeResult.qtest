@@ -3,7 +3,18 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-reference-free-result-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -117,7 +128,7 @@ printf(\"%d:%d:%d\\n\", runFunctions(), new ResultSource().run(),
     exerciseHeapFloatCleanup());
 ";
 
-string root = "/tmp/qore-aot-reference-free-result-" + string(getpid());
+string root = tmp.path + "/reference-free-result";
 mkdir(root);
 string script_path = root + "/reference-free-result.qr";
 File script();
@@ -136,7 +147,7 @@ string sub runAot(string suffix, string compile_env) {
         compile_env, env, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed (%s):\n%s", suffix, compile_out);
-        exit(2);
+        test_exit(2);
     }
     return backquote(sprintf("%s %s 2>&1", env, exe));
 }
@@ -148,5 +159,5 @@ string disabled = runAot("disabled",
 if (ast != expected || enabled != expected || disabled != expected) {
     printf("execution mismatch:\nexpected:\n%sAST:\n%sEnabled:\n%sDisabled:\n%s",
         expected, ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

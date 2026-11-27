@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-scalarized-aggregate-return-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -75,8 +85,8 @@ printf(\"%d:%d\\n\", aggregateKernel(1000),
     maybeAssignedKernel(True, 7));
 ";
 
-string src = "/tmp/qore-aot-scalarized-aggregate-return-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-scalarized-aggregate-return-" + string(getpid());
+string src = tmp.path + "/scalarized-aggregate-return.qr";
+string exe = tmp.path + "/scalarized-aggregate-return";
 string disabled = exe + "-disabled";
 string scalar_disabled = exe + "-scalar-disabled";
 string native_projection_disabled = exe + "-native-projection-disabled";
@@ -91,7 +101,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -111,13 +121,13 @@ string native_projection_disabled_compile = compile(
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=8.*native-specializations=4/) {
     printf("missing scalarized aggregate-return projections:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (native_projection_disabled_compile
         !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=8.*native-specializations=1/) {
     printf("native scalar projection disable control mismatch:\n%s",
         native_projection_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         =~ /IR-OPT-AOT-EFFECTS: maybeAssignedKernel[^:]*:.*aggregate-projections=[1-9]/
@@ -125,7 +135,7 @@ if (enabled_compile
         || scalar_disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled scalarized aggregate-return projection:\n%s\n%s\n%s",
         enabled_compile, disabled_compile, scalar_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "4013000:8\n";
@@ -136,7 +146,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled, scalar_disabled,
@@ -146,7 +156,7 @@ foreach string path in ((exe, disabled, scalar_disabled,
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
