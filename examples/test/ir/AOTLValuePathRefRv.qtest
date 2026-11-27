@@ -74,8 +74,11 @@ class AOTLValuePathRefRvTest inherits QUnit::Test {
             # the native closures, and the closure bodies from the IR of the image
             foreach string env in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ")) {
                 string label = sprintf("-O%s %s", opt, env);
+                # the closure bodies from the IR of the image run on the IR: with the harness's trace environment
+                # (ExecModeHarness::TraceEnv: JIT thresholds of 1, synchronous compilation) they would be compiled to
+                # native code first, so that run only traces native compilation, with the default thresholds
                 hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s%s%s -b", prefix,
-                    env, shellQuote(exe)));
+                    env, shellQuote(exe)), NOTHING, env ? "QORE_JIT_TIMING=1" : NOTHING);
                 assertEq(0, res.rc, label + ": " + res.out);
                 assertEq(expected, res.stdout, label);
                 assertEq("", res.stderr, label + ": stderr");

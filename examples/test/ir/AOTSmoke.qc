@@ -616,7 +616,6 @@ class AOTSmokeBase inherits QUnit::Test {
         };
     }
 
-    #! Run a script with the interpreter and return stdout
     #! runs a qcc executable and checks its exit status (0) and its output
     /** @param cmd the command that runs the executable; it must not redirect stderr
         @param expected the output expected on stdout; stderr must be empty apart from the module loader's warnings and
@@ -630,6 +629,7 @@ class AOTSmokeBase inherits QUnit::Test {
         assertEq("", res.stderr, label + ": stderr");
     }
 
+    #! runs a script with the interpreter and returns its output on stdout and stderr together
     private string runInterpreted(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
         on_exit {
