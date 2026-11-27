@@ -1,0 +1,236 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - module loading in a foreign thread and the native code generation of the execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+
+%exec-class ExecModeParentlessModuleTest
+
+#! Tests that the execution mode requested for the process applies to a module loaded without a requesting Program
+#! (qore#7495)
+/** The Program of a module inherited the mode requested with --exec-mode only from the Program that loaded it: a
+    module loaded without one (from C++ code, or from a thread with no current Program) got the automatic mode
+    (tiered), so that its code was compiled to native code in a script run with --exec-mode=ir.  The worker loads a
+    module in a foreign thread (dbg_load_module_in_foreign_thread(), a debug function), imports it and calls its
+    function in each execution mode with the thresholds of 1 of the harness: the harness checks that ast and ir
+    compile no code to native code, and that jit and tiered do.
+*/
+class ExecModeParentlessModuleTest inherits QUnit::Test {
+    public {
+        #! the module, loaded without a requesting Program
+        const Module = "%modern
+module ExecModeParentlessModule {
+    version = \"1.0\";
+    desc = \"a module loaded without a requesting Program\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace ExecModeParentlessModule {
+    public int sub f(int x) {
+        int s = 0;
+        for (int i = 0; i < x; ++i) {
+            s += i;
+        }
+        return s;
+    }
+}
+";
+
+        #! the worker: loads the module in a foreign thread, imports it and calls its function
+        const Worker = "%modern
+dbg_load_module_in_foreign_thread(\"ExecModeParentlessModule\");
+load_module(\"ExecModeParentlessModule\");
+int t = 0;
+for (int i = 0; i < 20; ++i) {
+    t += call_function(\"ExecModeParentlessModule::f\", 10);
+}
+printf(\"%d\\n\", t);
+";
+
+        #! a worker whose module cannot be loaded: the error of the foreign thread is raised in the calling thread
+        const FailingWorker = "%modern
+try {
+    dbg_load_module_in_foreign_thread(\"ExecModeParentlessNoSuchModule\");
+    printf(\"loaded\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc =~ /ExecModeParentlessNoSuchModule/ ? \"the module\" : ex.desc);
+}
+";
+
+        #! the modes of independent Programs (without a parent): a %modern one, a legacy one, and the legacy one once it
+        #! is %modern, with a child Program for comparison
+        const IndependentWorker = "%modern
+%no-child-restrictions
+Program legacy(PO_DEFAULT, True);
+Program modern(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION, True);
+Program child(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+printf(\"legacy=%d modern=%d child=%d\\n\", legacy.getExecMode(), modern.getExecMode(), child.getExecMode());
+legacy.parse(\"%modern\\nint sub f() { return 1; }\", \"x\");
+printf(\"legacy %%modern=%d\\n\", legacy.getExecMode());
+";
+
+        #! the value of each execution mode (Program::getExecMode())
+        const ModeValues = {"ast": 0, "ir": 1, "jit": 2, "tiered": 3};
+
+        #! an AOT module that requires a source module: the module manager loads the dependencies of an AOT module
+        #! before it initializes the module (QoreModuleManager::loadAOTBinaryModuleDependencies()), with the requesting
+        #! Program, whose mode the source module's Program inherits; a guard, which also passes without the fix, against
+        #! loading them with the AOT module's Program, whose mode (JIT) carries no requested mode
+        const AotModule = "%modern
+%requires ExecModeParentlessSource
+module ExecModeParentlessAot {
+    version = \"1.0\";
+    desc = \"an AOT module that requires a source module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace ExecModeParentlessAot {
+    public int sub g(int x) {
+        return ExecModeParentlessSource::f(x);
+    }
+}
+";
+
+        #! the source module that the AOT module requires
+        const SourceModule = "%modern
+module ExecModeParentlessSource {
+    version = \"1.0\";
+    desc = \"a source module that an AOT module requires\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace ExecModeParentlessSource {
+    public int sub f(int x) {
+        int s = 0;
+        for (int i = 0; i < x; ++i) {
+            s += i;
+        }
+        return s;
+    }
+}
+";
+
+        #! calls the source module's function through the AOT module, and directly: the AOT module, which is required
+        #! first, loads the source module, which is then only imported; calls from the AOT module's native code do not
+        #! promote a function in tiered execution, while those of the worker do
+        const AotWorker = "%modern
+%requires ExecModeParentlessAot
+%requires ExecModeParentlessSource
+int t = 0;
+for (int i = 0; i < 10; ++i) {
+    t += ExecModeParentlessAot::g(10) + ExecModeParentlessSource::f(10);
+}
+printf(\"%d\\n\", t);
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-exec-mode-parentless-module-");
+    }
+
+    constructor() : QUnit::Test("ExecModeParentlessModuleTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("a module loaded without a requesting Program in each execution mode", \testExecModes());
+        addTestCase("a module that cannot be loaded without a requesting Program", \testLoadError());
+        addTestCase("independent Programs in each execution mode", \testIndependent());
+        addTestCase("a source module that an AOT module requires in each execution mode", \testAotDependency());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_load_module_in_foreign_thread() requires a debug build");
+        }
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        writeFile(mod_dir + DirSep + "ExecModeParentlessModule.qm", Module);
+        string worker = tmp.path + DirSep + "worker.q";
+        writeFile(worker, Worker);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the harness raises EXEC-MODE-NATIVE-ERROR if ast or ir compiles code to native code, or if jit or tiered
+            # compiles none
+            string out = ExecModeHarness::run(sprintf("QORE_MODULE_DIR=%s%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s -b --exec-mode=%s %s", mod_dir, ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "",
+                libqore_dir, libqore_dir, qore_bin, mode, worker));
+            assertEq("900", trim(out), mode);
+        }
+    }
+
+    testLoadError() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_load_module_in_foreign_thread() requires a debug build");
+        }
+        string worker = tmp.path + DirSep + "failing.q";
+        writeFile(worker, FailingWorker);
+        string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
+            libqore_dir, libqore_dir, qore_bin, worker));
+        assertEq("DBG-LOAD-MODULE-ERROR: the module", trim(out));
+    }
+
+    testIndependent() {
+        string worker = tmp.path + DirSep + "independent.q";
+        writeFile(worker, IndependentWorker);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the worker runs no code often enough to be compiled: its native code is not checked
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, libqore_dir, qore_bin, mode, worker), ExecModeHarness::NativeCheck::None);
+            int v = ModeValues{mode};
+            # a legacy Program cannot run in a mode other than AST: it selects its automatic mode until it is %modern
+            assertEq((sprintf("legacy=0 modern=%d child=%d", v, v), sprintf("legacy %%modern=%d", v)),
+                (select out.split("\n"), $1), mode);
+        }
+    }
+
+    testAotDependency() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        string src = tmp.path + DirSep + "aot-src";
+        string aot = tmp.path + DirSep + "aot";
+        mkdir(src);
+        mkdir(aot);
+        writeFile(src + DirSep + "ExecModeParentlessSource.qm", SourceModule);
+        writeFile(src + DirSep + "ExecModeParentlessAot.qm", AotModule);
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -m -o %s %s 2>&1",
+            src, libqore_dir, libqore_dir, qcc_bin, aot + DirSep + "ExecModeParentlessAot.qmod",
+            src + DirSep + "ExecModeParentlessAot.qm"), \rc);
+        assertEq(0, rc, "qcc -m: " + out);
+        # the AOT module from the AOT directory, the source module from the source directory, where the AOT module's
+        # source is not found first
+        unlink(src + DirSep + "ExecModeParentlessAot.qm");
+        string worker = tmp.path + DirSep + "aot-worker.q";
+        writeFile(worker, AotWorker);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the harness raises EXEC-MODE-NATIVE-ERROR if ast or ir compiles code to native code (the source module's
+            # function), or if jit or tiered compiles none
+            out = ExecModeHarness::run(sprintf("QORE_MODULE_DIR=%s%s%s%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s -b --exec-mode=%s %s", aot, PathSep, src, ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "",
+                libqore_dir, libqore_dir, qore_bin, mode, worker));
+            assertEq("900", trim(out), mode);
+        }
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+}

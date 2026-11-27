@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of same-name-class-type-identity.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module SameNameClasses {
+    version = "1.0";
+    desc = "classes with the same name and declarations in two namespaces for same-name-class-type-identity.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SNA {
+public class Foo {}
+}
+
+public namespace SNB {
+public class Foo {}
+}
+
+public namespace SNM {
+# a method overloaded on the two classes
+public class C {
+    string m(SNA::Foo f) { return "m(SNA::Foo)"; }
+    string m(SNB::Foo f) { return "m(SNB::Foo)"; }
+}
+}

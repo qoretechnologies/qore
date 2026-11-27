@@ -11,6 +11,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 
 %exec-class ParamClassCheckStepsTest
 
@@ -71,8 +72,14 @@ class ParamClassCheckStepsTest inherits QUnit::Test {
             string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 worker));
             assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
-            checkOutput("qcc " + opt, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
-                libqore_dir, libqore_dir, exe)));
+            # the output on stdout followed by the output on stderr, as of the execution modes, apart from the module
+            # loader's warnings and the native compilation trace, which are not output of the program; the
+            # executable runs with the default environment, which only traces native compilation
+            hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+                sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe), NOTHING,
+                "QORE_JIT_TIMING=1");
+            assertEq(0, res.rc, sprintf("qcc %s: exit status (output: %y)", opt, res.out));
+            checkOutput("qcc " + opt, res.out);
         }
     }
 

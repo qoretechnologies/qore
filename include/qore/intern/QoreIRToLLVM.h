@@ -47,6 +47,7 @@ class LocalVar;
 class FunctionEntry;
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IRBuilder.h>
@@ -94,6 +95,29 @@ DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 //! Returns true if the fast entry of \a variant cannot be called by a call that gives the callee a temporary argument
 //! (\a call_gives_args), which a parameter of the callee takes over (see QoreIRToLLVM.cpp)
 DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant);
+
+//! The value of QoreIRToLLVM::deferred_element_restore when the exit on an exception restores no implicit element after
+//! the handlers: no element index, which is an int, has this value
+constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
+
+//! Returns the terminator of a block, or nullptr if it has none yet
+/** LLVM 23 changed getTerminator(): it no longer returns nullptr for a block whose last instruction is not a
+    terminator (it asserts the block is well formed, and returns its last instruction in a release build of LLVM), and
+    added getTerminatorOrNull() for that; the lowering tests blocks that it is still building, so it uses this.  A raw
+    getTerminator() is only for a block that has its terminator (examples/test/runner/test_llvm_terminator_queries.py
+    checks the code of the lowering)
+*/
+inline llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
+#if LLVM_VERSION_MAJOR >= 23
+    return block->getTerminatorOrNull();
+#else
+    return block->getTerminator();
+#endif
+}
+
+inline llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
+    return qoreGetTerminator(&block);
+}
 
 class QoreIRToLLVM {
 public:
@@ -385,11 +409,23 @@ private:
     // Calls in the same activation reuse the buffer after the preceding method returns.
     llvm::AllocaInst* native_method_context_storage = nullptr;
 
-    // Exact-class checks for stable local receivers, materialized once in the
-    // logical function entry. Object validity remains guarded at each call.
-    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+    // Exact-class checks for receivers in locals that the code does not write, made once in the logical function
+    // entry for the value of the local there; set_local_var_value() can still replace the value (of a parameter, for
+    // example), so each call reuses the result only for that receiver (qore#7631).  Object validity remains guarded
+    // at each call.
+    struct AotExactClassGuard {
+        //! the receiver in the local at the entry, which the entry cleanup of the local holds until the function exits
+        llvm::Value* receiver;
+        //! whether the class of that receiver is the exact class of the call target
+        llvm::Value* matches;
+    };
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    //! the locals of the function that an outlined function-body helper that it calls can assign (the
+    //! written_shared_locals of its CallAOTHelper instructions), whose entry cleanup the call releases and reloads
+    //! (see recordHelperSite()): no exact-class check of such a receiver is hoisted (qore#7631)
+    std::unordered_set<const void*> aot_helper_written_locals;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     using NativeConversionCache =
@@ -1237,6 +1273,9 @@ private:
     // register's last use is reached, enabling early release of DotEval base
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
+    //! the values that are the results of weak or opaque stores (qore_ir_weak_store_result()): a store does not take
+    //! their references, which the statement holds until its end (qore#7342)
+    std::unordered_set<uint32_t> weak_store_results;
     //! the block defining each value, for decisions that are only safe when a value is used in the block defining it
     /** The use counts above are static: a value defined before a loop and used once in its body counts one use,
         but that use runs on every iteration.
@@ -1257,11 +1296,18 @@ private:
     // being defined again, such as a read hoisted out of a loop (qore_ir_find_reused_call_args()): no call releases
     // it or takes its cleanup slot
     std::vector<uint8_t> reused_call_args;
+    std::unordered_set<uint32_t> invoke_store_moves;
     // the values read through a reference by a local with a reference flag -> the slot holding the reference that the
     // read took (see emitReferenceLocalRead()): the slot is not a cleanup slot of the value, as the value is the
     // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
     // only if it holds the value (qore_rt_release_reference_read())
     std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the slot of each read site of emitReferenceLocalRead() -> the slot of the value read before it at the site
+    std::unordered_map<llvm::AllocaInst*, llvm::AllocaInst*> reference_read_previous_slots;
+    // the result of each generic += of an "auto" local paired with its store whose local can hold a reference -> the
+    // i1 that is true if the local held one when the operation was made: the operation is made through it, and the
+    // paired store stores nothing then (autoAddHoldsReference(), QoreIRInstruction::paired_auto_add_store, qore#7421)
+    std::unordered_map<uint32_t, llvm::Value*> auto_add_reference_flags;
     // the arrays of given argument slots that are null when no read through a reference holds its value (see
     // buildArgCleanupArray())
     std::unordered_set<llvm::Value*> nullable_arg_cleanups;
@@ -1642,8 +1688,20 @@ private:
             const QoreIRInstruction* inst, llvm::BasicBlock* target);
     //! Emits, at the insertion point, the restoration of the implicit arguments and elements open at \a inst,
     //! innermost first, on a path where an exception leaves the function from \a inst (see
-    //! getImplicitContextRestoreEdge())
+    //! getImplicitContextRestoreEdge()); the element of a foreach statement is restored after the handlers of the
+    //! frame (QoreIRExceptionExitRestore::AfterHandlers): in a function with handlers, the path stores it in
+    //! deferred_element_restore instead
     void emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst);
+    //! The implicit element that an exit on an exception restores after the handlers of the frame have run, which
+    //! run with the element of the loop whose body they are in (qore#7379): the element that the outermost foreach
+    //! statement open at the exit saved (QoreIRExceptionExitRestore::AfterHandlers), which the exit stores
+    //! (emitImplicitContextRestore()), or QORE_IR_NO_DEFERRED_ELEMENT; created at the function's entry in a function
+    //! with on_block_exit handlers and such a push open at an exit, nullptr otherwise: without handlers, nothing that
+    //! runs before the end of the exit can read the element, which the exit then restores at once
+    llvm::AllocaInst* deferred_element_restore = nullptr;
+    //! Emits, at the insertion point of an exit on an exception after the handlers of the frame, the restoration of
+    //! the implicit element that the exit stored in deferred_element_restore, if any
+    void emitDeferredElementRestore(llvm::Module& module);
 
     // Phase 2B — incoming edges feeding function_common_cleanup's phi.
     // Populated by createPerInvokeCleanupLP; consumed by
@@ -1691,6 +1749,9 @@ private:
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
     // visible but the callee context is not cached.
+    // With ref_fast_variant (the callee), the fast entry is a reference parameter fast entry (issue #7271): the call
+    // binds the reference parameters on the runtime stack before it calls it, and the fallback makes the call when an
+    // argument does not match its parameter.
     DLLLOCAL llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
@@ -1707,7 +1768,8 @@ private:
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false,
             const std::vector<uint8_t>* date_kind_guards = nullptr,
-            const FastEntryTakeOver* take_over = nullptr);
+            const FastEntryTakeOver* take_over = nullptr,
+            const AbstractQoreFunctionVariant* ref_fast_variant = nullptr);
 
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
@@ -1737,6 +1799,13 @@ private:
     llvm::Value* emitFastEntryDateKindGuards(llvm::Module& module, llvm::Value* can_use_fast_entry,
             const std::vector<uint8_t>& date_kind_guards, const std::vector<llvm::Value*>& raw_args,
             const std::vector<uint32_t>& raw_arg_ids, const std::vector<llvm::Value*>& boxed_args);
+
+    //! Returns the array of the arguments of the parameters of a reference type of a call of a reference parameter
+    //! fast entry, in the order of the parameters, for qore_rt_bind_fast_entry_ref_params() (issue #7271)
+    /** @param boxed_args the NaN-boxed arguments of the call, one for each parameter
+    */
+    llvm::Value* emitRefFastEntryArgs(llvm::Function* llvm_func, const AbstractQoreFunctionVariant* variant,
+            const std::vector<llvm::Value*>& boxed_args);
 
     //! Converts the NaN-boxed result of a generic fallback call to the return ABI of @a callee_info's fast entry
     //! and releases the boxed result if it was converted
@@ -2080,6 +2149,19 @@ private:
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
+    //! returns \a owned, or a copy of its own if it is a weakly shared list or hash (qore#7342): the tag, the node type
+    //! and the flags of the container are tested inline, and the copy is made out of line; \a current is the storage
+    //! of the local that a store gives \a owned, if any: the container that it holds already gets no new holder (a +=
+    //! changed it in place, qore#7421)
+    llvm::Value* emitWeakShareCheck(llvm::Module& module, llvm::Function* func, llvm::Value* owned,
+            llvm::Value* xsink, llvm::Value* current = nullptr);
+    //! returns an i1 that is true if \a value is a weakly shared list or hash (the test of emitWeakShareCheck(), without
+    //! the reference count), which a store may have copied (qore#7342)
+    llvm::Value* emitWeakSharedTest(llvm::Module& module, llvm::Function* func, llvm::Value* value);
+    //! stores \a value in the local cache of \a key, which a store to the runtime stack gave the local, or reloads the
+    //! local from the runtime stack if the store may have copied it (a weakly shared container, qore#7342)
+    void retainOrReloadLocalCacheValue(const void* key, llvm::Value* value, llvm::Module& module,
+            llvm::Function* llvm_func);
 
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
@@ -2113,6 +2195,17 @@ private:
     bool irValueMayBeChar(uint32_t value_id) const;
     //! Returns true if the IR value can be NOTHING at runtime, as far as its facts show
     bool irValueMayBeNothing(uint32_t value_id) const;
+    //! Returns true if the IR value can be a list or a hash at runtime: it is boxed, and its type does not exclude both
+    bool irValueMayBeContainer(uint32_t value_id) const;
+    //! Emits the release of the reference of the operand's temporary after += on an lvalue without a value gave it
+    /** The result is then the operand itself, with a reference of its own; when the operand is an owned temporary
+        whose last use is the operation and that can be a list or a hash, qore_rt_add_assign_release_operand()
+        releases its slot's reference for a list or hash that a weak reference designates, so that the result holds
+        the only reference and a local that takes it moves it, as the AST interpreter gives the operand's reference to
+        the lvalue (qore#7342)
+    */
+    void emitAddAssignOperandRelease(const QoreIRInstruction* inst, llvm::Value* rhs, llvm::Value* result,
+        llvm::Function* llvm_func, llvm::Module& module);
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value
@@ -2808,9 +2901,13 @@ private:
         to the call (buildArgCleanupArray()), which are released when the callee returns, before its frame is popped,
         as the AST interpreter releases the parameters that took the arguments over in the callee's frame (issue #5882)
     */
+    //! @param ref_params_bound true if the call is one of a reference parameter fast entry whose reference parameters
+    //! the caller bound (qore_rt_bind_fast_entry_ref_params()): they are released in the call's frame once the fast
+    //! entry has returned, as AOT code releases them (issue #7271)
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0, const FastEntryTakeOver* take_over = nullptr);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0,
+            const FastEntryTakeOver* take_over = nullptr, bool ref_params_bound = false);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the
@@ -3162,9 +3259,19 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
-    //! Releases compiler-held duplicate owners before a dynamic local string append.
-    void prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
+    //! Releases compiler-held duplicate owners before a dynamic local string append; returns the left operand of the
+    //! += helper: \a lhs, or the reference that the local holds, through which the operation is made (qore#7421)
+    llvm::Value* prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
         llvm::Function* llvm_func);
+    //! returns the i1 that is true if the local of the generic += \a inst paired with its store holds a reference,
+    //! read from its reference flag once, or nullptr if the local cannot hold one (auto_add_reference_flags, qore#7421)
+    llvm::Value* autoAddHoldsReference(const QoreIRInstruction& inst, llvm::Function* llvm_func);
+    //! emits the paired store \a inst of a generic += of an "auto" local: it stores nothing if the operation was made
+    //! through a reference that the local holds (QoreIRInstruction::paired_auto_add_store, qore#7421)
+    bool lowerPairedAutoAddStore(const QoreIRInstruction* inst, llvm::Value* holds_ref, llvm::Function* llvm_func,
+        llvm::Module& module, std::string& error, const QoreIRInstruction* next);
+    // true while lowerPairedAutoAddStore() emits the store itself
+    bool lowering_paired_auto_add_store = false;
 
     //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
     /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds

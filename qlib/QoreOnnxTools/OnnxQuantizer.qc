@@ -42,7 +42,7 @@ public hashdecl OnnxPythonDependencyInfo {
 
 #! Options for ONNX quantization
 public hashdecl OnnxQuantizationOptions {
-    #! Python executable; defaults to \c QORE_ONNX_PYTHON or \c python3
+    #! Python executable; defaults to \c QORE_ONNX_PYTHON or \c python3 (\c python3 for code restricted from external information)
     *string python;
     #! Quantization method: \c dynamic or \c static
     string method = "dynamic";
@@ -141,7 +141,8 @@ public class OnnxQuantizer {
 
         @param options optional quantization options; \c python selects the
         executable to probe, otherwise \c QORE_ONNX_PYTHON or \c python3 is
-        used
+        used (\c python3 for code restricted from external information, for
+        which the environment is empty; see @ref sandbox_ambient_host_data)
         @return dependency status including the selected executable, ONNX
         Runtime version when available, captured diagnostics, and an
         installation hint when dependencies are missing
@@ -281,7 +282,8 @@ public class OnnxQuantizer {
         if (opts.python.val()) {
             return opts.python;
         }
-        if (ENV.QORE_ONNX_PYTHON.val()) {
+        # the environment of the host only for a caller that could read it itself (qore#7586)
+        if (SandboxManager::callerMayReadExternalInfo() && ENV.QORE_ONNX_PYTHON.val()) {
             return ENV.QORE_ONNX_PYTHON;
         }
         return "python3";

@@ -12,6 +12,16 @@
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
+
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -218,7 +228,7 @@ hash<string, string> sub compile(string suffix, string extra_env) {
     }
     return {
         "compile": output,
-        "run": backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)),
+        "run": run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)),
     };
 }
 
@@ -371,11 +381,11 @@ if (!is_file(external_false_exe) || !is_file(external_true_exe) || !is_file(exte
     exit(2);
 }
 
-string external_false_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string external_false_run = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, external_false_exe));
-string external_true_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string external_true_run = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, external_true_exe));
-string external_disabled_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+string external_disabled_run = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, external_disabled_exe));
 if (external_false_run != "5\n" || external_true_run != "10\n"
         || external_disabled_run != "5\n") {

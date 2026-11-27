@@ -37,6 +37,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class NestedCallableTypesTest
@@ -180,7 +181,11 @@ text after nested parameters: PARSE-TYPE-ERROR
         string compile_out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
             libqore_dir, qcc, exe, script));
         assertTrue(is_file(exe), "qcc compiled the script: " + compile_out);
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
-        assertEq(Expected, out, "the compiled script");
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(
+            sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertEq(0, res.rc, sprintf("%s: exit status (output: %y)", "the compiled script", res.out));
+        assertEq(Expected, res.stdout, "the compiled script");
+        # the native compilation trace and the module loader's warnings are not output of the program
+        assertEq("", res.stderr, "the compiled script" + ": stderr");
     }
 }

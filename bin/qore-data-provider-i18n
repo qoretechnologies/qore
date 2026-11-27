@@ -172,6 +172,12 @@ class QoreDataProviderI18nCmd {
         hash<string, hash<auto>> catalogs = {};
         hash<string, bool> app_names;
         if (opt.owner) {
+            # the catalogs of each owner, to check that its registrations did not fail (qore#7788)
+            hash<string, hash<string, hash<auto>>> owner_catalogs = {};
+            foreach string owner in (cast<list<string>>(opt.owner)) {
+                owner_catalogs{owner} = moduleCatalogs(owner);
+            }
+            checkProviderRegistrations(owner_catalogs, (map {$1: True}, cast<list<string>>(opt.owner)));
             foreach string owner in (cast<list<string>>(opt.owner)) {
                 foreach hash<auto> contribution in (
                         DataProviderActionCatalog::getPresentationContributionsForModule(
@@ -212,6 +218,11 @@ class QoreDataProviderI18nCmd {
         }
         if (!opt.owner && !opt.app) {
             mergeCatalogs(\catalogs, connectionCatalogs());
+        }
+        if (!opt.owner) {
+            # a registration of the selected apps (or of any app) that failed while the provider modules were loaded
+            # or the apps' actions were read ends the extraction before anything is written (qore#7788)
+            checkProviderRegistrations(NOTHING, NOTHING, opt.app ? cast<list<string>>(opt.app) : NOTHING);
         }
         if (!catalogs) {
             throw "DATA-PROVIDER-I18N-ERROR",
@@ -425,6 +436,8 @@ class QoreDataProviderI18nCmd {
         foreach string owner in (sort(keys owner_modules)) {
             owner_catalogs{owner} = moduleCatalogs(owner);
         }
+        # the provider modules registered what they own, before any catalog is compared or written (qore#7788)
+        checkProviderRegistrations(owner_catalogs, (map {$1.owner: True}, owned_roots));
 
         int stale = 0;
         int translation_count = 0;
@@ -569,6 +582,8 @@ class QoreDataProviderI18nCmd {
         foreach string owner in (sort(keys owner_modules)) {
             owner_catalogs{owner} = moduleCatalogs(owner);
         }
+        # the provider modules registered what they own, before any catalog is compared or written (qore#7788)
+        checkProviderRegistrations(owner_catalogs, (map {$1.owner: True}, owned_roots));
 
         # Validate the complete owner/domain mapping before touching any file.
         # This prevents a late duplicate, orphan, or new-domain error from
@@ -788,6 +803,9 @@ class QoreDataProviderI18nCmd {
                     owner_errors{owner} = sprintf("%s: %s", ex.err, ex.desc);
                 }
             }
+            # the provider modules registered what they own, before any catalog is re-keyed (qore#7788); an owner
+            # whose extraction was refused is reported with its domains
+            checkProviderRegistrations(owner_catalogs, (map {$1.owner: True}, roots));
         }
 
         # path -> the catalog to write there
@@ -1219,6 +1237,83 @@ class QoreDataProviderI18nCmd {
             }
             collectProviderSourceOwners(path + DirSep + child, \owners);
         }
+    }
+
+    #! Fails closed when a provider module's registration failed while it was loaded (qore#7788)
+    /** A registration that fails while its module loads, such as the init of an app whose action script cannot be
+        opened, is retained by the data provider catalog as an initialization failure, and its module contributes
+        less than it owns, or nothing: comparing its catalogs would report them as orphaned or stale, hiding the
+        cause.  So a retained failure, or an owner module with catalogs (or named by the caller) that contributes no
+        catalog, ends the run here with the original error, before any catalog is compared or written.
+
+        A module can also keep the error only for its discovery inventory provider, as TypeScriptActionInterface does
+        when its action script cannot be read: it registers no app, and its inventory provider raises the error.  The
+        failures of the inventory providers (DataProviderActionCatalog::getDiscoveryInventoryFailures(), with the
+        module that registered the provider) are therefore checked as the initialization failures are.
+
+        @param owner_catalogs the catalogs that each owner module contributes, by owner module; an owner whose
+        catalogs could not be extracted is not in it (its error is reported with its domains)
+        @param required_owners the owner modules that must contribute: those with catalogs in the tree, or, when
+        catalogs are extracted, those that --owner names; an owner found only by its source registers what it
+        registers when it is loaded, which can be nothing
+        @param apps the apps whose failures are checked; all if not given
+
+        @throw DATA-PROVIDER-I18N-ERROR an owner module registered no providers, or a registration failed
+    */
+    private checkProviderRegistrations(*hash<string, hash<string, hash<auto>>> owner_catalogs,
+            *hash<string, bool> required_owners, *list<string> apps) {
+        # each failure: what failed, the module that registered it, if known, and the original error
+        list<hash<auto>> failures = map (
+            "what": $1.app + ($1.action ? "/" + $1.action : ""),
+            "module_context": $1.module_context,
+            "error": $1.error,
+            "description": $1.description,
+        ), DataProviderActionCatalog::getInitializationFailures(apps);
+        # an inventory provider can stand for any app, also one of the selected apps
+        foreach hash<DataProviderDiscoveryFailureInfo> failure in (
+                DataProviderActionCatalog::getDiscoveryInventoryFailures()) {
+            string desc = failure.description;
+            # a producer can give the failures of its sources in the argument (ex: TypeScriptActionInterface)
+            if (failure.argument.typeCode() == NT_HASH && failure.argument.failures.typeCode() == NT_LIST) {
+                foreach auto source_failure in (failure.argument.failures) {
+                    if (source_failure.typeCode() == NT_HASH) {
+                        desc += sprintf("; %s: %s: %s", source_failure.source ?? source_failure.identity
+                            ?? "unknown source", source_failure.error ?? "unknown error",
+                            source_failure.description ?? "");
+                    }
+                }
+            }
+            failures += {
+                "what": "discovery inventory source " + failure.identity,
+                "module_context": failure.module_context,
+                "error": failure.error,
+                "description": desc,
+            };
+        }
+        foreach hash<auto> i in (owner_catalogs.pairIterator()) {
+            if (!i.value && required_owners{i.key}) {
+                # the failures of the module first
+                list<hash<auto>> own = select failures,
+                    $1.module_context.val() && $1.module_context.find(i.key) >= 0;
+                list<hash<auto>> other = select failures,
+                    !$1.module_context.val() || $1.module_context.find(i.key) < 0;
+                throw "DATA-PROVIDER-I18N-ERROR", sprintf("module %y registered no providers: %s", i.key,
+                    failures
+                        ? formatFailures(own + other)
+                        : "no initialization failure was recorded (its catalogs would be orphaned)");
+            }
+        }
+        if (failures) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf("a provider registration failed while the provider modules "
+                "were loaded: %s", formatFailures(failures));
+        }
+    }
+
+    #! Returns the text of registration failures: each with what failed (an app, an action or an inventory source),
+    #! its module and its original error
+    private static string formatFailures(list<hash<auto>> failures) {
+        return (map sprintf("%s (%s): %s: %s", $1.what, $1.module_context ?? "unknown module", $1.error,
+            $1.description), failures).join("; ");
     }
 
     private hash<string, hash<auto>> moduleCatalogs(string owner) {

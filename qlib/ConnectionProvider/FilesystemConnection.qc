@@ -143,9 +143,13 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         @return a data provider object for this connection
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the data provider is created from the connection's members and its constructor options: for restricted code
+        # that was lent the connection, from its creator's members, and with options that cannot change the target
+        # (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         load_module("FileDataProvider");
         return create_object("FileDataProvider", {
-            "root": urlh.path ?? "/",
+            "root": src.urlh.path ?? "/",
             "readonly": False,
         } + constructor_options);
     }
@@ -200,6 +204,8 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
 
         # sanitize / normalize the path
         urlh.path = normalize_dir(urlh.path);
+        # the members are normalized after the base class took its snapshot of them (qore#7327)
+        takeLentTargetSnapshot();
     }
 
     #! Verifies that subtype info has been loaded from external modules

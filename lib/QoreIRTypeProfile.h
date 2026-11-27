@@ -44,7 +44,7 @@ inline void TypeProfile::recordTypeInfo(const QoreTypeInfo* type_info) {
         TypeProfileTypeKey key{type_info, qore_get_type_identity_serial(type_info)};
         bool counted = false;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (extended_type_counts) {
                 auto i = extended_type_counts->find(key);
                 if (i != extended_type_counts->end()) {

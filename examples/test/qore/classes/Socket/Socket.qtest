@@ -2179,12 +2179,12 @@ class SocketTest inherits QUnit::Test {
         @param holds chunk i is held for holds[i] before it is forwarded
         @param split chunk i is forwarded in two halves split[i] apart
         @param frag if not 0, every chunk is forwarded in pieces of this size, @p gap apart
-        @param events receives what the relay does, with its time after @p t0, so that a failure tells data that the
-        relay did not forward (an error, an early end) from data that it forwarded and the peer did not read
-        (qore#7521)
+        @param events receives what the relay does, with its time after @p t0 (a monotonic clock reading in
+        microseconds), so that a failure tells data that the relay did not forward (an error, an early end) from data
+        that it forwarded and the peer did not read (qore#7521)
     */
     private static forwardTlsFlights(string dir, Socket src, Socket dst, list<auto> holds, list<auto> split, int frag,
-            date gap, Counter done, Queue events, date t0) {
+            date gap, Counter done, Queue events, int t0) {
         on_exit {
             try {
                 dst.shutdown();
@@ -2207,7 +2207,9 @@ class SocketTest inherits QUnit::Test {
                 if (*date sp = split[i]) {
                     int half = b.size() / 2;
                     dst.send(b.substr(0, half));
+                    SocketTest::heldFlightEvent(events, t0, "%s: chunk %d: first half sent, holding the second", dir, i);
                     usleep(sp);
+                    SocketTest::heldFlightEvent(events, t0, "%s: chunk %d: sending the second half", dir, i);
                     dst.send(b.substr(half));
                 } else if (frag) {
                     for (int o = 0; o < b.size(); o += frag) {
@@ -2227,13 +2229,16 @@ class SocketTest inherits QUnit::Test {
         }
     }
 
-    #! Records an event of sslUpgradeHeldFlightsTest() with its time after @p t0
-    /** @param events the events of the case
-        @param t0 the start of the case
+    #! Records an event of sslUpgradeHeldFlightsTest() with its time after @p t0, on the monotonic clock
+    /** The holds of the relay are sleeps, which a step of the wall clock (of a virtual machine, for example) does not
+        change, so the times that are compared with them are measured with the clock that does not step.
+
+        @param events the events of the case
+        @param t0 the start of the case: a reading of clock_get_monotonic_us()
         @param fmt the format of the event, for vsprintf() with the remaining arguments
     */
-    private static heldFlightEvent(Queue events, date t0, string fmt, ...) {
-        events.push(sprintf("%d ms: %s", get_duration_milliseconds(now_us() - t0), vsprintf(fmt, argv)));
+    private static heldFlightEvent(Queue events, int t0, string fmt, ...) {
+        events.push(sprintf("%d ms: %s", (clock_get_monotonic_us() - t0) / 1000, vsprintf(fmt, argv)));
     }
 
     #! A TLS upgrade completes as soon as the data of a delayed peer arrives (qore#7118)
@@ -2273,7 +2278,7 @@ class SocketTest inherits QUnit::Test {
             # the relay's accept thread and its forwarding threads; every thread of the case records what it does in
             # events, which a failure reports (qore#7521)
             Queue events();
-            date t0 = now_us();
+            int t0 = clock_get_monotonic_us();
             Counter relay_done(1);
             background sub () {
                 on_exit relay_done.dec();
@@ -2316,7 +2321,8 @@ class SocketTest inherits QUnit::Test {
 
             Socket client();
             client.connect("127.0.0.1:" + relay_port, 15s);
-            date start = now_us();
+            int start = clock_get_monotonic_us();
+            date wall_start = now_us();
             *hash<ExceptionInfo> err;
             string ok;
             try {
@@ -2328,7 +2334,10 @@ class SocketTest inherits QUnit::Test {
                 SocketTest::heldFlightEvent(events, t0, "client: %s: %s", ex.err, ex.desc);
                 err = ex;
             }
-            date elapsed = now_us() - start;
+            # the hold is a monotonic sleep of the relay: the time that it must outlast is measured with the monotonic
+            # clock too; the wall clock is read to tell a step of it from a hold that did not take effect
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
+            date wall_elapsed = now_us() - wall_start;
             client.close();
             auto server_result;
             try {
@@ -2363,7 +2372,20 @@ class SocketTest inherits QUnit::Test {
             }
             assertEq("ok", ok, label);
             # the hold took effect
-            assertGe(c.min ?? hold, elapsed, label);
+            date min_elapsed = c.min ?? hold;
+            string held_label = label;
+            if (elapsed < min_elapsed) {
+                list<string> log = ();
+                while (events.size()) {
+                    log += events.get();
+                }
+                held_label = sprintf("%s: the upgrade and the first data took %d ms by the monotonic clock and %d ms by the "
+                    "wall clock, less than the hold (%d ms): a wall clock that stepped back shows as a wall time shorter "
+                    "than the hold with a monotonic time that is not; events:\n  %s", label,
+                    get_duration_milliseconds(elapsed), get_duration_milliseconds(wall_elapsed),
+                    get_duration_milliseconds(min_elapsed), (foldl $1 + "\n  " + $2, log));
+            }
+            assertGe(min_elapsed, elapsed, held_label);
         }
     }
 

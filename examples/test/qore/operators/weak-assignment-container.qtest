@@ -16,14 +16,14 @@
 
 %exec-class WeakAssignmentContainerTest
 
-#! a weak assignment of a list or hash designates the container assigned in every execution mode (qore#7237)
+#! a weak assignment of a list or hash designates the container assigned in every execution mode (qore#7237, qore#7572)
 /** A type that strips the container's type (an untyped lvalue, \c list, \c hash, \c any, \c softlist,
     \c list<auto!>, an element of an untyped list or hash, a member of a list of lists) converted the container
     to a copy of its own, which only the weak reference held: the lvalue read an empty container after the statement,
-    and a change of the container assigned was not seen through it.  The weak reference now designates the container
-    assigned, and a type that converts the container to another (a hashdecl, another element type) refuses the weak
-    assignment.  Every mode must print the expected output.
-
+    and a change of the container assigned was not seen through it.  Such a weak assignment, as one to a type that
+    converts the container to another (a hashdecl, another element type), is now refused, and the lvalue keeps its
+    value; an lvalue whose type keeps the container (\c auto, \c list<auto>, \c hash<auto>, the container's own
+    type) takes the weak reference to the container assigned.  Every mode must print the expected output.
     The program is in \c weak-assignment-container/.
 */
 class WeakAssignmentContainerTest inherits QUnit::Test {
@@ -93,9 +93,11 @@ class WeakAssignmentContainerTest inherits QUnit::Test {
                     continue;
                 }
                 # -b must be the first argument of a compiled program
-                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
-                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
-                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+                hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", exe));
+                assertEq(0, res.rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, res.out));
+                assertEq(expected(name), res.stdout, sprintf("%s -O%s", name, opt));
+                # the native compilation trace and the module loader's warnings are not output of the program
+                assertEq("", res.stderr, sprintf("%s -O%s: stderr", name, opt));
             }
         }
     }

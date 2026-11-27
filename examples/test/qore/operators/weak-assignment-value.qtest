@@ -18,16 +18,17 @@
 
 #! the value of a weak assignment, and the lifetime of the temporary that it is given
 #! (qore#7084, qore#7085, qore#7122, qore#7142)
-/** The value of a weak assignment (\c :=) is the value assigned, converted to the variable's type: a variable, a
-    container or a call that is given the value holds it, as in the AST interpreter. Native code (JIT and qcc
-    executables) gave the consumer the weak reference that the variable holds, or, for a local, a value that it read as
+/** The value of a weak assignment (\c :=) is the value assigned, converted to the variable's type: a call that is
+    given the value uses it, and a variable or a container that is given a hash or a list from it takes a copy of its
+    own, as from any value that a weak reference designates (qore#7342), as in the AST interpreter. Native code (JIT
+    and qcc executables) gave the consumer the weak reference that the variable holds, or, for a local, a value that it read as
     an integer (qore#7084), and the IR interpreter gave the weak reference in some consumers. A temporary that a weak
     assignment is given lives until the end of the statement in every execution mode ("all chains, whole statement"):
     the AST interpreter and native code released it when the assignment ended, so that the weak reference designated a
-    destroyed object for the rest of the statement (qore#7085). A container whose type the variable's type strips is
-    not copied: the weak reference designates the container assigned (qore#7237). Every mode must print the output of
-    the AST; the JIT is also run with its functions compiled synchronously, as otherwise they can run in the IR
-    interpreter.
+    destroyed object for the rest of the statement (qore#7085). A weak assignment of a container that the variable's
+    type would convert to a copy is an error (qore#7572, weak-store-conversion-error.qtest). Every mode must print the
+    output of the AST; the JIT is also run with its functions compiled synchronously, as otherwise they can run in the
+    IR interpreter.
 
     The same holds for the lvalues assigned through an lvalue path (members, hash and hashdecl keys, list elements, a
     softlist variable), where the IR interpreter and native code released the temporary and gave the weak reference
@@ -103,9 +104,11 @@ class WeakAssignmentValueTest inherits QUnit::Test {
                     continue;
                 }
                 # -b must be the first argument of a compiled program
-                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
-                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
-                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+                hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b", exe));
+                assertEq(0, res.rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, res.out));
+                assertEq(expected(name), res.stdout, sprintf("%s -O%s", name, opt));
+                # the native compilation trace and the module loader's warnings are not output of the program
+                assertEq("", res.stderr, sprintf("%s -O%s: stderr", name, opt));
             }
         }
     }

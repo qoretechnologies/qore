@@ -1969,9 +1969,9 @@ public:
             case Action::Cleanup:
                 h2->cleanupStream(stream_id);
                 output = 0;
-                // the end of the last stream of a draining connection: the connection's poll operation must run to
-                // close it (qore#5899)
-                if (h2->isDraining() && h2->isDrainComplete()) {
+                // the end of the last stream of a draining connection, or of a session that has ended after a GOAWAY:
+                // the connection's poll operation must run to close it (qore#5899, qore#7770)
+                if ((h2->isDraining() && h2->isDrainComplete()) || h2->isSessionDone()) {
                     wake_controller = true;
                 }
                 break;
@@ -6294,6 +6294,16 @@ bool qore_socket_object_private::isHttp2DrainComplete() const {
     return h2 && h2->isDrainComplete();
 }
 
+bool qore_socket_object_private::isHttp2SessionDone() const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isSessionDone();
+}
+
+int64_t qore_socket_object_private::getHttp2GoawayErrorSent() const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 ? h2->getGoawayErrorSent() : -1;
+}
+
 std::vector<std::pair<int32_t, bool>> qore_socket_object_private::takeHttp2ResponseSendResultsForAsyncPoll() {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     if (!h2) {
@@ -6309,9 +6319,10 @@ void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
         if (h2) {
             h2->cleanupStream(stream_id);
-            // the end of the last stream of a draining connection: its poll operation must run to close it; on the
-            // I/O thread, the cycle that runs this sees it (qore#5899)
-            if (h2->isDraining() && !qore_on_async_io_thread() && h2->isDrainComplete()) {
+            // the end of the last stream of a draining connection, or of a session that has ended after a GOAWAY:
+            // its poll operation must run to close it; on the I/O thread, the cycle that runs this sees it
+            // (qore#5899, qore#7770)
+            if (!qore_on_async_io_thread() && ((h2->isDraining() && h2->isDrainComplete()) || h2->isSessionDone())) {
                 ExceptionSink wake_xsink;
                 qore_socket_object_wake_async_controller(this, &wake_xsink);
                 wake_xsink.clear();
@@ -6498,6 +6509,13 @@ void qore_socket_object_private::releaseHttp2StreamBodyConsumer(int32_t stream_i
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     if (h2) {
         h2->releaseStreamBodyConsumer(stream_id);
+    }
+}
+
+void qore_socket_object_private::releaseHttp2TunnelConsumer(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    if (h2) {
+        h2->releaseTunnelConsumer(stream_id);
     }
 }
 

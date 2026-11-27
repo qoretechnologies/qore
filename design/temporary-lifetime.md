@@ -19,6 +19,20 @@ method or closure call or an object construction) and a value read from a variab
 its own to (see [Values read from variables](#values-read-from-variables)), in the block or the temp scope of the
 call, are released there; a value borrowed from a variable or a constant has no reference of the frame to release.
 
+When an argument takes a copy of a weakly designated hash or list returned by a call, the caller keeps the original
+until the end of its statement (#7426). Each argument captures its value before evaluation of the next argument.
+For example, in `f(x = make(), x.n = 2)` the first argument has the value before the write, and a weak reference to
+the container moved into `x` observes the write. This also applies inside a `try` block.  The compiled modes capture
+such an argument with `CopyCallArg` and release or keep its source with `ReleaseCallArgSource`; when an exception
+leaves the statement, the captured argument is released with its argument list and a kept original with the
+receivers, as the AST interpreter's statement scope holds it (`qore_ir_build_exception_release_groups()`, which does
+not count the release as a use).  The AOT aggregate-return projections remove the capture of the value of a call to a
+producer of a fresh list or hash literal, which no weak reference can designate, so that the call stays the operand of
+its consumer (`qore_ir_fuse_aggregate_return_projections()`).  A cancellation leaves the function valid: the removal
+completes for the captures already chosen, a projection whose rewrite is being prepared restores the facts that the
+preparation set, and the rewrite, once started, completes.  A debug build stops an analysis operation at its n-th check
+with `QORE_DEBUG_IR_ANALYSIS_CANCEL="<operation>:<n>"` (`examples/test/ir/AggregateProjectionCancellation.qtest`).
+
 Only a value defined again for each execution of the call is released by it.  Loop-invariant code motion moves a read
 of a local or a parameter that a loop does not write (`qore_ir_is_hoistable_query_load()`) to the preheader of the
 loop, and the moved instruction keeps the temp scope of the statement in the loop body that it came from, so neither

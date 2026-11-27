@@ -383,7 +383,11 @@ class LazyValueAppCycleTest inherits QUnit::Test {
             "    catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
             "auto sub read_app(string app) { try { return map $1.action, DataProviderActionCatalog::getActions(app, False); }\n"
             "    catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", "worker-cycle-tenant");
-        tenant.setSandboxManager(new SandboxManager());
+        # the sandbox may read this test's directory: its file-system policy also applies to the module sources that
+        # the sandboxed Program loads (a2a90a9bd4)
+        SandboxManager sm();
+        sm.addFilesystemAllowedPath(normalize_dir(get_script_dir()), QSEC_READ);
+        tenant.setSandboxManager(sm);
         tenant.callFunction("load", normalize_dir(get_script_dir()) + "/LazyValueWorkerCycleModule.qm");
         int id = tenant.callFunction("id");
         Queue worker_tids();

@@ -291,6 +291,34 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @ref Qore::Socket::getRemoteCertificate() "getRemoteCertificate()": the request context gives them, in
     \c cx."peer-info" and \c cx."client-cert" (see @ref httpserverutil_request_context).
 
+    @section httpserver_http2_errors HTTP/2 Errors and the End of an HTTP/2 Connection
+
+    The server logs the HTTP/2 error frames of a connection at warning level, with the client's address and port
+    (see <a href="https://github.com/qoretechnologies/qore/issues/7770">issue 7770</a>):
+    - each \c GOAWAY frame with an error code other than \c NO_ERROR that it sends or receives: its error code, the
+      last stream ID and its debug data
+    - each \c RST_STREAM frame with an error code other than \c NO_ERROR and \c CANCEL that it sends or receives: its
+      stream ID and error code
+    - each frame that it receives and that is not valid (the cause of a stream error or of a connection error): its
+      type, stream ID, flags and length, and the error
+
+    At most 16 such messages are logged for a connection, and then one that says that further ones are not logged.
+    The messages go to the logger of the asynchronous I/O (see @ref Qore::set_async_io_logger() "set_async_io_logger()"),
+    or, if it has none, to the logger of the global
+    @ref Qore::AsyncIoController::setLogger() "AsyncIoController", which an HttpServer with a logger sets when it
+    starts.
+
+    After it has sent the \c GOAWAY frame of a connection error, the server closes the connection (RFC 9113 section
+    5.4.1), as it does when a \c GOAWAY frame has been sent or received and no stream of the connection has work left.
+
+    The server ends its half of the stream of an HTTP/2 WebSocket connection (RFC 8441) when the WebSocket connection
+    has closed: after the closing handshake, after the close timeout, or at once after its close frame when the
+    handler has no close timeout.  If the client has not ended its half then, the server resets the stream with
+    <tt>RST_STREAM(NO_ERROR)</tt> (RFC 9113 section 8.1), as it does for a request whose response it sent before the
+    end of the request; without a close timeout, the client's close frame is then not received.  A stream that the
+    client does not end would otherwise stay open for the life of the connection and count against the connection's
+    \c SETTINGS_MAX_CONCURRENT_STREAMS.  Any other \c CONNECT tunnel stays open until each side has ended its half.
+
     @section httpserver_lifetime The Lifetime of a Server and Its Requests
 
     Each request holds its server while the server processes it, from its dispatch until its response has been
@@ -414,6 +442,8 @@ log("started listener on %s", lh.desc);
       releases while requests run is destroyed after the last of them, in its thread, and all of them are answered
       (see @ref httpserver_lifetime;
       <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>)
+    - the HTML error pages of a server that code restricted from external information created do not show the
+      hostname (see @ref sandbox_ambient_host_data)
     - a listener can serve only its own handlers
       (@ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only"):
       it never serves the handlers, the dynamic handlers or the default handler of the server, and while it has no
@@ -1435,6 +1465,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     private {
         # for masking HTTP request log msgs
         *code<string(string)> maskfunc;
+
+        # if the hostname may be shown in the error pages: not if code restricted from external information created
+        # the server, nor for such code that calls the server's methods (qore#7586)
+        bool show_hostname = True;
 
         # quit server flag
         bool exit = False;
@@ -4014,11 +4048,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
+    #! Returns the HTML error page for the given status code and message
+    /** The page shows the server's name and the hostname, but not the hostname if code restricted from external
+        information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created the server or calls this method
+        (see @ref sandbox_ambient_host_data)
+    */
     string getHtmlErrorMessage(int status_code, string msg) {
-        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
-            "%s</address></body></html>",
+        string address = show_hostname && SandboxManager::callerMayReadExternalInfo()
+            ? sprintf("%s on %s", http_server_string, gethostname())
+            : http_server_string;
+        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s"
+            "</address></body></html>",
                 status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
-                html_encode(msg), http_server_string, gethostname());
+                html_encode(msg), address);
     }
 
     static bool acceptsHtml(hash<auto> cx) {
@@ -4457,6 +4499,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        # the hostname is external information: it is decided when the server is created (qore#7586)
+        show_hostname = SandboxManager::callerMayReadExternalInfo();
         drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         if ((opts.handler_socket_max_timeout ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("handler_socket_max_timeout (%d) must not be negative",
@@ -8511,27 +8555,28 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         its result takes a reference to the server to the controller, which releases it in the callback that runs the
         request, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
 
-        @param info connection and request information
+        @param sock the socket of the connection
+        @param cx the connection context
+        @param hdr the request header
+        @param header_info the header information of the request
 
         @return result info for the controller to act on, or @ref nothing if the request's handler does not answer it
         inline
 
         @since HttpServer 1.7
     */
-    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
-            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(Socket sock, hash<auto> cx, hash<auto> hdr,
+            hash<auto> header_info) {
         *hash<HttpServerAsyncIo::HttpRequestResultInfo> rv;
-        {
-            *HttpServer server_hold = serv;
-            *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(info.hdr);
-            if (handler && (handler.handlerCodeIsRestricted()
-                    ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
-                        handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
-                    : handler.canHandleInline(info.cx, info.hdr))) {
-                rv = processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
-            }
-            remove server_hold;
+        *HttpServer server_hold = serv;
+        *AbstractHttpRequestHandler handler = findHandlerForInlineCheck(hdr);
+        if (handler && (handler.handlerCodeIsRestricted()
+                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(cx, hdr).cx,
+                    handler.withholdCredentialsForDispatch(cx, hdr).hdr)
+                : handler.canHandleInline(cx, hdr))) {
+            rv = processInlineRequest(sock, cx, hdr, handler, header_info);
         }
+        remove server_hold;
         # the request released the last reference to the server (the program released it while the request ran, and
         # the request has no response to give that would hold the server): its stop closed the connections (qore#6508)
         if (!serv) {
@@ -14769,7 +14814,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         if (!inlineHeadValid(info.hdr, info.header_info)) {
             return NOTHING;
         }
-        return cast<HttpListener>(info.listener).tryInlineRequest(info);
+        return cast<HttpListener>(info.listener).tryInlineRequest(info.sock, info.cx, info.hdr, info.header_info);
     }
 
     #! Called when an HTTP request is ready (header fully parsed)
