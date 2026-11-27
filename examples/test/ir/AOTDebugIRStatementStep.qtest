@@ -118,7 +118,8 @@ foreach string e in (r.seen) {
         }
 
         # the AST interpreter is the benchmark
-        string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
+        string ast_out = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s", qore_bin, src),
+            NOTHING, "QORE_JIT_TIMING=1").out;
         assertEq("lookup 31:0-11\nlookup 31:13-21\nrv=3\nstep probe.q:30:4-24\nstep probe.q:31:0-11\n"
             "step probe.q:31:13-21\nstep probe.q:32:4-5\nstep probe.q:33:8-16\nstep probe.q:33:8-16\n"
             "step probe.q:35:4-33\nstep probe.q:36:4-20\n", ast_out, "AST source spans of probe()");
