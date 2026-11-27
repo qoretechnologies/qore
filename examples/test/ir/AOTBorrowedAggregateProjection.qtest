@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-borrowed-aggregate-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -59,7 +69,7 @@ printf(\"%d:%s:%s\\n\", borrowedProjection(), reassignedProjection(),
     removedProjection());
 ";
 
-string root = "/tmp/qore-aot-borrowed-aggregate-projection-" + string(getpid());
+string root = tmp.path + "/borrowed-aggregate-projection";
 string src = root + ".qr";
 string enabled = root + "-enabled";
 string disabled = root + "-disabled";
@@ -74,7 +84,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", output);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -89,7 +99,7 @@ if (enabled_compile
         || disabled_compile =~ /borrowed-aggregate-projections=[1-9]/) {
     printf("borrowed aggregate projection analysis mismatch:\n%s\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "9:alpha/changed:alpha\n";
@@ -99,7 +109,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         libqore_dir, qore_bin, mode, src));
     if (actual != expected) {
         printf("%s mismatch: expected %y, got %y\n", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string exe in ((enabled, disabled)) {
@@ -108,7 +118,7 @@ foreach string exe in ((enabled, disabled)) {
     if (actual != expected) {
         printf("AOT mismatch for %s: expected %y, got %y\n", exe,
             expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

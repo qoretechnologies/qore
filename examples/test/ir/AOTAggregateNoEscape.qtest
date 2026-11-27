@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-aggregate-noescape-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -141,8 +151,8 @@ printf(\"%s:%s:%s:%d:%d:%s:%s\\n\", aliasing(), unassignedHash(), removedString(
     phiEffects());
 ";
 
-string src = "/tmp/qore-aot-aggregate-noescape-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-aggregate-noescape-" + string(getpid());
+string src = tmp.path + "/aggregate-noescape.qr";
+string exe = tmp.path + "/aggregate-noescape";
 string disabled = exe + "-disabled";
 string fold_disabled = exe + "-fold-disabled";
 string qo_dir = exe + "-qo";
@@ -159,7 +169,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -171,13 +181,13 @@ string fold_disabled_compile = compile(fold_disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD=1");
 if (enabled_compile.find("fresh-list-size-calls=1") == -1) {
     printf("missing fresh-list size call fold:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (disabled_compile.find("fresh-list-size-calls=1") != -1
         || fold_disabled_compile.find("fresh-list-size-calls=1") != -1) {
     printf("fresh-list size call fold present in disabled control:\n%s",
         disabled_compile + fold_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 string qo_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
@@ -189,7 +199,7 @@ string qo = qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
 string disabled_qo = disabled_qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
 if (!is_file(qo) || !is_file(disabled_qo)) {
     printf(".qo compile failed:\nenabled:\n%sdisabled:\n%s", qo_compile, disabled_qo_compile);
-    exit(2);
+    test_exit(2);
 }
 string dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, qo));
@@ -203,14 +213,14 @@ foreach string function in (("readHash", "readString", "readListPseudos")) {
     string expected_params = function == "readString" ? "[1, 1]" : "[1]";
     if (!line || line.find("fast_param_noescape\": " + expected_params) == -1) {
         printf("missing aggregate noescape metadata for %s:\n%s", function, dump);
-        exit(2);
+        test_exit(2);
     }
 }
 string effect_line = findFastNativeLine(dump, "forwardMutateList(list<int>)");
 if (!effect_line
         || effect_line.find("\"fast_param_may_modify\": [1]") == -1) {
     printf("missing forwarded aggregate parameter-effect metadata:\n%s", dump);
-    exit(2);
+    test_exit(2);
 }
 string observe_selected_line = findFastNativeLine(dump,
     "observeSelected(bool,list<int>,list<int>)");
@@ -222,7 +232,7 @@ if (!observe_selected_line
         || observe_selected_line.find(
             "\"fast_param_may_modify\": [0, 0, 0]") == -1) {
     printf("missing phi noescape metadata:\n%s", dump);
-    exit(2);
+    test_exit(2);
 }
 if (!mutate_selected_line
         || mutate_selected_line.find(
@@ -230,17 +240,17 @@ if (!mutate_selected_line
         || mutate_selected_line.find(
             "\"fast_param_may_modify\": [0, 1, 1]") == -1) {
     printf("unsafe phi parameter-effect metadata:\n%s", dump);
-    exit(2);
+    test_exit(2);
 }
 if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
     printf("noescape metadata present in disabled control:\n%s", disabled_dump);
-    exit(2);
+    test_exit(2);
 }
 string hash_pseudo_line = findFastNativeLine(dump, "readHashPseudo(hash<auto>)");
 if (!hash_pseudo_line
         || hash_pseudo_line.find("\"fast_param_noescape\": [0]") == -1) {
     printf("unsafe hash pseudo noescape metadata:\n%s", dump);
-    exit(2);
+    test_exit(2);
 }
 
 string expected =
@@ -250,14 +260,14 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         libqore_dir, qore_bin, mode, src));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled, fold_disabled)) {
     string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, path));
     if (actual != expected) {
         printf("mismatch in aot %s\nexpected:\n%sactual:\n%s", path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-assigned-string-conversion-facts-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -17,8 +27,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-assigned-string-conversion-facts-"
-    + string(getpid());
+string root = tmp.path + "/assigned-string-conversion-facts";
 mkdir(root);
 string source = root + "/test.qr";
 string enabled = root + "/enabled";
@@ -65,7 +74,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
     if (output != ast) {
         printf("output mismatch in %s:\nast:\n%sactual:\n%s",
             mode, ast, output);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -88,7 +97,7 @@ if (!is_file(enabled) || !is_file(disabled)
     printf("compile failed:\nenabled:\n%sdisabled:\n%s"
         + "cleanup disabled:\n%s",
         enabled_compile, disabled_compile, cleanup_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_output = backquote(sprintf(
@@ -102,7 +111,7 @@ if (enabled_output != ast || disabled_output != ast
     printf("AOT output mismatch:\nast:\n%senabled:\n%sdisabled:\n%s"
         + "cleanup disabled:\n%s",
         ast, enabled_output, disabled_output, cleanup_disabled_output);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled));
@@ -117,7 +126,7 @@ string disassemble = otool.val() ? otool + " -tV"
     : objdump.val() ? objdump + " -d" : "";
 if (!disassemble.val()) {
     printf("cannot inspect AOT call lowering: no objdump or otool available\n");
-    exit(2);
+    test_exit(2);
 }
 int enabled_fallback_calls = int(backquote(sprintf(
     "%s %s | grep -Ec"
@@ -145,5 +154,5 @@ if (enabled_fallback_calls >= disabled_fallback_calls
         enabled_fallback_calls, disabled_fallback_calls,
         enabled_cleanup_calls, disabled_cleanup_calls,
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }

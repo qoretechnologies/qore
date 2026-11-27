@@ -5,8 +5,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-batch-callee-fast-path-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -777,21 +788,21 @@ string sub runScript(string script_path) {
 }
 
 string sub runAot(string script_path, bool check_self_entry = False) {
-    string exe = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid());
+    string exe = tmp.path + "/batch-callee-fast-path";
     string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -O3 -o %s %s 2>&1",
         libqore_dir, check_self_entry ? "QORE_AOT_DEBUG=1" : "", qcc_bin, exe, script_path));
     if (check_self_entry && compile_out !~ /method fast entry 'SpeculativeObjectLeaf__wrapper_/) {
         printf("missing fast entry for wrapper calling affine():\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
 
-string script_path = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/batch-callee-fast-path.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(scriptCode());
@@ -802,10 +813,10 @@ string aot = runAot(script_path, True);
 if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60:13:120:9:116:102\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
-    exit(2);
+    test_exit(2);
 }
 
-string unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-unassigned-" + string(getpid()) + ".qr";
+string unassigned_path = tmp.path + "/batch-callee-fast-path-unassigned.qr";
 File unassigned_script();
 unassigned_script.open2(unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
 unassigned_script.write(unassignedScriptCode());
@@ -817,10 +828,10 @@ if (!(ast_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_unassigned, aot_unassigned);
-    exit(2);
+    test_exit(2);
 }
 
-string assigned_nothing_path = "/tmp/qore-aot-batch-callee-fast-path-nothing-" + string(getpid()) + ".qr";
+string assigned_nothing_path = tmp.path + "/batch-callee-fast-path-nothing.qr";
 File assigned_nothing_script();
 assigned_nothing_script.open2(assigned_nothing_path, O_WRONLY | O_CREAT | O_TRUNC);
 assigned_nothing_script.write(assignedNothingScriptCode());
@@ -832,11 +843,10 @@ if (!(ast_assigned_nothing =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_assigned_nothing =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for assigned NOTHING lvalue\nAST:\n%sAOT:\n%s",
         ast_assigned_nothing, aot_assigned_nothing);
-    exit(2);
+    test_exit(2);
 }
 
-string self_rec_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-rec-unassigned-"
-    + string(getpid()) + ".qr";
+string self_rec_unassigned_path = tmp.path + "/batch-callee-fast-path-self-rec-unassigned.qr";
 File self_rec_unassigned_script();
 self_rec_unassigned_script.open2(self_rec_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
 self_rec_unassigned_script.write(selfRecursiveUnassignedScriptCode());
@@ -848,11 +858,10 @@ if (!(ast_self_rec_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_self_rec_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for self-recursive unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_self_rec_unassigned, aot_self_rec_unassigned);
-    exit(2);
+    test_exit(2);
 }
 
-string self_method_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-method-unassigned-"
-    + string(getpid()) + ".qr";
+string self_method_unassigned_path = tmp.path + "/batch-callee-fast-path-self-method-unassigned.qr";
 File self_method_unassigned_script();
 self_method_unassigned_script.open2(self_method_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
 self_method_unassigned_script.write(selfMethodUnassignedScriptCode());
@@ -864,11 +873,10 @@ if (!(ast_self_method_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_self_method_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for self-method unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_self_method_unassigned, aot_self_method_unassigned);
-    exit(2);
+    test_exit(2);
 }
 
-string closure_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-closure-unassigned-"
-    + string(getpid()) + ".qr";
+string closure_unassigned_path = tmp.path + "/batch-callee-fast-path-closure-unassigned.qr";
 File closure_unassigned_script();
 closure_unassigned_script.open2(closure_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
 closure_unassigned_script.write(closureUnassignedScriptCode());
@@ -879,11 +887,10 @@ string aot_closure_unassigned = runAot(closure_unassigned_path);
 if (ast_closure_unassigned != "1\n" || aot_closure_unassigned != ast_closure_unassigned) {
     printf("unexpected result for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_closure_unassigned, aot_closure_unassigned);
-    exit(2);
+    test_exit(2);
 }
 
-string map_store_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-map-store-unassigned-"
-    + string(getpid()) + ".qr";
+string map_store_unassigned_path = tmp.path + "/batch-callee-fast-path-map-store-unassigned.qr";
 File map_store_unassigned_script();
 map_store_unassigned_script.open2(map_store_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
 map_store_unassigned_script.write(mapStoreUnassignedScriptCode());
@@ -895,12 +902,12 @@ if (!(ast_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)
         || !(aot_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)) {
     printf("expected rejection for unassigned typed map result\nAST:\n%sAOT:\n%s",
         ast_map_store_unassigned, aot_map_store_unassigned);
-    exit(2);
+    test_exit(2);
 }
 
-string cross_leaf_path = "/tmp/qore-aot-cross-file-leaf-" + string(getpid()) + ".qr";
-string cross_main_path = "/tmp/qore-aot-cross-file-main-" + string(getpid()) + ".qr";
-string cross_exe_path = "/tmp/qore-aot-cross-file-" + string(getpid());
+string cross_leaf_path = tmp.path + "/cross-file-leaf.qr";
+string cross_main_path = tmp.path + "/cross-file-main.qr";
+string cross_exe_path = tmp.path + "/cross-file";
 File cross_leaf_script();
 cross_leaf_script.open2(cross_leaf_path, O_WRONLY | O_CREAT | O_TRUNC);
 cross_leaf_script.write(crossFileLeafCode());
@@ -914,15 +921,15 @@ string cross_compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s
     libqore_dir, qcc_bin, cross_exe_path, cross_leaf_path, cross_main_path));
 if (!is_file(cross_exe_path)) {
     printf("cross-file AOT compile failed:\n%s", cross_compile_out);
-    exit(2);
+    test_exit(2);
 }
 string cross_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, cross_exe_path));
 if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:4:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120:boxed:1\n13110:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
-    exit(2);
+    test_exit(2);
 }
 
-string separate_root = "/tmp/qore-aot-cross-file-separate-" + string(getpid());
+string separate_root = tmp.path + "/cross-file-separate";
 string separate_provider_dir = separate_root + "/provider";
 string separate_consumer_dir = separate_root + "/consumer";
 mkdir(separate_root);
@@ -935,7 +942,7 @@ string provider_qo = separate_provider_dir + "/"
     + regex_subst(basename(cross_leaf_path), "\\.qr$", ".qo");
 if (!is_file(provider_qo)) {
     printf("separate provider AOT compile failed:\n%s", separate_provider_out);
-    exit(2);
+    test_exit(2);
 }
 string separate_consumer_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
@@ -944,7 +951,7 @@ string consumer_qo = separate_consumer_dir + "/"
     + regex_subst(basename(cross_main_path), "\\.qr$", ".qo");
 if (!is_file(consumer_qo)) {
     printf("separate consumer AOT compile failed:\n%s", separate_consumer_out);
-    exit(2);
+    test_exit(2);
 }
 string separate_exe = separate_root + "/cross-file";
 string separate_link_out = backquote(sprintf(
@@ -952,13 +959,13 @@ string separate_link_out = backquote(sprintf(
     libqore_dir, qcc_bin, separate_exe, provider_qo, consumer_qo));
 if (!is_file(separate_exe)) {
     printf("separate AOT link failed:\n%s", separate_link_out);
-    exit(2);
+    test_exit(2);
 }
 string separate_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, separate_exe));
 if (separate_out != cross_out) {
     printf("unexpected separate cross-file AOT output: %s", separate_out);
-    exit(2);
+    test_exit(2);
 }
 string provider_index = backquote(sprintf("%s --dump-index-json %s",
     qcc_bin, provider_qo));
@@ -1001,7 +1008,7 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"global_int_global_scale\": 1/)
         || !(provider_index =~ /\"global_int_offset\": 0/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 string unassigned_main_path = separate_root + "/unassigned-main.qr";
@@ -1016,7 +1023,7 @@ string unassigned_compile_out = backquote(sprintf(
 string unassigned_qo = separate_consumer_dir + "/unassigned-main.qo";
 if (!is_file(unassigned_qo)) {
     printf("unassigned consumer AOT compile failed:\n%s", unassigned_compile_out);
-    exit(2);
+    test_exit(2);
 }
 string unassigned_exe = separate_root + "/unassigned";
 string unassigned_link_out = backquote(sprintf(
@@ -1024,12 +1031,12 @@ string unassigned_link_out = backquote(sprintf(
     libqore_dir, qcc_bin, unassigned_exe, provider_qo, unassigned_qo));
 if (!is_file(unassigned_exe)) {
     printf("unassigned consumer AOT link failed:\n%s", unassigned_link_out);
-    exit(2);
+    test_exit(2);
 }
 string unassigned_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, unassigned_exe));
 if (!(unassigned_out =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for imported fast-entry unassigned lvalue:\n%s",
         unassigned_out);
-    exit(2);
+    test_exit(2);
 }

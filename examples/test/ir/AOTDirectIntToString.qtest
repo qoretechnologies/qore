@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-direct-int-to-string-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -26,7 +37,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-direct-int-to-string-" + string(getpid());
+string root = tmp.path + "/direct-int-to-string";
 mkdir(root);
 string source = root + "/test.qr";
 string enabled = root + "/enabled";
@@ -60,7 +71,7 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled) || !is_file(disabled)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_output = run_executable(
@@ -73,7 +84,7 @@ string jit_output = ExecModeHarness::run_command(sprintf(
 if (enabled_output != ast || disabled_output != ast || jit_output != ast) {
     printf("output mismatch:\nast:\n%senabled:\n%sdisabled:\n%sjit:\n%s",
         ast, enabled_output, disabled_output, jit_output);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled));
@@ -84,7 +95,7 @@ if (enabled_undefined !~ /qore_rt_int_to_string/
         || disabled_undefined =~ /qore_rt_int_to_string/) {
     printf("unexpected conversion lowering:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string boxed_source = root + "/boxed.qr";
@@ -103,7 +114,7 @@ string boxed_undefined = is_file(boxed)
 if (!is_file(boxed) || boxed_undefined !~ /qore_rt_to_string/) {
     printf("boxed conversion did not retain generic lowering:\n%s\n%s",
         boxed_compile, boxed_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string measure_source = root + "/measure.qr";
@@ -158,7 +169,7 @@ if (!is_file(measure_enabled) || !is_file(measure_disabled)
         measure_enabled_compile, measure_disabled_compile,
         measure_enabled_output, measure_disabled_output, measure_ast,
         measure_enabled_undefined, measure_disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string facts_source = root + "/facts.qr";
@@ -225,5 +236,5 @@ if (!is_file(facts_enabled) || !is_file(facts_disabled)
         facts_enabled_output, facts_disabled_output, facts_ast,
         facts_enabled_measure, facts_enabled_materialize,
         facts_disabled_measure, facts_disabled_materialize);
-    exit(2);
+    test_exit(2);
 }
