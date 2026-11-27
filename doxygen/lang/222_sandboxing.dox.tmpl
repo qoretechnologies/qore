@@ -1083,8 +1083,9 @@ authenticate();
     destructor of an object of such a class), and any code that such code calls, also a method of the object's own
     class, acts for sandboxed code: it cannot change the object, open another update scope or share objects.  So does
     the code of a class that restricted code declared, also in a %Program whose sandbox has since been relaxed to
-    trust its code, and code that runs in the scope under the context of a thread, task or operation of restricted
-    code.  When that code returns, the scope's own code changes the object again.
+    trust its code, and any code that it calls in the scope, however deep, and code that runs in the scope under the
+    context of a thread, task or operation of restricted code.  When that code returns, the scope's own code changes
+    the object again.
 
     Only code that may share objects
     (@ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()") can mark an object with
