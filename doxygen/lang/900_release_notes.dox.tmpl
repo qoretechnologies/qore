@@ -3107,9 +3107,6 @@
     - the data provider that a read-only @ref ConnectionProvider::FilesystemConnection "FilesystemConnection"
       returns is read-only, whatever constructor options the caller gives
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
-    - <tt>cmake --install --prefix</tt> installs every file below the given prefix, and the installed
-      \c QoreConfig.cmake and \c aot-link.conf name the paths of that prefix; most files went to the prefix given at
-      configure time (<a href="https://github.com/qoretechnologies/qore/issues/7849">issue 7849</a>)
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
       running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
