@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-hashdecl-key-proof-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -26,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-hashdecl-key-proof-" + string(getpid());
+string root = tmp.path + "/hashdecl-key-proof";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -184,7 +194,7 @@ string enabled_compile = backquote(sprintf(
     env, qcc_bin, enabled_exe, source_path));
 if (!is_file(enabled_exe)) {
     printf("enabled compile failed:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string checked_exe = root + "/checked";
@@ -193,7 +203,7 @@ string checked_compile = backquote(sprintf(
     env, qcc_bin, checked_exe, source_path));
 if (!is_file(checked_exe)) {
     printf("checked compile failed:\n%s", checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string value_checked_exe = root + "/value-checked";
@@ -202,7 +212,7 @@ string value_checked_compile = backquote(sprintf(
     env, qcc_bin, value_checked_exe, source_path));
 if (!is_file(value_checked_exe)) {
     printf("value-checked compile failed:\n%s", value_checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string slot_checked_exe = root + "/slot-checked";
@@ -212,21 +222,21 @@ string slot_checked_compile = backquote(sprintf(
     env, qcc_bin, slot_checked_exe, source_path));
 if (!is_file(slot_checked_exe)) {
     printf("slot-checked compile failed:\n%s", slot_checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string name in (("known", "invalidValue", "unassignedValue")) {
     if (!enabled_compile.regex(sprintf(
             "hashdecl initializer key scan elided in '[^']*%s", name))) {
         printf("missing key proof for %s:\n%s", name, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile.regex("hashdecl initializer key scan elided in '[^']*invalidKey")
         || checked_compile.regex("hashdecl initializer key scan elided")) {
     printf("unexpected hashdecl key proof:\nenabled:\n%schecked:\n%s",
         enabled_compile, checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 
@@ -234,14 +244,14 @@ foreach string name in (("fullExact", "reorderedExact", "partialExact")) {
     if (!enabled_compile.regex(sprintf(
             "hashdecl initializer value checks elided in '[^']*%s", name))) {
         printf("missing value proof for %s:\n%s", name, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string name in (("fullExact",)) {
     if (!enabled_compile.regex(sprintf(
             "hashdecl initializer layout normalization elided in '[^']*%s", name))) {
         printf("missing layout proof for %s:\n%s", name, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string name in (("softValue", "optionalValue", "invalidValue",
@@ -249,7 +259,7 @@ foreach string name in (("softValue", "optionalValue", "invalidValue",
     if (enabled_compile.regex(sprintf(
             "hashdecl initializer value checks elided in '[^']*%s", name))) {
         printf("unexpected value proof for %s:\n%s", name, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile.regex(
@@ -257,7 +267,7 @@ if (enabled_compile.regex(
         || value_checked_compile.regex("hashdecl initializer (value checks|layout normalization) elided")) {
     printf("unexpected hashdecl value/layout proof:\nenabled:\n%svalue-checked:\n%s",
         enabled_compile, value_checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 if (!enabled_compile.regex(
@@ -267,7 +277,7 @@ if (!enabled_compile.regex(
         || slot_checked_compile.regex("hashdecl member slot")) {
     printf("unexpected hashdecl member slot proof:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, slot_checked_compile);
-    exit(2);
+    test_exit(2);
 }
 
 outputs.enabled = run_executable(sprintf("%s %s", env, enabled_exe));
@@ -284,6 +294,6 @@ foreach string mode in (keys outputs) {
     if (output != expected) {
         printf("%s execution mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, output);
-        exit(2);
+        test_exit(2);
     }
 }

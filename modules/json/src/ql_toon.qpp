@@ -59,6 +59,7 @@
 
 #include <cerrno>
 #include "qore-json-module.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "ql_toon.h"
 
@@ -69,7 +70,6 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
-#include <unordered_set>
 #include <algorithm>
 #include <utility>
 
@@ -680,7 +680,8 @@ static ToonArrayForm toon_array_form(ToonEncCtx& c, const QoreListNode* l, std::
             return TAF_EXPANDED;
         }
         if (!f.empty()) {
-            std::unordered_set<std::string> fset(f.begin(), f.end());
+            qore_keyed_string_set fset(f.begin(), f.end());
+            QORE_KEYED_HASH_SITE("json-1", fset);
             bool ok = (fset.size() == f.size());
             for (size_t i = 0; ok && i < n; ++i) {
                 if (c.checkCancel("serializing TOON array")) {
@@ -693,7 +694,9 @@ static ToonArrayForm toon_array_form(ToonEncCtx& c, const QoreListNode* l, std::
                 }
                 ConstHashIterator hi(he);
                 while (hi.next()) {
-                    if (fset.find(hi.getKey()) == fset.end()) {
+                    // a search by std::string, as with std::hash: libstdc++ searches a set of up to 20 elements by
+                    // comparing its keys, without hashing them, only for a key of the key type
+                    if (fset.find(std::string(hi.getKey())) == fset.end()) {
                         ok = false;
                         break;
                     }

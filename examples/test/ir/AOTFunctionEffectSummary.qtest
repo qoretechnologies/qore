@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-function-effect-summary-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -204,8 +215,8 @@ printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pu
     holder.get(), methodEffects(), contextSummary(), parameterEffects(), preciseRuntimeLocalEffects());
 ";
 
-string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
-string exe_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid());
+string script_path = tmp.path + "/function-effect-summary.qr";
+string exe_path = tmp.path + "/function-effect-summary";
 string disabled_exe_path = exe_path + "-disabled";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -218,7 +229,7 @@ string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-debug-info
     libqore_dir, qcc_bin, exe_path, script_path));
 if (!is_file(exe_path)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 string aot = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
 string disabled_compile_out = backquote(sprintf(
@@ -228,12 +239,12 @@ string disabled_compile_out = backquote(sprintf(
     libqore_dir, qcc_bin, disabled_exe_path, script_path));
 if (!is_file(disabled_exe_path)) {
     printf("AOT disabled-summary compile failed:\n%s", disabled_compile_out);
-    exit(2);
+    test_exit(2);
 }
 string disabled_aot = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, disabled_exe_path));
 if (ast != "71055:5:10:null:7:9:7:7:11:5606:7817:853:608308\n"
         || aot != ast || disabled_aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
-    exit(2);
+    test_exit(2);
 }

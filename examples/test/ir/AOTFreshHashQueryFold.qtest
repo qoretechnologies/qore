@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-fresh-hash-query-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -96,8 +106,8 @@ printf(\"%d:%d:%d:%d:%d:%d\\n\", freshQuery(), sideEffectFields(),
     unassignedElement(NOTHING), dynamicKey(), mutatedCallee(), sharedAggregate());
 ";
 
-string src = "/tmp/qore-aot-fresh-hash-query-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-fresh-hash-query-" + string(getpid());
+string src = tmp.path + "/fresh-hash-query.qr";
+string exe = tmp.path + "/fresh-hash-query";
 string disabled = exe + "-disabled";
 string noescape_disabled = exe + "-noescape-disabled";
 File source();
@@ -111,7 +121,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -125,14 +135,14 @@ if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: freshQuery[^\n]*:.*fresh-hash-key-ca
         || enabled_compile
             !~ /IR-OPT-AOT-EFFECTS: sideEffectFields[^\n]*:.*fresh-hash-key-calls=1/) {
     printf("missing fresh-hash query fold:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile =~ /IR-OPT-AOT-EFFECTS: (missingKey|unassignedElement|dynamicKey|mutatedCallee|sharedAggregate)[^\n]*:.*fresh-hash-key-calls=[1-9]/
         || disabled_compile =~ /fresh-hash-key-calls=[1-9]/
         || noescape_disabled_compile =~ /fresh-hash-key-calls=[1-9]/) {
     printf("unsafe or disabled fresh-hash query fold:\n%s",
         enabled_compile + disabled_compile + noescape_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "5:23:1:8:99:4\n";
@@ -143,7 +153,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled, noescape_disabled)) {
@@ -152,7 +162,7 @@ foreach string path in ((exe, disabled, noescape_disabled)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

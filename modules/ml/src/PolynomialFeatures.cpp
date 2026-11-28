@@ -11,6 +11,8 @@
 #include "QC_PolynomialFeatures.h"
 #include "ml_serialization.h"
 
+#include <memory>
+
 QorePolynomialFeatures::QorePolynomialFeatures(int degree, bool include_bias,
     bool interaction_only)
     : degree(degree), include_bias(include_bias), interaction_only(interaction_only) {
@@ -31,6 +33,10 @@ void QorePolynomialFeatures::generateTerms() {
 
     // Degrees 2..degree: combinations with repetition (or without for interaction_only)
     for (int d = 2; d <= degree; ++d) {
+        // interaction terms of more features than there are have none
+        if (interaction_only && d > n_features) {
+            break;
+        }
         // Generate all sorted combinations of d features from [0, n_features)
         // For interaction_only: all features in the combination must be distinct
         // For full polynomial: features can repeat (e.g., x0*x0 = x0^2)
@@ -207,37 +213,77 @@ std::vector<uint8_t> QorePolynomialFeatures::serializeState() const {
     return buf;
 }
 
+//! the largest number of terms of a restored model
+static constexpr uint64_t POLY_MAX_RESTORED_TERMS = 1ull << 24;
+//! the largest number of feature indices in all terms of a restored model
+static constexpr uint64_t POLY_MAX_RESTORED_TERM_INDICES = 1ull << 26;
+
 QorePolynomialFeatures* QorePolynomialFeatures::deserializeState(
     const uint8_t* data, size_t len, ExceptionSink* xsink) {
     const uint8_t* ptr = data;
     size_t remaining = len;
 
-    int d = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t d = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     bool ib = MLSerialization::readBool(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     bool io = MLSerialization::readBool(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nf = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t nf = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int noc = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t noc = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    auto* pf = new QorePolynomialFeatures(d, ib, io);
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "PolynomialFeatures", xsink)
+        || checkRange(d, 1, INT32_MAX, "PolynomialFeatures", "degree", xsink)
+        || checkRange(nf, 1, INT32_MAX, "PolynomialFeatures", "the number of features", xsink)) {
+        return nullptr;
+    }
+    // the number of terms that generateTerms() makes: per degree k, the combinations of k features with
+    // repetition, C(nf + k - 1, k), or without it, C(nf, k); each count follows from the one of the degree before
+    uint64_t n_terms = ib ? 1 : 0;
+    uint64_t n_indices = 0;
+    uint64_t count = 1;
+    for (int64_t k = 1; k <= d; ++k) {
+        if (io) {
+            count = count * (uint64_t)(nf - k + 1) / (uint64_t)k;
+        } else {
+            count = count * (uint64_t)(nf + k - 1) / (uint64_t)k;
+        }
+        if (!count) {
+            break;
+        }
+        n_terms += count;
+        n_indices += count * (uint64_t)k;
+        if (n_terms > POLY_MAX_RESTORED_TERMS || n_indices > POLY_MAX_RESTORED_TERM_INDICES) {
+            stateError(xsink, "PolynomialFeatures", "the terms of degree %d over %d features exceed %d terms "
+                "with %d feature indices", (int)d, (int)nf, (int)POLY_MAX_RESTORED_TERMS,
+                (int)POLY_MAX_RESTORED_TERM_INDICES);
+            return nullptr;
+        }
+        // without repetition there are no terms of more features than there are
+        if (io && k >= nf) {
+            break;
+        }
+    }
+    if (checkSize(noc, (int64_t)n_terms, "PolynomialFeatures", "the number of output columns", xsink)) {
+        return nullptr;
+    }
+
+    std::unique_ptr<QorePolynomialFeatures> pf(new QorePolynomialFeatures(d, ib, io));
     pf->n_features = nf;
     pf->field_names = std::move(fnames);
     pf->generateTerms();
-    pf->fitted = true;
     // n_output_cols is set by generateTerms(), verify consistency
     if (pf->n_output_cols != noc) {
-        int actual = pf->n_output_cols;
-        delete pf;
-        xsink->raiseException("ML-DESERIALIZE-ERROR",
-            "PolynomialFeatures deserialization mismatch: expected %d output cols, got %d",
-            noc, actual);
+        stateError(xsink, "PolynomialFeatures", "expected %d output columns, got %d", (int)noc,
+            pf->n_output_cols);
         return nullptr;
     }
-    return pf;
+    pf->fitted = true;
+    return pf.release();
 }

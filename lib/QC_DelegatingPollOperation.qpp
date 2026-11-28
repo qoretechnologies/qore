@@ -64,15 +64,52 @@ public:
         } else {
             delivered = static_cast<SocketSendStreamAndReadHeaderPollOperation&>(op).getResponseSendProgress(waiting);
         }
+        int64 wake;
+        switch (evaluate(delivered, waiting, q_get_monotonic_us() / 1000, wake)) {
+            case Result::NotMeasured:
+                return true;
+            case Result::Stalled:
+                xsink->raiseException("SOCKET-TIMEOUT", "HTTP response send made no progress for %lld ms",
+                    static_cast<long long>(stall_ms));
+                return false;
+            case Result::BelowRate:
+                xsink->raiseException("SOCKET-TIMEOUT", "the client took less than the minimum response rate of %lld "
+                    "bytes/s", static_cast<long long>(rate.getMinRate()));
+                return false;
+            case Result::Ok:
+                break;
+        }
+        // The controller converts this interval to microseconds for its poll deadline.
+        next.setKeyValue("poll_timeout_ms", std::min<int64>(wake, std::numeric_limits<int>::max()), xsink);
+        return !*xsink;
+    }
+
+    // the result of a check
+    enum class Result {
+        // the response is not being sent (the operation waits for the next request): nothing is measured
+        NotMeasured,
+        // the send progresses within its bounds
+        Ok,
+        // no byte was delivered for the stall timeout
+        Stalled,
+        // the client takes less than the minimum rate
+        BelowRate,
+    };
+
+    // Evaluates a check at the time now (in milliseconds) with the number of bytes delivered (< 0: the response is not
+    // being sent) and whether the send waits for the socket; with Result::Ok, wake is the interval in milliseconds
+    // until the next check.  The time is a parameter so that the logic can be tested without a clock (qore#7835);
+    // called with the lock held (or on an object of a test)
+    Result evaluate(int64 delivered, bool waiting, int64 now, int64& wake) {
+        wake = -1;
         if (delivered < 0) {
             if (last_progress >= 0) {
                 renew = true;
                 last_progress = -1;
                 rate = makeRateWindow(rate.getMinRate(), rate.getWindowMs());
             }
-            return true;
+            return Result::NotMeasured;
         }
-        int64 now = q_get_monotonic_us() / 1000;
         if (last_progress < 0 || delivered > last_progress) {
             renew = true;
             last_progress = delivered;
@@ -80,23 +117,17 @@ public:
         }
         int64 remaining = stall_ms - (now - since_ms);
         if (remaining <= 0) {
-            xsink->raiseException("SOCKET-TIMEOUT", "HTTP response send made no progress for %lld ms",
-                static_cast<long long>(stall_ms));
-            return false;
+            return Result::Stalled;
         }
         if (rate.update(delivered, waiting, now)) {
-            xsink->raiseException("SOCKET-TIMEOUT", "the client took less than the minimum response rate of %lld bytes/s",
-                static_cast<long long>(rate.getMinRate()));
-            return false;
+            return Result::BelowRate;
         }
         // TCP acknowledgements can advance while the socket is still not writable.
-        int64 wake = std::min(remaining, std::max<int64>(1, stall_ms / 2));
+        wake = std::min(remaining, std::max<int64>(1, stall_ms / 2));
         if (rate.enabled()) {
             wake = std::min<int64>(wake, rate.getCheckIntervalMs());
         }
-        // The controller converts this interval to microseconds for its poll deadline.
-        next.setKeyValue("poll_timeout_ms", std::min<int64>(wake, std::numeric_limits<int>::max()), xsink);
-        return !*xsink;
+        return Result::Ok;
     }
 
     bool takeRenewal() {
@@ -118,6 +149,44 @@ private:
     int64 since_ms = 0;
     SendRateWindow rate;
 };
+
+#ifdef DEBUG
+// Debug-only: runs the checks of an HTTP/1 response send bound over the given steps (hashes with "delivered": the bytes
+// delivered, < 0 if the response is not being sent, "now": the time in milliseconds, "waiting": whether the send waits
+// for the socket, default True), without a socket or a clock; returns a hash for each step with "result" ("ok",
+// "not-measured", "stalled" or "below-rate"), "wake" (the interval until the next check, or -1) and "renewed" (whether
+// the step renews the operation's timeout) (dbg_http_send_bound_steps(); qore#7835)
+DLLLOCAL QoreListNode* qore_dbg_http_send_bound_steps(int64 stall_ms, int64 min_rate, int64 window_ms,
+        const QoreListNode* steps, ExceptionSink* xsink) {
+    HttpResponseSendBound bound(stall_ms, min_rate, window_ms);
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoHashTypeInfo), xsink);
+    ConstListIterator i(steps);
+    while (i.next()) {
+        const QoreHashNode* step = i.getValue().getType() == NT_HASH ? i.getValue().get<const QoreHashNode>() : nullptr;
+        if (!step) {
+            xsink->raiseException("DBG-HTTP-SEND-BOUND-ERROR", "step %zu is not a hash", i.index());
+            return nullptr;
+        }
+        QoreValue w = step->getKeyValue("waiting");
+        int64 wake;
+        HttpResponseSendBound::Result r = bound.evaluate(step->getKeyValue("delivered").getAsBigInt(),
+            w.isNothing() ? true : w.getAsBool(), step->getKeyValue("now").getAsBigInt(), wake);
+        const char* name = "ok";
+        switch (r) {
+            case HttpResponseSendBound::Result::NotMeasured: name = "not-measured"; break;
+            case HttpResponseSendBound::Result::Stalled: name = "stalled"; break;
+            case HttpResponseSendBound::Result::BelowRate: name = "below-rate"; break;
+            case HttpResponseSendBound::Result::Ok: break;
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("result", new QoreStringNode(name), xsink);
+        h->setKeyValue("wake", wake, xsink);
+        h->setKeyValue("renewed", bound.takeRenewal(), xsink);
+        rv->push(h.release(), xsink);
+    }
+    return rv.release();
+}
+#endif
 
 class DelegatingPollOperationPriv : public SocketPollOperationBase {
 public:

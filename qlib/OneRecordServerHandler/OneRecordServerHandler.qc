@@ -218,6 +218,20 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
         notification_handler = handler;
     }
 
+    #! Returns the identity of the requestor from the authorizer
+    /** The authorizer of a restricted %Program gets the request without its credentials (see
+        @ref onerecordserverhandler_credentials; qore#7303): its \c Authorization field only when trusted code opted in
+        to it with
+        @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"
+    */
+    private:internal string getAuthorizerIdentity(hash<auto> cx, hash<auto> hdr) {
+        if (AbstractHttpRequestHandler::objectIsRestricted(authorizer)) {
+            hash<HttpFilteredRequestInfo> filtered = filterRequestForCode(cx, hdr);
+            return authorizer.getIdentity(filtered.cx, filtered.hdr);
+        }
+        return authorizer.getIdentity(cx, hdr);
+    }
+
     # ========================================================================
     # Request Dispatch
     # ========================================================================
@@ -397,7 +411,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! POST /logistics-objects — create logistics object
     private hash<HttpResponseInfo> handleCreateLogisticsObject(hash<auto> cx,
             hash<auto> hdr, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
         hash<auto> data = parseJsonLdBody(body);
 
         # Extract type from @type
@@ -446,7 +460,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! GET /logistics-objects/{id} — retrieve logistics object
     private hash<HttpResponseInfo> handleGetLogisticsObject(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRead(identity, id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized to read this logistics object",
@@ -495,7 +509,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! HEAD /logistics-objects/{id} — metadata only
     private hash<HttpResponseInfo> handleHeadLogisticsObject(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRead(identity, id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized",
@@ -520,7 +534,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! PATCH /logistics-objects/{id} — submit change request
     private hash<HttpResponseInfo> handleSubmitChangeRequest(hash<auto> cx,
             hash<auto> hdr, string id, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRequestChange(identity, id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized to submit change requests",
@@ -570,7 +584,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! POST /logistics-objects/{id} — submit verification request
     private hash<HttpResponseInfo> handleSubmitVerificationRequest(hash<auto> cx,
             hash<auto> hdr, string id, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!storage.logisticsObjectExists(id)) {
             throw "ONE-RECORD-NOT-FOUND",
@@ -613,7 +627,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! GET /action-requests/{id}
     private hash<HttpResponseInfo> handleGetActionRequest(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         *hash<OneRecordActionRequest> request = storage.getActionRequest(id);
         if (!exists request) {
@@ -639,7 +653,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! HEAD /action-requests/{id}
     private hash<HttpResponseInfo> handleHeadActionRequest(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         *hash<OneRecordActionRequest> request = storage.getActionRequest(id);
         if (!exists request) {
@@ -655,7 +669,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! PATCH /action-requests/{id}?status= — accept/reject
     private hash<HttpResponseInfo> handleUpdateActionRequestStatus(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         *string status_param = cx.url.params.status;
         if (!exists status_param) {
@@ -746,7 +760,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! DELETE /action-requests/{id} — revoke
     private hash<HttpResponseInfo> handleRevokeActionRequest(hash<auto> cx,
             hash<auto> hdr, string id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         *hash<OneRecordActionRequest> request = storage.getActionRequest(id);
         if (!exists request) {
@@ -783,7 +797,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! GET /logistics-objects/{id}/logistics-events
     private hash<HttpResponseInfo> handleListLogisticsEvents(hash<auto> cx,
             hash<auto> hdr, string object_id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRead(identity, object_id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized",
@@ -817,7 +831,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! POST /logistics-objects/{id}/logistics-events
     private hash<HttpResponseInfo> handleCreateLogisticsEvent(hash<auto> cx,
             hash<auto> hdr, string object_id, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canCreateEvent(identity, object_id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized to create events",
@@ -850,7 +864,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! GET /logistics-objects/{id}/logistics-events/{eid}
     private hash<HttpResponseInfo> handleGetLogisticsEvent(hash<auto> cx,
             hash<auto> hdr, string object_id, string event_id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRead(identity, object_id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized",
@@ -875,7 +889,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! GET /logistics-objects/{id}/audit-trail
     private hash<HttpResponseInfo> handleGetAuditTrail(hash<auto> cx,
             hash<auto> hdr, string object_id) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         if (!authorizer.canRead(identity, object_id)) {
             throw "ONE-RECORD-FORBIDDEN", "not authorized",
@@ -934,7 +948,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! POST /subscriptions
     private hash<HttpResponseInfo> handleCreateSubscription(hash<auto> cx,
             hash<auto> hdr, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         hash<auto> sub_data = parseJsonLdBody(body);
 
@@ -1000,7 +1014,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
 
     #! GET /subscriptions
     private hash<HttpResponseInfo> handleListSubscriptions(hash<auto> cx, hash<auto> hdr) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
 
         *string topic_type = cx.url.params.topicType;
         *string topic = cx.url.params.topic;
@@ -1051,7 +1065,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! POST /access-delegations
     private hash<HttpResponseInfo> handleCreateAccessDelegation(hash<auto> cx,
             hash<auto> hdr, *data body) {
-        string identity = authorizer.getIdentity(cx, hdr);
+        string identity = getAuthorizerIdentity(cx, hdr);
         hash<auto> deleg_data = parseJsonLdBody(body);
 
         # Extract logistics objects and permissions from the delegation data

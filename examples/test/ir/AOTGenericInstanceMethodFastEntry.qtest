@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-generic-instance-method-fast-entry-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -146,7 +156,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-generic-instance-method-fast-entry-" + string(getpid());
+string root = tmp.path + "/generic-instance-method-fast-entry";
 mkdir(root);
 string source_path = root + "/generic-instance-method.qr";
 File source_file();
@@ -162,7 +172,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -179,7 +189,7 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled_path) || !is_file(disabled_path)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /method fast entry 'GenericInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/
         || enabled_compile !~ /method fast entry 'MethodGenericInstanceSelector[^']*_generic_fast_h[0-9a-f]{16}'/
@@ -188,7 +198,7 @@ if (enabled_compile !~ /method fast entry 'GenericInstanceSelector[^']*_generic_
         || disabled_compile =~ /_generic_fast/) {
     printf("generic instance specialization mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string path in ((enabled_path, disabled_path)) {
@@ -197,6 +207,6 @@ foreach string path in ((enabled_path, disabled_path)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

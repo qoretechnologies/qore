@@ -18,6 +18,8 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "qore/intern/qore_keyed_hash.h"
+
 DLLEXPORT extern qore_classid_t CID_LABELENCODER;
 DLLLOCAL extern QoreClass* QC_LABELENCODER;
 
@@ -66,7 +68,8 @@ public:
 private:
     bool fitted = false;
     std::vector<std::string> classes;  //!< sorted unique values (index = label)
-    std::unordered_map<std::string, int> class_to_label;
+    //! with the keyed hash of the process (qore#7750)
+    qore_keyed_string_map<int> class_to_label;
     std::vector<std::string> field_names;
     mutable std::mutex mtx;
 };

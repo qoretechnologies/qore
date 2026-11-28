@@ -34,6 +34,7 @@
 #include <functional>
 #include <string>
 #include <map>
+#include <initializer_list>
 
 namespace MLSerialization {
     // Write primitives
@@ -68,6 +69,32 @@ namespace MLSerialization {
         ExceptionSink* xsink);
     DLLLOCAL std::vector<int> readIntVector(const uint8_t*& ptr, size_t& remaining,
         ExceptionSink* xsink);
+
+    // Validation of restored model state (qore#7844): each check raises ML-DESERIALIZE-ERROR with the model and the
+    // field named and returns -1 when the value breaks an invariant that training establishes, else 0; a
+    // deserializer checks every field it restores before it creates the model, so that a refused state leaves no
+    // model
+    DLLLOCAL int stateError(ExceptionSink* xsink, const char* model, const char* fmt, ...);
+    //! the value must be in [lo, hi]
+    DLLLOCAL int checkRange(int64_t v, int64_t lo, int64_t hi, const char* model, const char* field,
+        ExceptionSink* xsink);
+    //! the value must be in [lo, hi] and not NaN
+    DLLLOCAL int checkValueRange(double v, double lo, double hi, const char* model, const char* field,
+        ExceptionSink* xsink);
+    //! the size must equal the expected size
+    DLLLOCAL int checkSize(int64_t size, int64_t expected, const char* model, const char* what,
+        ExceptionSink* xsink);
+    //! the value must be one of the given strings
+    DLLLOCAL int checkOneOf(const std::string& v, std::initializer_list<const char*> allowed, const char* model,
+        const char* field, ExceptionSink* xsink);
+    //! every value must be finite
+    DLLLOCAL int checkFinite(const MatrixXd& m, const char* model, const char* what, ExceptionSink* xsink);
+    DLLLOCAL int checkFinite(const VectorXd& v, const char* model, const char* what, ExceptionSink* xsink);
+    DLLLOCAL int checkFinite(const std::vector<double>& v, const char* model, const char* what,
+        ExceptionSink* xsink);
+    DLLLOCAL int checkFinite(double v, const char* model, const char* what, ExceptionSink* xsink);
+    //! the state must have been read to its end
+    DLLLOCAL int checkEnd(size_t remaining, const char* model, ExceptionSink* xsink);
 
     // CRC-32
     DLLLOCAL uint32_t computeCRC32(const uint8_t* data, size_t len);

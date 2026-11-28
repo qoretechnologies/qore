@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-exec-mode: children - its checks run in child processes started without an execution mode
 # test-platform: macos - startup with closed stdin/stdout/stderr descriptors: data files never alias fds 0-2
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -6,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
 %requires FsUtil
 
 %try-module v8
@@ -85,10 +87,12 @@ class StdioStartupTest inherits QUnit::Test {
             testSkip("the POSIX native startup test executable is not available");
             return;
         }
-        int rc;
-        string output = backquote("exec " + shellQuote(native_bin) + " </dev/null 2>&1", \rc);
-        assertEq(0, rc, output);
-        assertEq("Passed 18 standard-descriptor startup cases\n", output);
+        # a warning of the module loader on stderr is not output of the program
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command("exec " + shellQuote(native_bin)
+            + " </dev/null", NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        assertEq("Passed 18 standard-descriptor startup cases\n", r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     aotStartup() {

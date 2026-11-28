@@ -28,6 +28,8 @@
 #include "QC_SparseMatrix.h"
 #include "ml_serialization.h"
 
+#include <algorithm>
+
 QoreSparseMatrix::QoreSparseMatrix(int rows, int cols, const QoreListNode* triplets,
     ExceptionSink* xsink) {
     matrix = qoreTripletListToSparse(rows, cols, triplets, xsink);
@@ -98,9 +100,20 @@ QoreSparseMatrix* QoreSparseMatrix::deserializeState(const uint8_t* data, size_t
     int32_t nnz = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructors establish (qore#7844): both dimensions are
+    // positive, and each entry, written as a 32-bit row, a 32-bit column and a double, is in the matrix
+    using namespace MLSerialization;
+    if (checkRange(rows, 1, INT32_MAX, "SparseMatrix", "the number of rows", xsink)
+        || checkRange(cols, 1, INT32_MAX, "SparseMatrix", "the number of columns", xsink)
+        || checkRange(nnz, 0, std::min<int64_t>(static_cast<int64_t>(rows) * cols,
+            remaining / (2 * sizeof(int32_t) + sizeof(double))), "SparseMatrix", "the number of entries", xsink)) {
+        return nullptr;
+    }
+
     std::vector<Eigen::Triplet<double>> triplets;
     triplets.reserve(nnz);
 
+    int64_t last_pos = -1;
     for (int32_t i = 0; i < nnz; ++i) {
         int32_t r = MLSerialization::readInt32(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
@@ -108,7 +121,21 @@ QoreSparseMatrix* QoreSparseMatrix::deserializeState(const uint8_t* data, size_t
         if (*xsink) { return nullptr; }
         double v = MLSerialization::readScalar(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
+        if (checkRange(r, 0, rows - 1, "SparseMatrix", "the row of an entry", xsink)
+            || checkRange(c, 0, cols - 1, "SparseMatrix", "the column of an entry", xsink)) {
+            return nullptr;
+        }
+        // the entries are written once each, in row-major order
+        int64_t pos = static_cast<int64_t>(r) * cols + c;
+        if (pos <= last_pos) {
+            stateError(xsink, "SparseMatrix", "the entries must be in row-major order without duplicates");
+            return nullptr;
+        }
+        last_pos = pos;
         triplets.emplace_back(r, c, v);
+    }
+    if (checkEnd(remaining, "SparseMatrix", xsink)) {
+        return nullptr;
     }
 
     SparseMatrixXd sparse(rows, cols);

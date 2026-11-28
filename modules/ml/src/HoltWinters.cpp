@@ -33,14 +33,22 @@ extern const TypedHashDecl* hashdeclHoltWintersResult;
 
 void QoreHoltWinters::fit(const VectorXd& series, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lk(mtx);
-    int n = static_cast<int>(series.size());
-    if (n < 2 * period) {
+    int64_t n64 = static_cast<int64_t>(series.size());
+    if (n64 < 2 * static_cast<int64_t>(period)) {
         xsink->raiseException("ML-HOLTWINTERS-ERROR",
-            "not enough data: received %d values but at least %d are needed "
+            "not enough data: received " QLLD " values but at least " QLLD " are needed "
             "(2 x seasonal cycle length of %d); increase the data size or "
-            "reduce the seasonal cycle length", n, 2 * period, period);
+            "reduce the seasonal cycle length", (int64)n64, (int64)(2 * static_cast<int64_t>(period)), period);
         return;
     }
+    // the step counter is an int, and a restored state keeps the period at most a third of its range
+    if (n64 > INT32_MAX || period > INT32_MAX / 3) {
+        xsink->raiseException("ML-HOLTWINTERS-ERROR",
+            "the series has " QLLD " values and a seasonal cycle length of %d; at most %d values and a seasonal "
+            "cycle length of at most %d are supported", (int64)n64, period, INT32_MAX, INT32_MAX / 3);
+        return;
+    }
+    int n = static_cast<int>(n64);
 
     bool additive = (seasonal_type == "additive");
 
@@ -56,7 +64,7 @@ void QoreHoltWinters::fit(const VectorXd& series, ExceptionSink* xsink) {
     for (int i = 0; i < period; ++i) {
         init_trend += (series(i + period) - series(i));
     }
-    init_trend /= (period * period);
+    init_trend /= (static_cast<double>(period) * period);
 
     // Initialize seasonal factors
     seasonal.resize(period);
@@ -192,7 +200,13 @@ QoreHashNode* QoreHoltWinters::update(double value, ExceptionSink* xsink) {
         }
     }
 
-    ++t;
+    // only t % period is used: a step counter that would pass INT32_MAX moves back by whole periods, staying at
+    // least two periods, as fit() leaves it (the period is at most a third of the range)
+    int64_t next_t = static_cast<int64_t>(t) + 1;
+    if (next_t > INT32_MAX) {
+        next_t = 2 * static_cast<int64_t>(period) + next_t % period;
+    }
+    t = static_cast<int>(next_t);
 
     // Compute one-step-ahead forecast
     double fc;
@@ -230,7 +244,7 @@ QoreListNode* QoreHoltWinters::forecast(int steps, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(floatTypeInfo), xsink);
 
     for (int h = 1; h <= steps; ++h) {
-        int season_idx = (t + h - 1) % period;
+        int season_idx = static_cast<int>((static_cast<int64_t>(t) + h - 1) % period);
         double damped_trend;
         if (damped) {
             // Sum of phi^1 + phi^2 + ... + phi^h
@@ -338,6 +352,24 @@ QoreHoltWinters* QoreHoltWinters::deserializeState(const uint8_t* data, size_t l
     if (*xsink) { return nullptr; }
     int32_t t = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844): fit() needs two
+    // seasonal cycles of data, supports a period of at most a third of the int range and leaves the step counter at
+    // the number of values it was given
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "HoltWinters", xsink)
+        || checkRange(period, 2, INT32_MAX / 3, "HoltWinters", "period", xsink)
+        || checkOneOf(seasonal_type, {"additive", "multiplicative"}, "HoltWinters", "seasonal_type", xsink)
+        || checkSize(seasonal.size(), period, "HoltWinters", "the number of seasonal factors", xsink)
+        || checkRange(t, 2 * period, INT32_MAX, "HoltWinters", "the step counter", xsink)) {
+        return nullptr;
+    }
+    // the constructor refuses phi <= 0 or phi >= 1 with damping, and sets it to 1 without damping
+    if (damped ? (phi <= 0.0 || phi >= 1.0) : phi != 1.0) {
+        stateError(xsink, "HoltWinters", "phi is %g but must be %s", phi, damped ? "in (0, 1) when damped" : "1 when "
+            "not damped");
+        return nullptr;
+    }
 
     std::unique_ptr<QoreHoltWinters> obj(new QoreHoltWinters(
         period, alpha, beta, gamma, seasonal_type, damped, phi));

@@ -1,0 +1,150 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! Writes model states in the native format of ml_serialize() for the tests of restored model state (qore#7844)
+/** A test writes the state of a model field by field with these functions, as the model's serializeState() writes
+    it, and wraps it with blob() in the header and CRC that ml_deserialize() checks; a test of a refused state
+    changes one field of a state that ml_deserialize() accepts.
+*/
+
+%modern
+%requires ml
+
+module MlStateTestUtil {
+    version = "1.0";
+    desc = "writes model states in the native format of the ml module for tests";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace MlStateTestUtil {
+#! the bytes of a double, little endian, of the values that the tests use
+public const DoubleHex = {
+    "0": "0000000000000000",
+    "1": "000000000000f03f",
+    "2": "0000000000000040",
+    "3": "0000000000000840",
+    "4": "0000000000001040",
+    "5": "0000000000001440",
+    "0.5": "000000000000e03f",
+    "0.25": "000000000000d03f",
+    "-1": "000000000000f0bf",
+    "nan": "000000000000f87f",
+    "inf": "000000000000f07f",
+    "-inf": "000000000000f0ff",
+    "1e300": "9c7500883ce4377e",
+    "1e10": "000000205fa00242",
+};
+
+#! returns the little-endian bytes of the low @p n bytes of @p v
+public binary sub le(int v, int n) {
+    string hex;
+    for (int i = 0; i < n; ++i) {
+        hex += sprintf("%02x", (v >> (8 * i)) & 0xff);
+    }
+    return parse_hex_string(hex);
+}
+
+#! a 32-bit integer
+public binary sub i32(int v) {
+    return le(v, 4);
+}
+
+#! a 64-bit integer
+public binary sub i64(int v) {
+    return le(v, 8);
+}
+
+#! a boolean
+public binary sub b8(bool v) {
+    return le(v ? 1 : 0, 1);
+}
+
+#! a double: one of the keys of DoubleHex, or an integer value as a string
+public binary sub f64(softstring v) {
+    *string hex = DoubleHex{v};
+    if (!hex) {
+        throw "ML-STATE-TEST-ERROR", sprintf("no double constant for %y", v);
+    }
+    return parse_hex_string(hex);
+}
+
+#! a string: its length as a 32-bit integer, then its bytes
+public binary sub str(string s) {
+    return i32(s.size()) + binary(s);
+}
+
+#! a vector of strings (writeStringVector())
+public binary sub strv(list<string> l) {
+    binary rv = le(l.size(), 4);
+    foreach string s in (l) {
+        rv += str(s);
+    }
+    return rv;
+}
+
+#! a vector of doubles (writeDoubleVector()): a 32-bit count, then the doubles
+public binary sub dblv(list<softstring> l) {
+    binary rv = le(l.size(), 4);
+    foreach softstring v in (l) {
+        rv += f64(v);
+    }
+    return rv;
+}
+
+#! a vector of integers (writeIntVector()): a 32-bit count, then the 32-bit integers
+public binary sub intv(list<int> l) {
+    binary rv = le(l.size(), 4);
+    foreach int v in (l) {
+        rv += i32(v);
+    }
+    return rv;
+}
+
+#! an Eigen vector (writeVector()): a 32-bit size, then the doubles
+public binary sub vec(list<softstring> l) {
+    binary rv = i32(l.size());
+    foreach softstring v in (l) {
+        rv += f64(v);
+    }
+    return rv;
+}
+
+#! an Eigen matrix (writeMatrix()): 32-bit rows and columns, then the doubles row by row
+public binary sub mat(int rows, int cols, list<softstring> l) {
+    if (l.size() != rows * cols) {
+        throw "ML-STATE-TEST-ERROR", sprintf("%d values for a %d x %d matrix", l.size(), rows, cols);
+    }
+    binary rv = i32(rows) + i32(cols);
+    foreach softstring v in (l) {
+        rv += f64(v);
+    }
+    return rv;
+}
+
+#! the CRC-32 of the native format (polynomial 0xEDB88320)
+public int sub crc32(binary b) {
+    int crc = 0xffffffff;
+    for (int i = 0; i < b.size(); ++i) {
+        crc ^= get_byte(b, i);
+        for (int bit = 0; bit < 8; ++bit) {
+            crc = (crc & 1) ? ((crc >> 1) ^ 0xedb88320) : (crc >> 1);
+        }
+    }
+    return crc ^ 0xffffffff;
+}
+
+#! the serialized form of a model of algorithm @p algorithm with state @p state, as ml_serialize() writes it
+public binary sub blob(string algorithm, binary state) {
+    binary rv = binary("QML") + le(1, 1) + le(1, 2) + str(algorithm) + str("{}") + strv(()) + i64(state.size())
+        + state;
+    return rv + i32(crc32(rv));
+}
+
+#! restores the model of @p algorithm from @p state
+public ML::AbstractMLModel sub restore(string algorithm, binary state) {
+    return ML::ml_deserialize(blob(algorithm, state));
+}
+}
