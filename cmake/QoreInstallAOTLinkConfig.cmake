@@ -25,9 +25,13 @@ foreach (_qore_aot_conf_line IN LISTS _qore_aot_conf_lines)
     endif()
     string(APPEND _qore_aot_conf "${_qore_aot_conf_line}\n")
 endforeach()
-# written beside the build tree's file, then installed with file(INSTALL), which applies DESTDIR and records the file
-# in the install manifest
-set(_qore_aot_conf_staged "${QORE_AOT_LINK_CONF_SOURCE}.install")
+# staged in the destination directory, which the install can write (the build tree may not be writable by the user
+# who installs, nor is a temporary directory guaranteed), then installed with file(INSTALL), which applies DESTDIR,
+# leaves an unchanged file alone and records the file in the install manifest; the staged copy is removed
+set(_qore_aot_conf_dest "$ENV{DESTDIR}${_qore_aot_conf_libdir}/qore")
+file(MAKE_DIRECTORY "${_qore_aot_conf_dest}")
+set(_qore_aot_conf_staged "${_qore_aot_conf_dest}/.aot-link.conf.staged")
 file(WRITE "${_qore_aot_conf_staged}" "${_qore_aot_conf}")
 file(INSTALL DESTINATION "${_qore_aot_conf_libdir}/qore" TYPE FILE RENAME aot-link.conf
     FILES "${_qore_aot_conf_staged}")
+file(REMOVE "${_qore_aot_conf_staged}")

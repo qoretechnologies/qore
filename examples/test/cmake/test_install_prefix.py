@@ -13,6 +13,13 @@ prefix, and the installed QoreConfig.cmake must take its paths from its own loca
 The AOT-compiled modules (qore-qlib-aot) use the same relative directories; they are not installed here, as they are
 large.
 
+The install runs the build tree's install script as "cmake --install --prefix <dir> --component <c>" does, from a
+copy whose install manifest is written to the test's temporary directory: the script writes it into the build tree,
+which the user that runs the test may not be allowed to write (the CI jobs build as root and test as another user).
+The install rules themselves are the build tree's: the copy includes the scripts of the subdirectories by their
+absolute paths.  A configured prefix that is empty (the macOS CI job configures with -DCMAKE_INSTALL_PREFIX=) is the
+root directory, below which the temporary prefix always is, so the checks against it are not made then.
+
 The test needs a configured and built Qore build tree (QORE_TEST_BUILD_DIR, or build/ in this tree), and is skipped
 without one.
 """
@@ -42,26 +49,43 @@ class InstallPrefixTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="qore-install-prefix-")
         self.addCleanup(temporary.cleanup)
+        self.tmp = Path(os.path.realpath(temporary.name))
         # the real path, as the manifests name it
-        self.prefix = Path(os.path.realpath(temporary.name)) / "prefix"
-        self.configured = configured_prefix()
-        self.assertTrue(self.configured, "the build tree has a configured install prefix")
-        self.assertFalse(str(self.prefix).startswith(self.configured.rstrip("/") + "/"),
-                         "the temporary prefix is not below the configured one")
+        self.prefix = self.tmp / "prefix"
+        configured = configured_prefix()
+        self.assertIsNotNone(configured, "the build tree has a configured install prefix")
+        # the configured prefix without its trailing slashes; empty for the root directory
+        self.configured = configured.rstrip("/")
+        if self.configured:
+            self.assertFalse(str(self.prefix).startswith(self.configured + "/"),
+                             "the temporary prefix is not below the configured one")
+
+    def install_script(self):
+        """Returns a copy of the build tree's install script that writes its manifest to the temporary directory"""
+        text = (BUILD_DIR / "cmake_install.cmake").read_text()
+        pattern = re.compile(r'file\(WRITE "[^"\n]*/\$\{CMAKE_INSTALL_MANIFEST\}"')
+        self.assertEqual(1, len(pattern.findall(text)), "the install script writes one install manifest")
+        manifests = self.tmp / "manifests"
+        manifests.mkdir()
+        text = pattern.sub(lambda m: f'file(WRITE "{manifests}/${{CMAKE_INSTALL_MANIFEST}}"', text)
+        script = self.tmp / "cmake_install.cmake"
+        script.write_text(text)
+        return script, manifests
 
     def install(self):
+        script, manifests = self.install_script()
         installed = []
         log = ""
         for component in COMPONENTS:
-            manifest = BUILD_DIR / f"install_manifest_{component}.txt"
-            if manifest.exists():
-                manifest.unlink()
-            result = subprocess.run(["cmake", "--install", str(BUILD_DIR), "--prefix", str(self.prefix),
-                                     "--component", component], text=True, capture_output=True, timeout=1800)
+            # as "cmake --install <build> --prefix <prefix> --component <component>"
+            result = subprocess.run(["cmake", f"-DCMAKE_INSTALL_PREFIX={self.prefix}",
+                                     f"-DCMAKE_INSTALL_COMPONENT={component}", "-P", str(script)],
+                                    text=True, capture_output=True, timeout=1800)
             self.assertEqual(0, result.returncode, f"{component}: {result.stdout[-4000:]}{result.stderr[-4000:]}")
             log += result.stdout
-            if manifest.exists():
-                installed += manifest.read_text().splitlines()
+            manifest = manifests / f"install_manifest_{component}.txt"
+            self.assertTrue(manifest.is_file(), f"{component}: the install wrote its manifest")
+            installed += manifest.read_text().splitlines()
         return installed, log
 
     def test_everything_below_the_prefix(self):
@@ -74,8 +98,9 @@ class InstallPrefixTest(unittest.TestCase):
         reported = re.findall(r"^-- (?:Installing|Up-to-date): (.*)$", log, re.M)
         self.assertEqual([], [path for path in reported if not path.startswith(root)][:20],
                          "the install reports no path outside the prefix")
-        # nothing is written below the configured prefix (when it exists apart from the temporary one)
-        self.assertEqual([], [path for path in installed if path.startswith(self.configured.rstrip("/") + "/")])
+        # nothing is written below the configured prefix (the root directory, when it is empty, holds everything)
+        if self.configured:
+            self.assertEqual([], [path for path in installed if path.startswith(self.configured + "/")])
 
         # aot-link.conf names the library directory of the install-time prefix
         confs = list(self.prefix.glob("**/qore/aot-link.conf"))
@@ -90,8 +115,9 @@ class InstallPrefixTest(unittest.TestCase):
         self.assertEqual(1, len(configs), f"one QoreConfig.cmake: {configs}")
         text = configs[0].read_text()
         self.assertIn('get_filename_component(_qore_install_prefix "${CMAKE_CURRENT_LIST_DIR}/', text)
-        self.assertNotIn(self.configured.rstrip("/") + "/", text,
-                         "the installed QoreConfig.cmake names no path of the configured prefix")
+        if self.configured:
+            self.assertNotIn(self.configured + "/", text,
+                             "the installed QoreConfig.cmake names no path of the configured prefix")
 
 
 if __name__ == "__main__":
