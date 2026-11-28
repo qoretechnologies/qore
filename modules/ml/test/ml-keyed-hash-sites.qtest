@@ -33,6 +33,12 @@ class MlKeyedHashSitesTest inherits QUnit::Test {
         #! the time limit of a child process
         const ChildTimeout = 120s;
 
+        #! a line that onnxruntime, which the module links, writes to stderr when it loads on a host whose CPU vendor
+        #! it does not know (some arm64 hosts): output of the environment, not of the operations, so only this exact
+        #! line is ignored and any other output to stderr still fails
+        const OnnxCpuVendorWarning = "^onnxruntime cpuid_info warning: Unknown CPU vendor\\. cpuinfo_vendor value: "
+            + "[0-9]+$";
+
         const Key1 = "000102030405060708090a0b0c0d0e0f";
         const Key2 = "0f0e0d0c0b0a09080706050403020100";
 
@@ -120,7 +126,8 @@ class MlKeyedHashSitesTest inherits QUnit::Test {
         string err = err_stream.getData();
         assertTrue(done, "the child process finished within the time limit");
         assertEq(0, p.exitCode(), out + err);
-        assertEq("", err, "the child process wrote nothing to stderr");
+        list<string> err_lines = select err.split("\n"), $1 != "" && !regex($1, OnnxCpuVendorWarning);
+        assertEq((), err_lines, "the child process wrote nothing to stderr but onnxruntime's CPU vendor warning");
         return out;
 %endif
     }
