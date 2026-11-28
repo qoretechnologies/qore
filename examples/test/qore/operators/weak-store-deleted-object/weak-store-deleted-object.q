@@ -55,6 +55,82 @@ sub wsd_report(string name, *hash<ExceptionInfo> ex, string after, string copy, 
         after, copy, later);
 }
 
+# weak store as the initializer of an int declaration (the form reported in qore#7778)
+sub wsd_case_37(int kind) {
+    string name = sprintf("weak int declaration, %s", ("deleted", "live", "NOTHING", "int")[kind]);
+    any src;
+    *WsdObj keep;
+    switch (kind) {
+        case 0: {
+            WsdObj o(1);
+            src := o;
+            delete o;
+            break;
+        }
+        case 1:
+            keep = new WsdObj(2);
+            src := keep;
+            break;
+        case 3:
+            src = 5;
+            break;
+    }
+    *hash<ExceptionInfo> err;
+    string after = "-";
+    string copy = "-";
+    string later = "-";
+    try {
+        int t := src;
+        after = wsd_desc(t);
+        hash<auto> c = {"v": t};
+        copy = wsd_desc(c.v);
+        delete keep;
+        later = wsd_desc(t);
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex;
+    }
+    delete keep;
+    wsd_report(name, err, after, copy, later);
+}
+
+# opaque store as the initializer of an int declaration (the form reported in qore#7778: int t @= src)
+sub wsd_case_38(int kind) {
+    string name = sprintf("opaque int declaration, %s", ("deleted", "live", "NOTHING", "int")[kind]);
+    any src;
+    *WsdObj keep;
+    switch (kind) {
+        case 0: {
+            WsdObj o(1);
+            src := o;
+            delete o;
+            break;
+        }
+        case 1:
+            keep = new WsdObj(2);
+            src := keep;
+            break;
+        case 3:
+            src = 5;
+            break;
+    }
+    *hash<ExceptionInfo> err;
+    string after = "-";
+    string copy = "-";
+    string later = "-";
+    try {
+        int t @= src;
+        after = wsd_desc(t);
+        hash<auto> c = {"v": t};
+        copy = wsd_desc(c.v);
+        delete keep;
+        later = wsd_desc(t);
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex;
+    }
+    delete keep;
+    wsd_report(name, err, after, copy, later);
+}
+
 # weak store into int
 sub wsd_case_1(int kind) {
     string name = sprintf("weak int, %s", ("deleted", "live", "NOTHING", "int")[kind]);
@@ -1281,7 +1357,15 @@ sub wsd_case_36(int kind) {
 
 for (int i = 0; i < 3; ++i) {
     printf("run %d\n", i);
-    foreach code f in ((\wsd_case_1(), \wsd_case_2(), \wsd_case_3(), \wsd_case_4(), \wsd_case_5(), \wsd_case_6(), \wsd_case_7(), \wsd_case_8(), \wsd_case_9(), \wsd_case_10(), \wsd_case_11(), \wsd_case_12(), \wsd_case_13(), \wsd_case_14(), \wsd_case_15(), \wsd_case_16(), \wsd_case_17(), \wsd_case_18(), \wsd_case_19(), \wsd_case_20(), \wsd_case_21(), \wsd_case_22(), \wsd_case_23(), \wsd_case_24(), \wsd_case_25(), \wsd_case_26(), \wsd_case_27(), \wsd_case_28(), \wsd_case_29(), \wsd_case_30(), \wsd_case_31(), \wsd_case_32(), \wsd_case_33(), \wsd_case_34(), \wsd_case_35(), \wsd_case_36())) {
+    list<code> cases = (
+        \wsd_case_37(), \wsd_case_38(), \wsd_case_1(), \wsd_case_2(), \wsd_case_3(), \wsd_case_4(), \wsd_case_5(),
+        \wsd_case_6(), \wsd_case_7(), \wsd_case_8(), \wsd_case_9(), \wsd_case_10(), \wsd_case_11(), \wsd_case_12(),
+        \wsd_case_13(), \wsd_case_14(), \wsd_case_15(), \wsd_case_16(), \wsd_case_17(), \wsd_case_18(),
+        \wsd_case_19(), \wsd_case_20(), \wsd_case_21(), \wsd_case_22(), \wsd_case_23(), \wsd_case_24(),
+        \wsd_case_25(), \wsd_case_26(), \wsd_case_27(), \wsd_case_28(), \wsd_case_29(), \wsd_case_30(),
+        \wsd_case_31(), \wsd_case_32(), \wsd_case_33(), \wsd_case_34(), \wsd_case_35(), \wsd_case_36()
+    );
+    foreach code f in (cases) {
         for (int kind = 0; kind < 4; ++kind) {
             f(kind);
         }

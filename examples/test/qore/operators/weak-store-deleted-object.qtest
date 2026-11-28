@@ -21,7 +21,8 @@
 /** The program (weak-store-deleted-object/weak-store-deleted-object.q) stores each value with each operator into
     typed and untyped locals (int, *int, string, object, *object, softlist, any, auto), members (int, *int, *object,
     any), hash keys (hash<auto>, hash<string, int>, hash<string, *object>) and list elements (list<auto>, list<int>,
-    list<*int>), each store in a function of its own, and prints the exception that the store raises and the value that
+    list<*int>), and as the initializer of an int declaration (int t := src, int t @= src), each store in a function
+    of its own, and prints the exception that the store raises and the value that
     the lvalue holds afterwards.  A store into a local int read as a native value aborted the JIT and qcc in a debug
     build (an assertion in QoreIRToLLVM::lowerInstruction(), fixed by qore#7764): the weak store of a weak reference to
     a deleted object, and the opaque store of any value.
@@ -74,7 +75,7 @@ class WeakStoreDeletedObjectTest inherits QUnit::Test {
 
     testAst() {
         list<string> expected = ReadOnlyFile::readTextFile(dir + "/weak-store-deleted-object.expected").split("\n");
-        assertEq(136, expected.size(), "expected cases");
+        assertEq(144, expected.size(), "expected cases");
         list<string> lines = astOutput().split("\n");
         list<string> run_lines;
         int runs = 0;
@@ -100,9 +101,9 @@ class WeakStoreDeletedObjectTest inherits QUnit::Test {
         }
         check_run();
         assertEq(Runs, runs, "runs");
-        # each run has 144 cases (2 operators, 18 lvalues, 4 values), 8 of them into a softlist lvalue; the forms of
-        # qore#7778 give what the AST interpreter gives
-        assertEq(Runs * 144, (select lines, $1 =~ /^(weak|opaque) /).size(), "cases");
+        # each run has 152 cases (2 operators with 18 lvalues, plus 2 declarations, each with 4 values), 8 of them into
+        # a softlist lvalue; the forms of qore#7778 give what the AST interpreter gives
+        assertEq(Runs * 152, (select lines, $1 =~ /^(weak|opaque) /).size(), "cases");
         assertEq(Runs, (select lines, $1 =~ /^weak int, deleted: RUNTIME-TYPE-ERROR .*; value: integer 0;/).size(),
             "weak store of a deleted object into an int");
         assertEq(Runs, (select lines, $1 =~ /^opaque int, int: ok; value: integer 5;/).size(),

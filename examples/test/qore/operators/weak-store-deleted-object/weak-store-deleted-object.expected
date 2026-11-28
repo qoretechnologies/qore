@@ -1,3 +1,11 @@
+weak int declaration, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: -; copy: -; after delete: -
+weak int declaration, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: -; copy: -; after delete: -
+weak int declaration, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: -; copy: -; after delete: -
+weak int declaration, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque int declaration, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: -; copy: -; after delete: -
+opaque int declaration, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: -; copy: -; after delete: -
+opaque int declaration, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: -; copy: -; after delete: -
+opaque int declaration, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
 weak int, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: integer 0; copy: integer 0; after delete: integer 0
 weak int, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: integer 0; copy: integer 0; after delete: integer 0
 weak int, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: integer 0; copy: integer 0; after delete: integer 0
