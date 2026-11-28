@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of weak and opaque stores and of the reads of their lvalues
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakStoreDeletedObjectTest
+
+#! weak (:=) and opaque (@=) stores of a weak reference to a deleted object, a live object, NOTHING and an int
+#! (qore#7778)
+/** The program (weak-store-deleted-object/weak-store-deleted-object.q) stores each value with each operator into
+    typed and untyped locals (int, *int, string, object, *object, softlist, any, auto), members (int, *int, *object,
+    any), hash keys (hash<auto>, hash<string, int>, hash<string, *object>) and list elements (list<auto>, list<int>,
+    list<*int>), and as the initializer of an int declaration (int t := src, int t @= src), each store in a function
+    of its own, and prints the exception that the store raises and the value that
+    the lvalue holds afterwards.  A store into a local int read as a native value aborted the JIT and qcc in a debug
+    build (an assertion in QoreIRToLLVM::lowerInstruction(), fixed by qore#7764): the weak store of a weak reference to
+    a deleted object, and the opaque store of any value.
+
+    Every mode and the qcc executables (-O0 and -O3) must print the output of the AST interpreter.  The AST output is
+    also compared with weak-store-deleted-object.expected, apart from the softlist lvalues, whose result depends on the
+    weak store conversion rules of the branch (qore#7619 refuses a store that wraps the value in a new list): those
+    lines are compared between the modes only.
+*/
+class WeakStoreDeletedObjectTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string dir = get_script_dir() + "/weak-store-deleted-object";
+        string script = dir + "/weak-store-deleted-object.q";
+        #! the AST output that every other mode must reproduce
+        *string ast_output;
+
+        #! the number of times that the program runs its cases
+        const Runs = 3;
+    }
+
+    constructor() : QUnit::Test("WeakStoreDeletedObjectTest", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s ", libqore_dir, libqore_dir,
+            libqore_dir);
+    }
+
+    private string run(string mode, string extra_env = "") {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s%s -b --enable-debug "
+            "--exec-mode=%s %s", env(), extra_env, qore_bin, mode, script));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        assertEq("", r.stderr, mode + ": stderr");
+        return r.stdout;
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    testAst() {
+        list<string> expected = ReadOnlyFile::readTextFile(dir + "/weak-store-deleted-object.expected").split("\n");
+        assertEq(144, expected.size(), "expected cases");
+        list<string> lines = astOutput().split("\n");
+        list<string> run_lines;
+        int runs = 0;
+        # compares the lines of the run read so far with the expected output
+        code check_run = sub () {
+            assertEq(expected, run_lines, sprintf("run %d", runs - 1));
+        };
+        foreach string line in (lines) {
+            if (line =~ /^run [0-9]+$/) {
+                if (runs) {
+                    check_run();
+                }
+                assertEq(sprintf("run %d", runs), line, "run header");
+                ++runs;
+                run_lines = ();
+                continue;
+            }
+            # the result of a store into a softlist lvalue depends on the branch's weak store conversion rules
+            if (line =~ /^(weak|opaque) softlist, /) {
+                continue;
+            }
+            run_lines += line;
+        }
+        check_run();
+        assertEq(Runs, runs, "runs");
+        # each run has 152 cases (2 operators with 18 lvalues, plus 2 declarations, each with 4 values), 8 of them into
+        # a softlist lvalue; the forms of qore#7778 give what the AST interpreter gives
+        assertEq(Runs * 152, (select lines, $1 =~ /^(weak|opaque) /).size(), "cases");
+        assertEq(Runs, (select lines, $1 =~ /^weak int, deleted: RUNTIME-TYPE-ERROR .*; value: integer 0;/).size(),
+            "weak store of a deleted object into an int");
+        assertEq(Runs, (select lines, $1 =~ /^opaque int, int: ok; value: integer 5;/).size(),
+            "opaque store of an int into an int");
+        assertEq(Runs, (select lines, $1 =~ /^opaque int, deleted: RUNTIME-TYPE-ERROR .*; value: integer 0;/).size(),
+            "opaque store of a deleted object into an int");
+    }
+
+    testModes() {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(astOutput(), run(mode), mode);
+        }
+        # the functions compiled before they run
+        assertEq(astOutput(), run("jit", "QORE_JIT_SYNC_COMPILE=1 "), "jit (synchronous)");
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-store-deleted-object-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/weak-store-deleted-object-O%s", tmp.path, opt);
+            int rc;
+            # in a debug build, the compile asserts that every read of a local with native facts is native
+            string out = backquote(sprintf("%s%s -O%s -o %s %s 2>&1", env(), qcc_bin, opt, exe, script), \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the program: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b", env(), exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(astOutput(), r.stdout, sprintf("qcc -O%s", opt));
+            # the native compilation trace and the module loader's warnings are not output of the program
+            assertEq("", r.stderr, sprintf("qcc -O%s: stderr", opt));
+        }
+    }
+}
