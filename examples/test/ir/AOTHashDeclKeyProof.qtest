@@ -18,6 +18,16 @@ sub test_exit(int rc) {
     exit(rc);
 }
 
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
+
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -270,11 +280,11 @@ if (!enabled_compile.regex(
     test_exit(2);
 }
 
-outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
-outputs.checked = backquote(sprintf("%s %s 2>&1", env, checked_exe));
-outputs.value_checked = backquote(sprintf("%s %s 2>&1", env, value_checked_exe));
-outputs.slot_checked = backquote(sprintf(
-    "%s %s 2>&1", env, slot_checked_exe));
+outputs.enabled = run_executable(sprintf("%s %s", env, enabled_exe));
+outputs.checked = run_executable(sprintf("%s %s", env, checked_exe));
+outputs.value_checked = run_executable(sprintf("%s %s", env, value_checked_exe));
+outputs.slot_checked = run_executable(sprintf(
+    "%s %s", env, slot_checked_exe));
 
 string expected = "1:2:default:3:4:full:5:6:reordered:7:8:default:10:True:"
     + "RUNTIME-TYPE-ERROR:HASHDECL-INIT-ERROR:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:"

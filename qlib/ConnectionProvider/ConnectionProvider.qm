@@ -215,6 +215,11 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - the @ref FileDataProvider::FileDataProvider "FileDataProvider" that
+      @ref ConnectionProvider::FilesystemConnection::getDataProvider() "FilesystemConnection::getDataProvider()"
+      returns is rooted at and locked to the connection's directory, and it is read-only if the connection is
+      read-only: the caller's \c root, \c lock and \c readonly constructor options cannot change them
+      (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - code that may not receive the host's secrets (code that a sandbox governs, or code restricted from external
       information) gets the connections of only the connection provider modules that resolve names for the calling
       code themselves (see @ref connectionprovider_caller_scoped): a lookup of a connection that it may not use

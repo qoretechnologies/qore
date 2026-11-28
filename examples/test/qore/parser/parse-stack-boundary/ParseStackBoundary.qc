@@ -6,6 +6,7 @@
 %requires ../../../TestBuildTools.qm
 %requires ../../../TestInterpreter.qm
 %requires ../../../QoreBuildTree.qm
+%requires ../../../ExecModeHarness.qm
 
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
 #! and together they run every case (see addPartCase()); parts 1, 3 and 4 parse code in a single Program, parts 2 and 5
@@ -134,11 +135,12 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-boundary-");
         string exe = build(dir.path, root, libdir);
-        int status;
-        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
-            + quote(exe) + " 2>&1", \status);
-        assertEq(0, status, output);
-        assertEq("parse-stack-boundary: ok\n", output);
+        # the fixture runs in its default environment; a warning of the module loader on stderr is not its output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command("LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + quote(exe), NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        assertEq("parse-stack-boundary: ok\n", r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     #! Modules that require each other are parsed from their sources in a foreign thread with each stack size
@@ -173,15 +175,17 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         # from 128KB, or the platform's minimum stack size if it is larger (see getSweepStartKb())
         int start_kb = max(128, getSweepStartKb(exe, libdir, 32));
         hash<string, string> results = sweep(start_kb, 1024, 32, string sub (int kb) {
-            int status;
-            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-                + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe) + " StackChain0 " + kb + " 2>&1", \status);
+            # the fixture runs in its default environment; a warning of the module loader on stderr is not its output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command("LD_LIBRARY_PATH=" + quote(libdir)
+                + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe)
+                + " StackChain0 " + kb, NOTHING, "QORE_JIT_TIMING=1");
             string label = sprintf("%dK", kb);
-            assertEq(0, status, label + ": " + output);
-            if (output == "parsed\n") {
+            assertEq(0, r.rc, label + ": " + r.out);
+            assertEq("", r.stderr, label + ": stderr");
+            if (r.stdout == "parsed\n") {
                 return "parsed";
             }
-            assertEq("stack error\n", output, label);
+            assertEq("stack error\n", r.stdout, label);
             return "stack error";
         });
         assertGt(0, count(results, "parsed"), "the chain is parsed with a large stack");

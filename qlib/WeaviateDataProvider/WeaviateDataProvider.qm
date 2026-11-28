@@ -48,10 +48,9 @@ module WeaviateDataProvider {
             "desc": "Provides access to [Weaviate](https://weaviate.io) — an open-source "
                 "vector database supporting hybrid search (vector + keyword), "
                 "multi-tenancy, and a wide range of vectorizer modules.\n\n"
-                "Use the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" "
-                "backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported "
-                "ingest/retrieve path through @ref QoreRagUtils::RagPipeline "
-                "\"RagPipeline\".",
+                "Use the `WeaviateVectorStore` "
+                "backend in `QoreRagUtils` for the supported "
+                "ingest/retrieve path through `RagPipeline`.",
             "scheme": "weaviate",
             "logo": WeaviateLogo,
             "logo_file_name": "weaviate-logo.svg",

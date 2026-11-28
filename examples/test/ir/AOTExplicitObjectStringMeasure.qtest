@@ -18,6 +18,16 @@ sub test_exit(int rc) {
     exit(rc);
 }
 
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
+
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -81,12 +91,12 @@ if (!is_file(hot_enabled) || !is_file(hot_fusion_disabled)
     test_exit(2);
 }
 
-string hot_enabled_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_enabled));
-string hot_fusion_disabled_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_fusion_disabled));
-string hot_facts_disabled_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, hot_facts_disabled));
+string hot_enabled_output = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, hot_enabled));
+string hot_fusion_disabled_output = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, hot_fusion_disabled));
+string hot_facts_disabled_output = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, hot_facts_disabled));
 if (hot_enabled_output != hot_ast
         || hot_fusion_disabled_output != hot_ast
         || hot_facts_disabled_output != hot_ast) {
@@ -208,11 +218,11 @@ string safety_disabled_compile = backquote(sprintf(
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, safety_disabled, safety_source));
 string safety_enabled_output = is_file(safety_enabled)
-    ? backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, safety_enabled)) : "";
+    ? run_executable(sprintf(
+        "LD_LIBRARY_PATH=%s %s", libqore_dir, safety_enabled)) : "";
 string safety_disabled_output = is_file(safety_disabled)
-    ? backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, safety_disabled)) : "";
+    ? run_executable(sprintf(
+        "LD_LIBRARY_PATH=%s %s", libqore_dir, safety_disabled)) : "";
 if (!is_file(safety_enabled) || !is_file(safety_disabled)
         || safety_enabled_output != safety_ast
         || safety_disabled_output != safety_ast) {

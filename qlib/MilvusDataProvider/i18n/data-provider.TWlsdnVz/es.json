@@ -12,8 +12,8 @@
           "message": "Base de datos vectorial de código abierto Milvus / Zilliz Cloud"
         },
         "app.TWlsdnVz.desc": {
-          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "Proporciona acceso a [Milvus](https://milvus.io) y [Zilliz Cloud](https://zilliz.com) (Milvus administrado): una base de datos vectorial de código abierto que admite búsquedas de similitud a escala de miles de millones.\n\nUtilice el backend @ref QoreRagUtils::MilvusVectorStore \"MilvusVectorStore\" en @ref qoreragutilsintro \"QoreRagUtils\" para la ruta admitida de ingesta/recuperación a través de @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+          "source": "Provides access to [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com) (managed Milvus) — an open-source vector database supporting billion-scale similarity search.\n\nUse the `MilvusVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "Proporciona acceso a [Milvus](https://milvus.io) y [Zilliz Cloud](https://zilliz.com) (Milvus administrado): una base de datos vectorial de código abierto que admite búsquedas de similitud a escala de miles de millones.\n\nUtilice el backend `MilvusVectorStore` en `QoreRagUtils` para la ruta admitida de ingesta/recuperación a través de `RagPipeline`."
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "Cargar un archivo usando multipart/form-data"
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura `FileDataType` (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
         },
         "app.TWlsdnVz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

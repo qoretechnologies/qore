@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 %modern
 %no-child-restrictions
@@ -9,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class AOTConstantInitializerMemoryTest
@@ -98,9 +100,16 @@ class AOTConstantInitializerMemoryTest inherits QUnit::Test {
         assertGt(0, peak_kb, "the peak was measured");
         assertLt(MaxPeakKb, peak_kb, "the compile does not keep a copy of the constants per initializer");
 
-        out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", q(libqore_dir), q(libqore_dir), q(exe)),
-            \rc);
-        assertEq(0, rc, "ran: " + out);
-        assertEq("errors=0\n", out, "the compiled constants have their values");
+        checkExecutable(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", q(libqore_dir), q(libqore_dir), q(exe)),
+            "errors=0\n", "the compiled constants have their values");
+    }
+
+    #! runs a qcc executable in its default environment and checks its output; a warning of the module loader on
+    #! stderr is not output (qore#7805)
+    private checkExecutable(string cmd, string expected, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+        assertEq(expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 }

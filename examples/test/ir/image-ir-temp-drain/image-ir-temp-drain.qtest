@@ -9,6 +9,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class ImageIrTempDrainTest
 
@@ -46,10 +47,14 @@ class ImageIrTempDrainTest inherits QUnit::Test {
                 fmt));
         }
         string script = get_script_dir() + DirSep + "image-ir-temp-drain.q";
-        string expected = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1", env, qore_bin, script));
+        # the AST run and the executable run in their default environment; a warning of the module loader on stderr
+        # is not output (qore#7805)
+        string expected = ExecModeHarness::run_command(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script),
+            NOTHING, "QORE_JIT_TIMING=1").out;
         string exe = tmp.path + DirSep + "image-ir-temp-drain";
         string out = backquote(sprintf("%s %s -O0 -o %s %s 2>&1", env, qcc_bin, exe, script));
         assertTrue(is_file(exe), out);
-        assertEq(expected, backquote(sprintf("%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s 2>&1", env, exe)));
+        assertEq(expected, ExecModeHarness::run_command(sprintf("%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s", env, exe),
+            NOTHING, "QORE_JIT_TIMING=1").out);
     }
 }

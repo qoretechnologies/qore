@@ -264,6 +264,15 @@ QoreImputer* QoreImputer::deserializeState(const uint8_t* data, size_t len,
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "Imputer", xsink)
+        || checkOneOf(strategy, {"mean", "median", "most_frequent", "constant"}, "Imputer", "strategy", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "Imputer", "the number of features", xsink)
+        || checkSize(fill_values.size(), n_features, "Imputer", "the number of fill values", xsink)) {
+        return nullptr;
+    }
+
     std::unique_ptr<QoreImputer> obj(new QoreImputer(strategy, constant_value));
     obj->n_features = n_features;
     obj->fill_values = std::move(fill_values);

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc and in qcc executables
 
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
@@ -7,6 +8,7 @@
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -17,6 +19,16 @@ TmpDir tmp("qore-aot-object-compound-get-cross-object-");
 sub test_exit(int rc) {
     remove_tree(tmp.path);
     exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
 }
 
 string qore_bin = TestInterpreter::qore_interpreter();
@@ -144,7 +156,7 @@ if (!is_file(exe_path)) {
     test_exit(2);
 }
 
-string actual = backquote(sprintf("%s %s 2>&1", env, exe_path));
+string actual = run_executable(sprintf("%s %s", env, exe_path));
 string expected = "7:12:1004\n";
 if (actual != expected) {
     printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",

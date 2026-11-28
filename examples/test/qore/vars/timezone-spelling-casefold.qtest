@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run in a child process of the test's own binary, started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Case variants of time zone region names in a zoneinfo directory that does not distinguish the case of names on a
+# system other than macOS (a directory with case folding: ext4, f2fs, tmpfs) are spellings, bounded as other spellings
+# are (qore#7783, following qore#7592): the name of an entry keeps its name, a case variant keeps its name while fewer
+# than the limit of spellings have zones, and after that gets the zone of the stored name of its entry.
+#
+# The child script (timezone-spelling-casefold/casefold-child.q) runs in a user namespace of its own (unshare -rm) on a
+# tmpfs mounted with case folding, with a zoneinfo directory that folds case (chattr +F) that it makes the runtime read
+# regions from with the debug-build hook dbg_tz_set_zoneinfo_root().  The test is skipped where that cannot be set up
+# (no unprivileged user namespaces, a kernel without case folding in tmpfs (Linux 6.13), no chattr) and in a release
+# build (the hooks are in debug builds of the library only).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../../TestInterpreter.qm
+
+%exec-class TimeZoneSpellingCasefoldTest
+
+class TimeZoneSpellingCasefoldTest inherits QUnit::Test {
+    constructor() : QUnit::Test("time zone region spellings in a directory that folds case", "1.0", \ARGV) {
+        addTestCase("case variants in a directory that folds case are bounded spellings", \testCasefold());
+        set_return_value(main());
+    }
+
+    testCasefold() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_tz_set_zoneinfo_root() is only in debug builds of the library");
+        }
+        if (PlatformOS != "Linux") {
+            testSkip("directories that fold case are made with a casefold tmpfs, a Linux feature");
+        }
+        *string unshare = find_program("unshare");
+        *string chattr = find_program("chattr");
+        if (!unshare || !chattr) {
+            testSkip("unshare(1) and chattr(1) are needed");
+        }
+        string script = get_script_dir() + "timezone-spelling-casefold/casefold-child.q";
+        string mnt = tmp_location() + DirSep + sprintf("qore-tz-casefold-%d-%d", getpid(), gettid());
+        # the paths are given to sh -c in single quotes
+        foreach string path in ((mnt, script, TestInterpreter::qore_interpreter(), unshare, chattr)) {
+            if (path =~ /[\x27\s]/) {
+                testSkip("a path has a quote or a space: " + path);
+            }
+        }
+        mkdir(mnt);
+        on_exit rmdir(mnt);
+        # the mount is private to the user namespace of the child and ends with it
+        string cmd = sprintf("%s -rm sh -c 'mount -t tmpfs -o casefold tmpfs %s || { echo SKIP: mount; exit 0; }; "
+            "exec %s %s %s %s' 2>&1", unshare, mnt, TestInterpreter::qore_interpreter(), script, mnt, chattr);
+        string out = backquote(cmd);
+        if (out =~ /^SKIP: /m) {
+            testSkip("a directory that folds case cannot be made here: " + trim(out));
+        }
+        if (out =~ /unshare: /) {
+            testSkip("unprivileged user namespaces are not available: " + trim(out));
+        }
+        assertRegex("(?m)^entry AA/Rab0: AA/Rab0$", out, "the name of an entry keeps its name: " + out);
+        for (int i = 1; i <= 4; ++i) {
+            assertRegex(sprintf("(?m)^kept aa/Rab%d: aa/Rab%d$", i, i), out,
+                "a spelling below the limit keeps its name: " + out);
+        }
+        for (int i = 5; i <= 7; ++i) {
+            assertRegex(sprintf("(?m)^bounded aa/Rab%d: AA/Rab%d$", i, i), out,
+                "a spelling over the limit gets the zone of the stored name of its entry: " + out);
+        }
+        assertRegex("(?m)^zones at the limit: yes$", out, "no spelling over the limit got a zone of its own: " + out);
+        assertRegex("(?m)^stored dir name: AA/Rab8$", out, "a variant of a directory's name gets the stored name: "
+            + out);
+        assertRegex("(?m)^restricted: AA/Rab9,AA/Rab9,AA/Rab9$", out, "restricted code gets the zone of the stored "
+            "name: " + out);
+        assertRegex("(?m)^restricted added: 1$", out, "the case variants of restricted code add one region name: "
+            + out);
+    }
+
+    #! returns the path of a program in PATH
+    static *string find_program(string name) {
+        foreach string dir in (ENV.PATH.split(":")) {
+            string p = dir + "/" + name;
+            if (is_executable(p)) {
+                return p;
+            }
+        }
+    }
+}

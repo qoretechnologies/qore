@@ -12,8 +12,8 @@
           "message": "ハイブリッド検索対応のWeaviateオープンソースベクトルデータベース"
         },
         "app.V2VhdmlhdGU.desc": {
-          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported ingest/retrieve path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
-          "message": "[Weaviate](https://weaviate.io) へのアクセスを提供します。これはハイブリッド検索（ベクトル + キーワード）、マルチテナンシー、幅広いベクトライザーモジュールをサポートするオープンソースのベクトルデータベースです。\n\n@ref QoreRagUtils::RagPipeline \"RagPipeline\" を介したサポート対象の取り込み/取得パスには、@ref qoreragutilsintro \"QoreRagUtils\" 内の @ref QoreRagUtils::WeaviateVectorStore \"WeaviateVectorStore\" バックエンドを使用してください。"
+          "source": "Provides access to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nUse the `WeaviateVectorStore` backend in `QoreRagUtils` for the supported ingest/retrieve path through `RagPipeline`.",
+          "message": "[Weaviate](https://weaviate.io) へのアクセスを提供します。これはハイブリッド検索（ベクトル + キーワード）、マルチテナンシー、幅広いベクトライザーモジュールをサポートするオープンソースのベクトルデータベースです。\n\n`RagPipeline` を介したサポート対象の取り込み/取得パスには、`QoreRagUtils` 内の `WeaviateVectorStore` バックエンドを使用してください。"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -204,8 +204,8 @@
           "message": "multipart/form-dataを使用してファイルをアップロード"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
-          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
-          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+          "source": "Upload a file using `multipart/form-data`. The body must be a `FileDataType` structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは`FileDataType`構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
         },
         "app.V2VhdmlhdGU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
           "source": "XML",

@@ -56,6 +56,10 @@
 #include <vector>
 #include <sys/param.h>
 #include <openssl/evp.h>
+#ifndef _Q_WINDOWS
+#include <dirent.h>
+#include <strings.h>
+#endif
 #ifdef __APPLE__
 #include <sys/attr.h>
 #endif
@@ -882,10 +886,70 @@ int QoreZoneInfo::setStandardInfo(ExceptionSink* xsink) {
 }
 
 #ifdef _Q_WINDOWS
+//! the registry key of the Windows time zones
+#define WTZ_KEY "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Time Zones"
+
+//! sets \a stored to the stored name of the time zone key that \a name opens (qore#7783)
+/** The registry does not distinguish the case of key names: \a name itself if it is a key, otherwise the key whose
+    name differs from it only in case.  Returns false if there is none (also for a zoneinfo region name, which has a
+    \c / and is no key) or the keys cannot be read
+*/
+static bool win_stored_tz_key_name(const char* name, std::string& stored) {
+    HKEY hk;
+    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, WTZ_KEY, 0, KEY_ENUMERATE_SUB_KEYS, &hk) != ERROR_SUCCESS) {
+        return false;
+    }
+    ON_BLOCK_EXIT(RegCloseKey, hk);
+    // key names are at most 255 characters
+    char buf[256];
+    bool found = false;
+    for (DWORD i = 0; ; ++i) {
+        DWORD len = sizeof buf;
+        LONG rc = RegEnumKeyEx(hk, i, buf, &len, nullptr, nullptr, nullptr, nullptr);
+        if (rc == ERROR_NO_MORE_ITEMS) {
+            break;
+        }
+        if (rc != ERROR_SUCCESS) {
+            continue;
+        }
+        if (!strcmp(buf, name)) {
+            stored = name;
+            return true;
+        }
+        if (!found && !_stricmp(buf, name)) {
+            stored.assign(buf, len);
+            found = true;
+        }
+    }
+    return found;
+}
+
 const AbstractQoreZoneInfo* QoreTimeZoneManager::processFile(const char* fn, bool use_path, ExceptionSink* xsink) {
     tzmap_t::iterator i = tzmap.find(fn);
     if (i != tzmap.end()) {
         return i->second;
+    }
+
+    // a name with a backslash is no time zone key name (it would open another key, or the key with a separator at its
+    // end, as a name of its own)
+    if (strchr(fn, '\\')) {
+        raiseUnknownRegion(fn, xsink);
+        return nullptr;
+    }
+
+    // a spelling of a time zone key (a name that differs from the key's stored name in case, which the registry does
+    // not distinguish) gets a zone of its own, named as given, only while fewer than MaxSpellingZones spellings have
+    // zones; after that, the zone of the key's stored name, so that the zones that names add are bounded by the keys
+    // and that limit (qore#7783, as for the spellings of zoneinfo regions, qore#7592)
+    bool spelling = false;
+    {
+        std::string stored;
+        if (win_stored_tz_key_name(fn, stored) && stored != fn) {
+            if (win_spelling_zones >= MaxSpellingZones) {
+                return processFile(stored.c_str(), use_path, xsink);
+            }
+            spelling = true;
+        }
     }
 
 
@@ -901,10 +965,14 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::processFile(const char* fn, boo
             return nullptr;
         }
 
-        rv = tzi.release();
+        // the map entry is made first, so that the zone is owned if it cannot be made
+        AbstractQoreZoneInfo*& slot = tzmap[fn];
+        rv = slot = tzi.release();
     }
-    tzmap[fn] = rv;
     ++tzsize;
+    if (spelling) {
+        ++win_spelling_zones;
+    }
 
     return rv;
 }
@@ -1847,7 +1915,7 @@ typedef struct _REG_TZI_FORMAT {
     SYSTEMTIME DaylightDate;
 } REG_TZI_FORMAT;
 
-#define WTZ_INFO "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Time Zones\\"
+#define WTZ_INFO WTZ_KEY "\\"
 
 QoreWindowsZoneInfo::QoreWindowsZoneInfo(const char* n_name, ExceptionSink* xsink) : valid(false), rule(false),
         daylight_first(false), dst_off(0) {
@@ -2353,11 +2421,107 @@ static bool has_component(const std::string& todo, size_t pos) {
 //! the maximum number of symbolic links followed in the zoneinfo directory for one region
 static constexpr unsigned QORE_TZ_MAX_SYMLINKS = 40;
 
-//! sets the name of a directory entry as it is stored (qore#7592)
+#ifndef __APPLE__
+//! returns true if the directory does not distinguish the case of \a comp (qore#7783)
+/** The directory reaches the same entry with the case of the letters of \a comp swapped: a directory with case
+    folding (ext4, f2fs and tmpfs casefold), a file system that does not distinguish case (vfat, exFAT, NTFS, SMB
+    shares); a name without letters has no other spelling.  On a file system that distinguishes case, both names
+    reach the same entry only if they are links to the same file, which find_stored_entry_name() then resolves to
+    \a comp
+*/
+static bool dir_folds_case(int dirfd, const std::string& comp) {
+    std::string swapped(comp);
+    bool letters = false;
+    for (char& c : swapped) {
+        if (c >= 'a' && c <= 'z') {
+            c = static_cast<char>(c - 'a' + 'A');
+            letters = true;
+        } else if (c >= 'A' && c <= 'Z') {
+            c = static_cast<char>(c - 'A' + 'a');
+            letters = true;
+        }
+    }
+    if (!letters) {
+        return false;
+    }
+    struct stat a, b;
+    if (fstatat(dirfd, comp.c_str(), &a, AT_SYMLINK_NOFOLLOW)
+            || fstatat(dirfd, swapped.c_str(), &b, AT_SYMLINK_NOFOLLOW)) {
+        return false;
+    }
+    return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+}
+
+//! sets \a name to the stored name of the entry of \a comp in a directory that does not distinguish case
+/** The entries of the directory are read: \a comp itself if it is an entry, otherwise the entry whose name differs
+    from it only in the case of ASCII letters (region names are ASCII; see QoreTimeZoneManager::isRegionName()),
+    otherwise the entry that reaches the same file as \a comp (another name of the file: the long name of a vfat
+    short name such as \c LOS_AN~1).  Returns false if there is none (the name is then taken as given) or the
+    directory cannot be read
+*/
+static bool find_stored_entry_name(int dirfd, const std::string& comp, std::string& name) {
+    int fd;
+    do {
+        fd = openat(dirfd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return false;
+    }
+    // fdopendir() owns the descriptor when it succeeds
+    struct DirCloser {
+        void operator()(DIR* d) const {
+            closedir(d);
+        }
+    };
+    std::unique_ptr<DIR, DirCloser> dir(fdopendir(fd));
+    if (!dir) {
+        ::close(fd);
+        return false;
+    }
+    std::string match;
+    bool found = false;
+    while (struct dirent* de = readdir(dir.get())) {
+        if (!strcmp(de->d_name, comp.c_str())) {
+            name = comp;
+            return true;
+        }
+        if (!found && !strcasecmp(de->d_name, comp.c_str())) {
+            match = de->d_name;
+            found = true;
+        }
+    }
+    if (!found) {
+        // another name of the file that comp reaches
+        struct stat cs;
+        if (!fstatat(dirfd, comp.c_str(), &cs, AT_SYMLINK_NOFOLLOW)) {
+            rewinddir(dir.get());
+            while (struct dirent* de = readdir(dir.get())) {
+                if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) {
+                    continue;
+                }
+                struct stat es;
+                if (!fstatat(dirfd, de->d_name, &es, AT_SYMLINK_NOFOLLOW) && es.st_dev == cs.st_dev
+                        && es.st_ino == cs.st_ino) {
+                    match = de->d_name;
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (found) {
+        name.swap(match);
+    }
+    return found;
+}
+#endif
+
+//! sets the name of a directory entry as it is stored (qore#7592, qore#7783)
 /** On macOS, whose file systems do not distinguish the case of names by default, the name is the stored name, which
-    can differ from \a comp in case; on other systems, whose file systems distinguish case, and if the stored name
-    cannot be read (a missing entry, which the walk then does not open, or a file system without the attribute), it
-    is \a comp
+    can differ from \a comp in case.  On other systems it is the stored name in a directory that does not
+    distinguish case (dir_folds_case(): case folding, vfat, SMB, ...), read from the directory.  Otherwise, and if
+    the stored name cannot be read (a missing entry, which the walk then does not open, or a file system without the
+    attribute), it is \a comp
 */
 static void get_entry_name(int dirfd, const std::string& comp, std::string& name) {
 #ifdef __APPLE__
@@ -2389,7 +2553,9 @@ static void get_entry_name(int dirfd, const std::string& comp, std::string& name
         }
     }
 #else
-    (void)dirfd;
+    if (dir_folds_case(dirfd, comp) && find_stored_entry_name(dirfd, comp, name)) {
+        return;
+    }
 #endif
     name = comp;
 }
@@ -2473,8 +2639,17 @@ static int open_region_file(const std::string& root, const char* region, std::st
         bool last = !has_component(todo, pos);
         // the component is the last of the region as given if it is the last one and in the region's part of the path
         bool region_last = false;
+#ifndef __APPLE__
+        // the stored name of the component, also for the path walked (rel), which is the canonical name of the file
+        // that restricted code gets: in a directory that does not distinguish case, its case variants then reach the
+        // zone of the stored name, as on macOS (F_GETPATH in loadRegion()), so that they add no zone (qore#7783)
+        get_entry_name(dirs.top(), comp, entry_name);
+#else
         if (want_entry) {
             get_entry_name(dirs.top(), comp, entry_name);
+        }
+#endif
+        if (want_entry) {
             size_t start = pos - 1 - comp.size();
             region_last = last && start >= todo.size() - region_tail;
         }
@@ -2493,7 +2668,11 @@ static int open_region_file(const std::string& root, const char* region, std::st
                 if (!new_rel.empty()) {
                     new_rel += '/';
                 }
+#ifndef __APPLE__
+                new_rel += entry_name;
+#else
                 new_rel += comp;
+#endif
                 if (!last) {
                     rel_len.push_back(rel.size());
                 }

@@ -71,6 +71,46 @@ class HttpClientIoSocketAccess {
         return stream.getConnectionFor(token);
     }
 
+    #! Acquires a connection step of a manager for the code of this module (qore#7813)
+    /** The public acquireConnectionAsync() refuses code that a sandbox restricts and that does not own the manager:
+        this module's code acquires the connection for the request that such code makes with the manager, and keeps it
+    */
+    static *EventNotifier acquireConnectionAsync(HttpClientConnectionManager mgr, string url,
+            reference<*HttpClientConnection> conn_out) {
+        return mgr.acquireConnectionAsyncFor(token, url, \conn_out);
+    }
+
+    #! Processes the proxy challenge of a connection error for the code of this module (qore#7830)
+    /** The public processProxyConnectFailure() refuses code that a sandbox restricts and that does not own the manager:
+        this module's code acts for the request that such code makes with the manager
+    */
+    static bool processProxyConnectFailure(HttpClientConnectionManager mgr, string url, *hash<auto> err) {
+        return mgr.processProxyConnectFailureFor(token, url, err);
+    }
+
+    #! Returns the headers of the next request of a redirect chain for the code that makes the request (qore#7837)
+    static hash<auto> prepareRequestHeaders(HttpClientConnectionManager mgr, HttpRedirectFollower rf,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state, bool decoded = True) {
+        return mgr.prepareRequestHeadersFor(token, rf, auth, \auth_state, decoded);
+    }
+
+    #! Processes an authentication challenge for the code that makes the request (qore#7837)
+    static bool processAuthChallenge(HttpClientConnectionManager mgr, int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
+        return mgr.processAuthChallengeFor(token, status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! Stores the cookies of a response for the code that makes the request (qore#7837)
+    static storeStateCookies(HttpClientConnectionManager mgr, hash<auto> state, HttpRedirectFollower rf,
+            *hash<auto> resp_headers) {
+        mgr.storeStateCookiesFor(token, state, rf, resp_headers);
+    }
+
+    #! Creates the status of a pooled connection for the code that waits for it (qore#7813)
+    static HttpClientConnectionStatus newStatus(HttpClientConnection conn) {
+        return new HttpClientConnectionStatus(token, conn);
+    }
+
     #! Returns @ref True if the calling code is restricted and does not own the connection (qore#7570)
     static bool callerIsRestrictedNonOwner(HttpClientConnection conn) {
         return conn.callerIsRestrictedNonOwnerFor(token);

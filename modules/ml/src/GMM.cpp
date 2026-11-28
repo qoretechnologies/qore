@@ -393,8 +393,11 @@ void QoreGMM::update(const MatrixXd& data, ExceptionSink* xsink) {
         return;
     }
 
-    ++batch_count;
-    double eta = 1.0 / (batch_count + 1);
+    // the batch count saturates at its maximum, where the learning rate no longer changes
+    if (batch_count < INT32_MAX - 1) {
+        ++batch_count;
+    }
+    double eta = 1.0 / (batch_count + 1.0);
 
     // E-step: compute responsibilities on new data using current parameters
     MatrixXd responsibilities = eStep(data);
@@ -632,8 +635,18 @@ QoreGMM* QoreGMM::deserializeState(const uint8_t* data, size_t len, ExceptionSin
     double log_likelihood = MLSerialization::readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844); the counts are
+    // checked before they size anything: each mean vector takes at least 4 bytes and each covariance matrix 8
+    using namespace MLSerialization;
+    if (checkRange(n_components, 1, INT32_MAX, "GMM", "n_components", xsink)) {
+        return nullptr;
+    }
     int32_t means_count = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    if (checkSize(means_count, n_components, "GMM", "the number of means", xsink)
+        || checkRange(means_count, 1, remaining / 4, "GMM", "the number of means", xsink)) {
+        return nullptr;
+    }
     std::vector<VectorXd> means;
     means.reserve(means_count);
     for (int32_t i = 0; i < means_count; ++i) {
@@ -643,6 +656,10 @@ QoreGMM* QoreGMM::deserializeState(const uint8_t* data, size_t len, ExceptionSin
 
     int32_t cov_count = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    if (checkSize(cov_count, n_components, "GMM", "the number of covariance matrices", xsink)
+        || checkRange(cov_count, 1, remaining / 8, "GMM", "the number of covariance matrices", xsink)) {
+        return nullptr;
+    }
     std::vector<MatrixXd> covariances;
     covariances.reserve(cov_count);
     for (int32_t i = 0; i < cov_count; ++i) {
@@ -654,6 +671,24 @@ QoreGMM* QoreGMM::deserializeState(const uint8_t* data, size_t len, ExceptionSin
     if (*xsink) { return nullptr; }
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    if (checkEnd(remaining, "GMM", xsink)
+        || checkOneOf(covariance_type, {"full", "diagonal"}, "GMM", "covariance_type", xsink)
+        || checkRange(max_iterations, 1, INT32_MAX, "GMM", "max_iterations", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "GMM", "the number of features", xsink)
+        || checkRange(batch_count, 1, INT32_MAX - 1, "GMM", "the batch count", xsink)
+        || checkSize(weights.size(), n_components, "GMM", "the number of weights", xsink)) {
+        return nullptr;
+    }
+    for (int32_t c = 0; c < n_components; ++c) {
+        if (checkSize(means[c].size(), n_features, "GMM", "the size of a mean vector", xsink)
+            || checkSize(covariances[c].rows(), n_features, "GMM", "the number of rows of a covariance matrix",
+                xsink)
+            || checkSize(covariances[c].cols(), n_features, "GMM",
+                "the number of columns of a covariance matrix", xsink)) {
+            return nullptr;
+        }
+    }
 
     std::unique_ptr<QoreGMM> obj(new QoreGMM(n_components, max_iterations, tolerance,
         1, covariance_type));

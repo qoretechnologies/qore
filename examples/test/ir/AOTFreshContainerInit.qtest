@@ -1,9 +1,11 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -14,6 +16,16 @@ TmpDir tmp("qore-aot-fresh-container-init-");
 sub test_exit(int rc) {
     remove_tree(tmp.path);
     exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
 }
 
 string qore_bin = TestInterpreter::qore_interpreter();
@@ -130,18 +142,19 @@ if (enabled_compile
     test_exit(2);
 }
 
-string ast = backquote(sprintf("%s %s %s 2>&1", env, qore_bin, source_path));
-string jit = backquote(sprintf("%s %s --exec-mode=jit %s 2>&1",
+# the qore runs that the executables' output is compared with run the same way
+string ast = run_executable(sprintf("%s %s %s", env, qore_bin, source_path));
+string jit = run_executable(sprintf("%s %s --exec-mode=jit %s",
     env, qore_bin, source_path));
-string jit_disabled = backquote(sprintf(
+string jit_disabled = run_executable(sprintf(
     "%s QORE_DISABLE_IR_FRESH_CONTAINER_INIT=1"
-        " %s --exec-mode=jit %s 2>&1",
+        " %s --exec-mode=jit %s",
     env, qore_bin, source_path));
-string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
-string enabled_generic_hash = backquote(sprintf(
-    "%s QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1 %s 2>&1",
+string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
+string enabled_generic_hash = run_executable(sprintf(
+    "%s QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1 %s",
     env, enabled_exe));
-string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
 if (!ast || ast
         !~ /:1:hash<string, int>:hash<auto>:3:hash<string, int>:hash<auto>:RUNTIME-TYPE-ERROR\n$/
         || jit != ast || jit_disabled != ast

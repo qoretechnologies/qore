@@ -45,10 +45,11 @@ print_usage () {
   echo "                           it is stopped by SIGTTOU."
   echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
   echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
-  echo "  QORE_TEST_TMP_LEAKS      'report' or 'fail': each test gets a temporary directory of its own as TMPDIR,"
-  echo "                           and what it leaves there is removed and reported as a warning, or fails the test"
-  echo "                           ('fail'); not set by default, as tests then share the AOT batch memory ledger in"
-  echo "                           TMPDIR and keep short socket paths (qore#7817)."
+  echo "  QORE_TEST_TMP_LEAKS      'report' (the default), 'fail' or 'off': each test gets a temporary directory of"
+  echo "                           its own as TMPDIR, and what it leaves there is removed and reported as a warning,"
+  echo "                           or fails the test ('fail', as in CI) unless the test is listed in"
+  echo "                           examples/test/runner/tmp-leak-known.txt; 'off' (or empty) gives tests the run's"
+  echo "                           TMPDIR (qore#7817, qore#7823)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  QORE_TEST_STACK_TOOLS    The tools that capture the native call stacks of the test's other"
@@ -2092,6 +2093,25 @@ WATCHDOG_ERROR_TESTS=""
 WATCHDOG_ERROR_COUNT=0
 WATCHDOG_ERROR_PASSED_COUNT=0
 
+# What a test leaves in its temporary directory: QORE_TEST_TMP_LEAKS, "report" (the default: a warning), "fail" (the
+# test fails; CI sets it) or "off" (or empty: the tests share the run's TMPDIR); each test gets a TMPDIR of its own
+# unless it is "off" (see run_test() and check_test_tmpdir(); qore#7817, qore#7823)
+case "${QORE_TEST_TMP_LEAKS-report}" in
+    report|fail)
+        QORE_TEST_TMP_LEAKS=${QORE_TEST_TMP_LEAKS-report}
+        ;;
+    off|"")
+        QORE_TEST_TMP_LEAKS=""
+        ;;
+    *)
+        echo "ERROR: QORE_TEST_TMP_LEAKS is \"report\", \"fail\" or \"off\": '$QORE_TEST_TMP_LEAKS'" >&2
+        exit 1
+        ;;
+esac
+# the tests that still leave files in their temporary directory, reported but not failed with "fail": one path from
+# the root of the source tree per line (examples/test/runner/test_tmp_leak_known.py checks the list)
+TMP_LEAK_KNOWN_FILE="$BASE_TEST_PATH/runner/tmp-leak-known.txt"
+
 # The number of tests run at the same time: QORE_TEST_JOBS, a number or "auto" (the number of CPUs); 1 by default.
 # A parallel run prints the output of each test when the test has ended, as a whole.  A test that cannot run beside
 # others declares a lane on its own line:
@@ -3290,18 +3310,31 @@ remove_test_tmpdir() {
     [ ! -e "$1" ]
 }
 
+# Returns success if the test (the argument) is listed in TMP_LEAK_KNOWN_FILE: it still leaves files in its temporary
+# directory, which is reported but does not fail it (qore#7823)
+is_known_tmp_leak() {
+    [ -f "$TMP_LEAK_KNOWN_FILE" ] || return 1
+    known_test=`printf '%s\n' "$1" | sed 's|^\./||'`
+    grep -v '^[	 ]*#' "$TMP_LEAK_KNOWN_FILE" | grep -qxF "$known_test"
+}
+
 # Reports and removes what a test left in its temporary directory (TEST_TMPDIR, see run_test()), after the processes
-# it left running have been ended; with QORE_TEST_TMP_LEAKS=fail, a test that passed fails for it (qore#7817)
+# it left running have been ended; with QORE_TEST_TMP_LEAKS=fail, a test that passed fails for it, unless it is listed
+# in TMP_LEAK_KNOWN_FILE (qore#7817, qore#7823).  The caches that tools keep in TMPDIR (xcrun's on macOS, which the
+# compiling tests run) are not the test's: they are removed without a report
 check_test_tmpdir() {
     if [ -z "$TEST_TMPDIR" ] || [ ! -d "$TEST_TMPDIR" ]; then
         return
     fi
     # entries that the test made unreadable are listed too
     chmod -R u+rwx "$TEST_TMPDIR" 2>/dev/null
-    tmp_left=`ls -A "$TEST_TMPDIR" 2>/dev/null`
+    tmp_left=`ls -A "$TEST_TMPDIR" 2>/dev/null | grep -v '^xcrun_db'`
     if [ -n "$tmp_left" ]; then
         tmp_count=`printf '%s\n' "$tmp_left" | wc -l | tr -d ' '`
-        if [ "$QORE_TEST_TMP_LEAKS" = fail ]; then
+        if [ "$QORE_TEST_TMP_LEAKS" = fail ] && is_known_tmp_leak "$test"; then
+            echo "*** WARNING: the test left files in its temporary directory (TMPDIR; $tmp_count entries); it is" \
+                "listed in $TMP_LEAK_KNOWN_FILE, so it does not fail; they are removed: ***"
+        elif [ "$QORE_TEST_TMP_LEAKS" = fail ]; then
             echo "*** FAILURE: the test left files in its temporary directory (TMPDIR; $tmp_count entries); they are removed: ***"
             if [ $test_exit -eq 0 ]; then
                 test_exit=1
@@ -3361,14 +3394,16 @@ run_test() {
     # with QORE_TEST_TMP_LEAKS, the test's own temporary directory, given to it as TMPDIR (which tmp_location(),
     # TmpDir, TmpFile and mktemp use): it is in the directory of the test's events, which is the test's own in a
     # parallel run, so tests running beside each other do not share it, and what the test leaves in it is reported
-    # after it (see check_test_tmpdir()).  Not by default: tests share the AOT batch memory ledger in TMPDIR, and a
-    # deeper TMPDIR lengthens the UNIX socket paths of tests (at most 104 bytes on macOS)
+    # after it (see check_test_tmpdir()).  The AOT batch memory ledger stays in the runner's temporary directory
+    # (QORE_AOT_MEMORY_LEDGER_DIR), so that the batch compiles of tests running beside each other still share their
+    # memory admission (qore#7823).  A test that makes UNIX sockets makes them in a short directory (TestSocketDir), as
+    # the deeper TMPDIR would lengthen their paths (at most 104 bytes on macOS)
     TEST_TMPDIR=""
     if [ -n "$QORE_TEST_TMP_LEAKS" ] && [ -n "$TEST_EVENT_DIR" ]; then
         remove_test_tmpdir "$TEST_EVENT_DIR/tmp"
         if mkdir "$TEST_EVENT_DIR/tmp"; then
             TEST_TMPDIR="$TEST_EVENT_DIR/tmp"
-            TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR"
+            TEST_ENV="$TEST_ENV TMPDIR=$TEST_TMPDIR QORE_AOT_MEMORY_LEDGER_DIR=${QORE_AOT_MEMORY_LEDGER_DIR:-${TMPDIR:-/tmp}}"
         else
             echo "*** WARNING: no temporary directory of its own for the test: $TEST_EVENT_DIR/tmp ***"
         fi

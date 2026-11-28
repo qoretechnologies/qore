@@ -251,8 +251,7 @@ public class AzureDocumentIntelligenceAnalyzeResponseDataType inherits HashDataT
             "pages": {
                 "display_name": "Pages",
                 "desc": "Per-page layout — each entry is an "
-                    "@ref AzureDocumentIntelligenceDataProvider::AzureDocIntelPageDataType "
-                    "\"AzureDocIntelPage\" with lines, words, selection marks, "
+                    "`AzureDocIntelPage` with lines, words, selection marks, "
                     "spans, and page dimensions.",
                 "type": new ListDataType("AzureDocIntelPageList",
                     new AzureDocIntelPageDataType(), True),
@@ -276,8 +275,7 @@ public class AzureDocumentIntelligenceAnalyzeResponseDataType inherits HashDataT
                 "display_name": "Documents",
                 "desc": "Typed-entity documents (with prebuilt-invoice / "
                     "receipt / idDocument / W-2 / etc.) — each entry is an "
-                    "@ref AzureDocumentIntelligenceDataProvider::AzureDocIntelDocumentDataType "
-                    "\"AzureDocIntelDocument\" with `docType`, `fields`, and "
+                    "`AzureDocIntelDocument` with `docType`, `fields`, and "
                     "`confidence`.",
                 "type": new ListDataType("AzureDocIntelDocumentList",
                     new AzureDocIntelDocumentDataType(), True),

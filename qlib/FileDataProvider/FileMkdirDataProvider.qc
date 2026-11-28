@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileMkdirDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileMkdirDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,7 +75,9 @@ public class FileMkdirDataProvider inherits FileDataProviderBase {
         }
         checkReadOnly("mkdir");
 
-        mkdir(req.path, req.mode, True);
+        # the directories created must be under the root directory, also if the path changes after it was checked
+        # (qore#7821)
+        runConfined(sub () { mkdir(req.path, req.mode, True); });
         return {
             "path": req.path,
         };

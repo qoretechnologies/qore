@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileMoveDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** FileMoveDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,8 +81,10 @@ public class FileMoveDataProvider inherits FileDataProviderBase {
         }
         checkReadOnly("move");
 
+        # the source and the target must be under the root directory, also if the paths change after they were
+        # checked (qore#7821)
         return {
-            "target": move_path(req.source, req.target, req.overwrite),
+            "target": runConfined(string sub () { return move_path(req.source, req.target, req.overwrite); }),
         };
     }
 

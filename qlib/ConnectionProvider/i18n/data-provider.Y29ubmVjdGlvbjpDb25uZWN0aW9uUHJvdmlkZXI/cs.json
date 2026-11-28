@@ -12,16 +12,16 @@
           "message": "Připojení k souborovému systému"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Nepoznačí připojení jako nedostupné, pokud je umístění souborového systému jen pro čtení; použijte například, pokud má být připojení směrováno na adresář jen pro čtení; adresáře rozhraní by měly být obvykle zapisovatelné"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Neoznačí připojení jako nedostupné, pokud je umístění v souborovém systému jen pro čtení, a nastaví poskytovatele dat, které připojení vrací, jen pro čtení: nemohou v umístění vytvářet, mazat, přesouvat, kopírovat do něj ani vytvářet adresáře; použijte například tehdy, když má připojení ukazovat na základní adresář jen pro čtení; adresáře rozhraní by obvykle měly být zapisovatelné"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "Pouze pro čtení"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Nastaví příznak jen pro čtení na připojení"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Nastaví připojení a jeho poskytovatele dat jen pro čtení"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

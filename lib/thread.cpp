@@ -962,6 +962,24 @@ public:
     // own manager, so re-entering sandboxed code (a callback) stays sandboxed.
     unsigned sandbox_policy_barrier = 0;
 
+    //! a file-system confinement of a call on this thread (qore#7821)
+    struct FsConfinement {
+        //! the manager whose file-system policy allows only the directory of the call (referenced)
+        QoreSandboxManager* sm;
+        //! the policy barriers, trusted policy boundaries and module initialization barriers when it was pushed
+        unsigned policy_barriers;
+        unsigned trusted_policy_depth;
+        size_t module_init_barriers;
+    };
+    //! the file-system confinements of the calls on this thread, innermost last (qore#7821)
+    /** Pushed by SandboxManager::callWithFilesystemRoot().  Policy resolution
+        (qore_find_thread_sandbox_policy_manager_ref()) combines each one with the managers that govern the code, but
+        not under a policy barrier, a system-policy capability or a module initialization barrier established inside
+        its call: the code that pushed it does not decide the policy of the trusted code that it calls through them.
+        They are not captured for the work of other threads
+    */
+    std::vector<FsConfinement> fs_confinements;
+
     // the program context helper that was current when each active policy barrier was pushed, innermost last;
     // POLICY resolution under a barrier still walks the caller Programs entered after the innermost barrier was
     // pushed and stops at this helper.  So a callback that re-enters a sandboxed Program inside the barrier
@@ -10067,7 +10085,50 @@ const QoreProgram* qore_reflection_get_module_application_program(const QoreProg
 }
 
 QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref() {
-    return find_thread_sandbox_manager_ref_intern(nullptr, true);
+    ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
+    ThreadData* td = thread_data.get();
+    if (!td || td->fs_confinements.empty()) {
+        return base.release();
+    }
+    // the confinements of the calls on the thread restrict every policy check made in them (qore#7821), except under
+    // a barrier established inside the call (see ThreadData::fs_confinements)
+    std::vector<QoreSandboxManager*> managers;
+    managers.reserve(td->fs_confinements.size() + 1);
+    managers.push_back(base.operator->());
+    for (const ThreadData::FsConfinement& c : td->fs_confinements) {
+        if (c.policy_barriers == td->sandbox_policy_barrier && c.trusted_policy_depth == td->trusted_policy_depth
+                && c.module_init_barriers == td->module_init_barriers.size()) {
+            managers.push_back(c.sm);
+        }
+    }
+    if (managers.size() == 1) {
+        return base.release();
+    }
+    return QoreSandboxComposition::combine(managers);
+}
+
+int qore_push_fs_confinement(QoreSandboxManager* sm) {
+    assert(sm);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return -1;
+    }
+    try {
+        td->fs_confinements.push_back({sm, td->sandbox_policy_barrier, td->trusted_policy_depth,
+            td->module_init_barriers.size()});
+    } catch (std::bad_alloc&) {
+        return -1;
+    }
+    sm->ref();
+    return 0;
+}
+
+void qore_pop_fs_confinement() {
+    ThreadData* td = thread_data.get();
+    assert(td && !td->fs_confinements.empty());
+    QoreSandboxManager* sm = td->fs_confinements.back().sm;
+    td->fs_confinements.pop_back();
+    sm->deref(nullptr);
 }
 
 int qore_push_sandbox_policy_barrier() {
@@ -13471,6 +13532,8 @@ private:
                     abort();
                 }
                 qore_counter_ops(thread_counter).dec();
+                // a thread has ended and its resources are free: a callback worker may start again (qore#7834)
+                qore_async_io_worker_start_possible();
                 lock.lock();
                 if (afterJoinLocked()) {
                     return;
@@ -13496,6 +13559,8 @@ private:
             }
             arg.reset();
             qore_counter_ops(tp_thread_counter).dec();
+            // a thread has ended and its resources are free: a callback worker may start again (qore#7834)
+            qore_async_io_worker_start_possible();
             lock.lock();
             if (afterJoinLocked()) {
                 return;

@@ -126,7 +126,20 @@ QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len
         return nullptr;
     }
 
-    std::unique_ptr<QoreMLPipeline> p(new QoreMLPipeline);
+    // the state must satisfy the invariants that fitMatrix() establishes (qore#7844): only a fitted pipeline is
+    // serialized, and fitMatrix() fits only a pipeline with steps; each step is written as its name, its algorithm
+    // and the length of its state, each with a 32-bit length, followed by its state
+    using namespace MLSerialization;
+    if (!fitted_) {
+        stateError(xsink, "MLPipeline", "the pipeline must be fitted");
+        return nullptr;
+    }
+    if (checkRange(nsteps, 1, remaining / (3 * sizeof(uint32_t)), "MLPipeline", "the number of steps", xsink)) {
+        return nullptr;
+    }
+
+    // a refused step releases the pipeline with the steps restored before it
+    ReferenceHolder<QoreMLPipeline> p(new QoreMLPipeline, xsink);
     QoreProgram* pgm = getProgram();
     for (uint32_t i = 0; i < nsteps; ++i) {
         std::string step_name = MLSerialization::readString(ptr, remaining, xsink);
@@ -167,6 +180,12 @@ QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len
         }
         AbstractPrivateData* priv = deserializer(ptr, state_len, xsink);
         if (*xsink || !priv) {
+            if (priv) {
+                priv->deref(xsink);
+            }
+            if (!*xsink) {
+                stateError(xsink, "MLPipeline", "the state of step '%s' was not restored", step_name.c_str());
+            }
             return nullptr;
         }
         ptr += state_len;
@@ -182,6 +201,9 @@ QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len
         if (*xsink) {
             return nullptr;
         }
+    }
+    if (checkEnd(remaining, "MLPipeline", xsink)) {
+        return nullptr;
     }
     p->fitted = fitted_;
     return p.release();

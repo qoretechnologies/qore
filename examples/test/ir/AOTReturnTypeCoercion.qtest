@@ -20,6 +20,16 @@ sub test_exit(int rc) {
     exit(rc);
 }
 
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
+}
+
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -478,8 +488,8 @@ if (!is_file(aot_path)) {
     test_exit(2);
 }
 
-string aot_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, aot_path));
+string aot_output = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, aot_path));
 if (aot_output != expected) {
     printf("AOT mismatch:\nexpected:\n%sactual:\n%s",
         expected, aot_output);
@@ -522,8 +532,8 @@ if (!is_file(exact_aot_path)) {
     test_exit(2);
 }
 
-string exact_output = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exact_aot_path));
+string exact_output = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, exact_aot_path));
 if (exact_output != "42:ok\n") {
     printf("exact-return AOT mismatch:\n%s", exact_output);
     test_exit(2);

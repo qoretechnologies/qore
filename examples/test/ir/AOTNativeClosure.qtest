@@ -1,9 +1,11 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -14,6 +16,16 @@ TmpDir tmp("qore-aot-native-closure-");
 sub test_exit(int rc) {
     remove_tree(tmp.path);
     exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
 }
 
 string qore_bin = TestInterpreter::qore_interpreter();
@@ -272,9 +284,10 @@ string fallback_only_exe_path = exe_path + "-fallback-only";
     source.write(sourceCode());
 }
 
-string ast_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+# the AST runs that the executables' output is compared with run the same way
+string ast_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
     libqore_dir, qore_bin, source_path));
-string ast_eh_out = backquote(sprintf("QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+string ast_eh_out = run_executable(sprintf("QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
     libqore_dir, qore_bin, source_path));
 string compile_out = backquote(sprintf(
     "QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
@@ -299,32 +312,32 @@ if (!(compile_out =~ /compiled native closure/)) {
     test_exit(2);
 }
 
-string native_out = backquote(sprintf(
-    "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-string native_eh_out = backquote(sprintf(
-    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-string fallback_out = backquote(sprintf(
-    "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-string fallback_eh_out = backquote(sprintf(
-    "QORE_TEST_AOT_CLOSURE_EH=1 QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1",
+string native_out = run_executable(sprintf(
+    "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
+string native_eh_out = run_executable(sprintf(
+    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
+string fallback_out = run_executable(sprintf(
+    "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
+string fallback_eh_out = run_executable(sprintf(
+    "QORE_TEST_AOT_CLOSURE_EH=1 QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s",
     libqore_dir, exe_path));
-string disabled_out = backquote(sprintf(
+string disabled_out = run_executable(sprintf(
     "QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY=1 "
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
-    "LD_LIBRARY_PATH=%s %s 2>&1",
+    "LD_LIBRARY_PATH=%s %s",
     libqore_dir, disabled_exe_path));
-string disabled_eh_out = backquote(sprintf(
+string disabled_eh_out = run_executable(sprintf(
     "QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY=1 "
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
-    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1",
+    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s",
     libqore_dir, disabled_exe_path));
-string fallback_only_out = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, fallback_only_exe_path));
-string eager_fallback_out = backquote(sprintf(
+string fallback_only_out = run_executable(sprintf(
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, fallback_only_exe_path));
+string eager_fallback_out = run_executable(sprintf(
     "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1 "
-    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+    "LD_LIBRARY_PATH=%s %s", libqore_dir, exe_path));
 string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:10:71:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3:2080\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || eager_fallback_out != expected || fallback_only_out != expected

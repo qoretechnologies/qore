@@ -126,6 +126,12 @@
   same port number.  A test that needs the name `localhost` (a TLS host name check, an origin that must differ from
   `127.0.0.1`, a fallback from `::1`) listens on both loopback addresses, or holds the port on `::1`, and declares
   `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
+- A test runs a qcc executable through `ExecModeHarness::run_command()` (the ir tests through a `run_executable()`
+  helper), never with `2>&1`, and checks its stdout and stderr apart from the module loader's warnings, which a stale
+  AOT module puts on stderr; a qore run that the executable's output is compared with goes through it too.
+  `examples/test/runner/test_qcc_executable_output.py` enforces it, with an allow-list of the runs that a warning
+  cannot fail and lists of the tests still to convert, which may only shrink; it also reads commands built by
+  concatenation or in a variable (#7799, #7805, #7818).
 - A CI job runs all of its test suites, also when an earlier one fails, and ends with one summary of every failing
   suite and of its failing tests: the CI scripts run each suite with `qore_ci_suite` and end with
   `qore_ci_suites_summary` (`examples/test/docker_test/ci-suites.sh`; `examples/test/runner/test_ci_suites.py`
@@ -137,6 +143,11 @@
   `examples/test/docker_test/check-build-warnings.py`: it exits with 3, which the job allows, so a pipeline with
   warnings passes with a warning (an orange job) and the warnings are fixed in the next batch; keep the build free of
   them (qore#7757).
+- `run_tests.sh` gives each test a `TMPDIR` of its own and reports what the test leaves there (`QORE_TEST_TMP_LEAKS`:
+  `report` by default, `fail` in CI, `off` for the run's shared `TMPDIR`).  A test removes what it creates (use
+  `TmpDir`/`make_tmp_dir()`), and makes UNIX sockets under `TestSocketDir` (`examples/test/TestSocketDir.qm`), whose
+  short directory keeps socket paths within 104 bytes on macOS.  A test that still leaks is listed in
+  `examples/test/runner/tmp-leak-known.txt` until it is fixed (qore#7817, qore#7823).
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 - The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the

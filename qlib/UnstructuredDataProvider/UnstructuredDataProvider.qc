@@ -647,8 +647,7 @@ public class UnstructuredElementDataType inherits HashDataType {
                 "display_name": "Metadata",
                 "short_desc": "Per-element metadata",
                 "desc": "Per-element metadata; see "
-                    "@ref UnstructuredDataProvider::UnstructuredElementMetadataDataType "
-                    "\"UnstructuredElementMetadataDataType\".",
+                    "`UnstructuredElementMetadataDataType`.",
                 "type": new UnstructuredElementMetadataDataType(),
             },
         };

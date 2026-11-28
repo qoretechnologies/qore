@@ -3,7 +3,7 @@
 # A data provider module whose vendored schemas are built with LazySharedValue still loads in a sandboxed Program that
 # loads it by its path from the module path: it is library code there, and its values are process-shared; a copy of
 # its own outside the module path is refused when it registers its factory in the process-wide catalog (qore#7684);
-# see lazy-shared-values.qtest
+# see LazySharedValuesTest.qc
 
 %modern
 %enable-all-warnings

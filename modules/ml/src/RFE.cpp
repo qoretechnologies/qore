@@ -229,22 +229,41 @@ QoreRFE* QoreRFE::deserializeState(const uint8_t* data, size_t len,
     if (*xsink) { return nullptr; }
     int ns = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nsup = MLSerialization::readInt32(ptr, remaining, xsink);
+    // the support mask and the ranking are each written as a 32-bit count and one 32-bit value per feature
+    std::vector<int> sup_flags = MLSerialization::readIntVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<bool> sup(nsup);
-    for (int i = 0; i < nsup; ++i) {
-        sup[i] = MLSerialization::readInt32(ptr, remaining, xsink) != 0;
-        if (*xsink) { return nullptr; }
-    }
-    int nrank = MLSerialization::readInt32(ptr, remaining, xsink);
+    std::vector<int> rnk = MLSerialization::readIntVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<int> rnk(nrank);
-    for (int i = 0; i < nrank; ++i) {
-        rnk[i] = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return nullptr; }
-    }
     auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "RFE", xsink)
+        || checkRange(nfts, 1, INT32_MAX, "RFE", "n_features_to_select", xsink)
+        || checkRange(st, 1, INT32_MAX, "RFE", "step", xsink)
+        || checkRange(nf, 1, INT32_MAX, "RFE", "the number of features", xsink)
+        || checkSize(sup_flags.size(), nf, "RFE", "the size of the support mask", xsink)
+        || checkSize(rnk.size(), nf, "RFE", "the size of the ranking", xsink)) {
+        return nullptr;
+    }
+    std::vector<bool> sup(nf);
+    int n_supported = 0;
+    for (int i = 0; i < nf; ++i) {
+        if (checkRange(sup_flags[i], 0, 1, "RFE", "a support flag", xsink)
+            // a selected feature has rank 1, a feature eliminated in elimination round r has rank r + 1
+            || (sup_flags[i] ? checkSize(rnk[i], 1, "RFE", "the rank of a selected feature", xsink)
+                : checkRange(rnk[i], 2, nf, "RFE", "the rank of an eliminated feature", xsink))) {
+            return nullptr;
+        }
+        sup[i] = sup_flags[i] != 0;
+        n_supported += sup_flags[i];
+    }
+    // fit() eliminates features until n_features_to_select remain, or keeps all features if there are fewer
+    if (checkSize(n_supported, std::min(nfts, nf), "RFE", "the number of supported features", xsink)
+        || checkSize(ns, n_supported, "RFE", "the number of selected features", xsink)) {
+        return nullptr;
+    }
 
     auto* rfe = new QoreRFE(nfts, st);
     rfe->n_features = nf;

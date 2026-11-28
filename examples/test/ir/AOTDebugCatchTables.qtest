@@ -19,6 +19,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
 %exec-class AOTDebugCatchTablesTest
 
 class AOTDebugCatchTablesTest inherits QUnit::Test {
@@ -106,11 +107,14 @@ background sub () {
 
     #! runs the command with the library of the build; returns its output, without the line of the step events
     private string run(string cmd, bool any_rc = False) {
-        int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", libqore_dir,
-            libqore_dir, libqore_dir, cmd), \rc);
+        # the command runs in its default environment; its output is the output on stdout followed by the output on
+        # stderr, apart from the warnings of the module loader, which are not output of the run (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s", libqore_dir, libqore_dir, libqore_dir, cmd), NOTHING,
+            "QORE_JIT_TIMING=1");
+        string out = r.out;
         if (!any_rc) {
-            assertEq(0, rc, cmd + ": " + out);
+            assertEq(0, r.rc, cmd + ": " + out);
         }
         # the step events are made only with the debugger: they are counted, not compared
         return (select out.split("\n"), $1 !~ /^STEPS:/).join("\n");

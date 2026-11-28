@@ -1,0 +1,282 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child qore processes started without an execution mode
+# test-platform: macos - threads: the start of the AsyncIoController's callback workers fails, and starts again when a thread has been joined
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoCallbackWorkerStartFailureTest
+
+#! A callback queued when no callback worker can be started runs once one can start (qore#7834)
+/** When every callback worker is busy, the dispatcher starts a new one; if the start failed (a thread or stack
+    limit), the exception was printed as an unhandled exception in the thread that queued the work, and with no worker
+    running, nothing ran the work until a later item started a worker, which on an idle controller may never happen.
+    Now the failure is logged (with the async I/O logger, or else on the standard error output), and the work stays
+    queued: with a worker running, the worker takes it when it is free; with none, a worker is started for it when one
+    may start again: by the next item queued, or, in the controller's I/O thread, when a thread has ended (and been
+    joined) or the default thread stack size has changed.  Work that still waits when the controller stops is released
+    by the stop, and the process ends normally; a callback item records its Program, so the Program's end releases it
+    while the Program exists, and the destructors of the objects that it holds run (qore#7842).
+
+    The starts are made to fail with dbg_async_io_fail_callback_worker_starts() (debug builds), so that no start
+    succeeds before the case allows it.  Each case runs a child process, whose callback workers are only those it
+    starts.
+*/
+class AsyncIoCallbackWorkerStartFailureTest inherits QUnit::Test {
+    private {
+        const ChildScript = "%%modern
+%%prepend-module-path \"%s\"
+%%requires Logger
+
+# the warnings and errors of the async I/O controller
+class CapturingLogger inherits LoggerInterfaceBase {
+    private {
+        Queue q;
+    }
+    constructor(Queue q) {
+        self.q = q;
+    }
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        q.push(sprintf(\"%%s: %%s\", level >= LoggerLevel::ERROR ? \"ERROR\" : \"WARN\", vsprintf(message, format_args)));
+    }
+    bool isEnabledFor(int level) {
+        return level >= LoggerLevel::WARN;
+    }
+}
+
+# makes callback worker starts fail (a debug build's test hook, guarded by the child's own code; the test is skipped
+# in a release build)
+sub fail_starts(int count, bool enqueue_only = False, int after = 0) {
+    Option::HAVE_LIBRARY_DEBUGGING
+        ? call_function(\"dbg_async_io_fail_callback_worker_starts\", count, enqueue_only, after) : NOTHING;
+}
+
+# held by a callback: its destructor runs when the callback is released
+class ReleaseSignal {
+    destructor() {
+        print(\"released\\n\");
+    }
+    touch() {
+    }
+}
+
+code sub make_cb(Queue q, string label) {
+    ReleaseSignal sig();
+    return sub () { sig.touch(); q.push(label); };
+}
+
+# the first item that waits can be the release of references that a callback had, before the callback itself
+const NoWorker = \"no callback worker runs, and none could be started; the callback\";
+const Busy = \"a callback worker could not be started; the callback (type=callback owner=-) is queued for the \"
+    \"workers running\";
+
+# the start of the message that the logger got for a callback item (the release of references that a callback had can
+# wait before), if it is the given one
+string sub logged(Queue log_q, string msg) {
+    while (True) {
+        string m = log_q.get(60s);
+        if (m.find(\"(type=callback \") < 0) {
+            continue;
+        }
+        return m.find(msg) >= 0 ? m.substr(0, m.find(msg) + msg.size()) : m;
+    }
+}
+
+sub main() {
+    string mode = ARGV[0];
+    bool logger = (mode !~ /^stderr/);
+    Queue log_q();
+    if (logger) {
+        AsyncIoController::setLogger(new CapturingLogger(log_q));
+    }
+    Queue q();
+    if (mode == \"busy\") {
+        # a worker runs a callback, and a second one cannot be started for the next callback: the first start
+        # succeeds and every later one fails, so the worker that runs the first callback is the only one (a release
+        # item queued meanwhile cannot start another, which would take the second callback without a start)
+        Queue started();
+        Queue gate();
+        # the first callback is let go on every path, so that no thread waits at the end of the process
+        on_exit gate.push(1);
+        fail_starts(1000, False, 1);
+        AsyncIoController::addTimerDelay(0s, sub () {
+            started.push(1);
+            try {
+                gate.get(60s);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            q.push(\"first\");
+        });
+        started.get(60s);
+        AsyncIoController::addTimerDelay(0s, sub () { q.push(\"second\"); });
+        printf(\"log: %%s\\n\", logged(log_q, Busy));
+        fail_starts(0);
+        gate.push(1);
+        # the second can run first: a later item queued can start a worker for it
+        printf(\"ran: %%y\\n\", sort((q.get(60s), q.get(60s))));
+    } else {
+        # no callback worker runs, and none can be started until the case allows it; for the events that a worker may
+        # start again, only the starts made when work is queued fail, so that only the event starts one
+        bool event = (mode == \"thread-end\" || mode == \"stderr-thread-end\" || mode == \"stack-size\");
+        fail_starts(1000, event);
+        AsyncIoController::addTimerDelay(0s, mode == \"shutdown-destructor\" ? make_cb(q, \"first\")
+            : sub () { q.push(\"first\"); });
+        if (logger) {
+            printf(\"log: %%s\\n\", logged(log_q, NoWorker));
+        }
+        printf(\"waiting: %%d\\n\", q.size());
+        switch (mode) {
+            case \"thread-end\":
+            case \"stderr-thread-end\":
+                # a thread ends: the controller's I/O thread starts a worker
+                Queue tq();
+                background tq.push(1);
+                tq.get(60s);
+                printf(\"after a thread ended: %%s\\n\", q.get(60s));
+                break;
+            case \"stack-size\":
+                # the default thread stack size changes: the controller's I/O thread starts a worker
+                set_default_thread_stack_size(get_default_thread_stack_size());
+                printf(\"after the stack size changed: %%s\\n\", q.get(60s));
+                break;
+            case \"next\":
+                # the next item queued starts a worker, which runs both
+                fail_starts(0);
+                AsyncIoController::addTimerDelay(0s, sub () { q.push(\"second\"); });
+                printf(\"after the next callback: %%y\\n\", sort((q.get(60s), q.get(60s))));
+                break;
+            case \"shutdown\":
+            case \"shutdown-destructor\":
+                # the callback still waits when the controller stops at the end of the process: the stop releases it;
+                # the Program of the callback releases it when it ends, so the destructors of the objects that it holds
+                # run in the Program (qore#7842)
+                print(\"ending\\n\");
+                break;
+        }
+    }
+    if (mode !~ /^shutdown/) {
+        fail_starts(0);
+        if (logger) {
+            AsyncIoController::setLogger();
+        }
+    }
+    print(\"done\\n\");
+}
+main();
+";
+    }
+
+    public {
+        TmpDir tmp;
+        string script;
+        string qore_bin;
+    }
+
+    constructor() : Test("AsyncIoCallbackWorkerStartFailureTest", "1.0") {
+        tmp = new TmpDir("asyncio-cb-worker-start-");
+        script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ChildScript, realpath(get_script_dir() + "/../../../../../qlib")));
+        f.close();
+        qore_bin = TestInterpreter::qore_interpreter();
+
+        addTestCase("no worker can start: the callback waits, and runs when a thread has ended", \testThreadEnd());
+        addTestCase("no worker can start: the callback runs when the default thread stack size changes",
+            \testStackSize());
+        addTestCase("no worker can start: the next callback queued starts a worker, which runs both", \testNext());
+        addTestCase("no worker can start, no logger: the failure is reported on stderr", \testStderr());
+        addTestCase("a worker runs: the callback is queued for it and runs; the failed start is logged", \testBusy());
+        addTestCase("the callback that waits when the controller stops is released by the stop", \testShutdown());
+        addTestCase("the callback that waits when its Program ends is released in the Program", \testShutdownDestructor());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("fail_starts() is only in a debug build of the library");
+        }
+    }
+
+    #! Runs the child script in the given mode; returns its standard output and error output
+    private hash<auto> run(string mode) {
+        string err_file = sprintf("%s/%s.err", tmp.path, mode);
+        int rc;
+        string out = backquote(sprintf("%s %s %s 2>%s", qore_bin, script, mode, err_file), \rc);
+        # the lines of a tool that runs the child (valgrind with --trace-children) are not the child's
+        string err = ReadOnlyFile::readTextFile(err_file);
+        err = (foldl $1 + $2, (select err.split("\n", True), $1 !~ /^==[0-9]+==/)) ?? "";
+        hash<auto> rv = {
+            "out": out,
+            "err": err,
+        };
+        assertEq(0, rc, sprintf("%s: exit status (%y)", mode, rv));
+        # the failed start is handled: it is never printed as an unhandled exception
+        assertEq(-1, rv.err.find("unhandled"), sprintf("%s: no unhandled exception: %y", mode, rv.err));
+        return rv;
+    }
+
+    #! the output of a case in which the callback waits for a worker, with a logger
+    private string waited(string rest) {
+        return "log: ERROR: AsyncIoController: no callback worker runs, and none could be started; the callback\n"
+            "waiting: 0\n" + rest + "done\n";
+    }
+
+    testThreadEnd() {
+        hash<auto> rv = run("thread-end");
+        assertEq(waited("after a thread ended: first\n"), rv.out);
+        assertEq(-1, rv.err.find("AsyncIoController"),
+            sprintf("with a logger, nothing is reported on stderr: %y", rv.err));
+    }
+
+    testStackSize() {
+        hash<auto> rv = run("stack-size");
+        assertEq(waited("after the stack size changed: first\n"), rv.out);
+        assertEq(-1, rv.err.find("AsyncIoController"),
+            sprintf("with a logger, nothing is reported on stderr: %y", rv.err));
+    }
+
+    testNext() {
+        hash<auto> rv = run("next");
+        assertEq(waited("after the next callback: [\"first\", \"second\"]\n"), rv.out);
+        assertEq(-1, rv.err.find("AsyncIoController"),
+            sprintf("with a logger, nothing is reported on stderr: %y", rv.err));
+    }
+
+    testStderr() {
+        hash<auto> rv = run("stderr-thread-end");
+        assertEq("waiting: 0\nafter a thread ended: first\ndone\n", rv.out);
+        assertRegex("(^|\n)AsyncIoController: no callback worker runs, and none could be started; the callback "
+            "\\(type=[a-z ]+ owner=-\\) waits until one can start: THREAD-CREATION-FAILURE: ", rv.err,
+            "the failure is reported on stderr");
+    }
+
+    testBusy() {
+        hash<auto> rv = run("busy");
+        assertEq("log: WARN: AsyncIoController: a callback worker could not be started; the callback "
+            "(type=callback owner=-) is queued for the workers running\nran: [\"first\", \"second\"]\ndone\n", rv.out);
+        assertEq(-1, rv.err.find("AsyncIoController"),
+            sprintf("with a logger, nothing is reported on stderr: %y", rv.err));
+    }
+
+    testShutdown() {
+        hash<auto> rv = run("shutdown");
+        # the process ends normally (run() checks the exit status and that nothing is unhandled): the stop releases the
+        # callback that waits, which is never run
+        assertEq(waited("ending\n"), rv.out);
+    }
+
+    #! a callback item records its Program, whose end releases it while the Program exists: the destructor of an object
+    #! that the callback holds runs, instead of failing with PROGRAM-ERROR after the Program was deleted (qore#7842)
+    testShutdownDestructor() {
+        hash<auto> rv = run("shutdown-destructor");
+        assertEq(waited("ending\n") + "released\n", rv.out);
+        assertEq(-1, rv.err.find("PROGRAM-ERROR"), sprintf("no PROGRAM-ERROR: %y", rv.err));
+    }
+}

@@ -456,7 +456,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         *hash<SocketPollInfo> info = continuePoll();
         if (info) {
-            mgr.getController().submit(<SocketPollOperationInfo>{
+            mgr.submitPollOperation(<SocketPollOperationInfo>{
                 "sock": info.socket,
                 "spop": self,
                 # the operation raises its own timeout errors first; a negative value means no timeout
@@ -609,7 +609,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     checkDeadline();
                     self_signaled = False;
                     string origin = rf.getOrigin();
-                    *EventNotifier notifier = mgr.acquireConnectionAsync(origin, \tracked);
+                    *EventNotifier notifier = HttpClientIoSocketAccess::acquireConnectionAsync(mgr, origin, \tracked);
                     if (!notifier && tracked && HttpClientRequestPollOperation::failed(tracked)
                         && !mgr.isUnresolvedRaceLeg(tracked)) {
                         # the connection closed synchronously; the next step counts the failure
@@ -634,8 +634,8 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                         stream.setRequestDeadline(getDeadlineUs());
                         # the cookie jar supplies the cookies for each target
                         # the body is decoded unless the stream is handed over
-                        stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,
-                            \auth_state, !opts.keep_stream), opts.body_streaming, rf.getBody(), io_notifier);
+                        stream.startStreaming(rf.getMethod(), target, HttpClientIoSocketAccess::prepareRequestHeaders(mgr, rf,
+                            auth, \auth_state, !opts.keep_stream), opts.body_streaming, rf.getBody(), io_notifier);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "HTTPCLIENT-NOT-READY") {
                             # the connection reported itself ready and refused the request; retry the acquisition
@@ -742,9 +742,10 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         response.processed = True;
         # cookies set by a response are stored before a redirect is followed
-        mgr.storeStateCookies(auth_state, rf, response.headers);
+        HttpClientIoSocketAccess::storeStateCookies(mgr, auth_state, rf, response.headers);
         # an authentication challenge is answered once for each request; the body of the response is discarded
-        if (mgr.processAuthChallenge(response.status_code, response.headers, auth, \auth_state)) {
+        if (HttpClientIoSocketAccess::processAuthChallenge(mgr, response.status_code, response.headers, auth,
+                \auth_state)) {
             redirecting = True;
             auth_retry = True;
             body_chunks = ();
@@ -954,7 +955,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         # a proxy authentication challenge of a CONNECT request is answered once with a new connection
         if (!proxy_connect_answered
-                && mgr.processProxyConnectFailure(rf.getOrigin(), err)) {
+                && HttpClientIoSocketAccess::processProxyConnectFailure(mgr, rf.getOrigin(), err)) {
             proxy_connect_answered = True;
             return;
         }

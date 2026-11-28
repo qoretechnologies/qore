@@ -671,7 +671,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # worst-case benign race produces two serial cleanups.
         last_cleanup_mono_us = now_mono_us;
         try {
-            cleanupIdleConnections();
+            cleanupIdleConnectionsIntern();
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "cleanupIdleConnections error: %s: %s",
                 ex.err, ex.desc);
@@ -734,15 +734,45 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Destructor - closes all connections
     destructor() {
         try {
-            closeAll();
+            closeAllIntern();
         } catch () {
             # Destructors must not propagate exceptions
         }
     }
 
     #! Returns the AsyncSocketIoController
+    /** The controller is shared by every caller of the manager, and its methods cancel the operations of any of them,
+        so it is given only to code that no sandbox restricts or that owns the manager (qore#7828); code that only
+        needs to run a poll operation of its own uses @ref submitPollOperation()
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
     AsyncSocketIo::AsyncSocketIoController getController() {
+        checkStateCaller();
         return controller;
+    }
+
+    #! Submits a poll operation to the manager's async I/O controller
+    /** The operation runs on the I/O thread of the manager, as the requests of its callers do; the caller gets no
+        handle on the controller, so it cannot cancel the operations of other callers.  Open to every caller (qore#7828)
+
+        @param info the operation, as for @ref AsyncSocketIo::AsyncSocketIoController::submit(); an operation does not
+        replace another, and its owner and key may not begin with \c "HttpClientConnectionManager:", the names of the
+        owners and the keys of the connections of the managers
+
+        @return the queue that receives the result of the operation, if the operation asks for one
+
+        @throw PERMISSION-DENIED the owner or the key of the operation is one of a connection manager: the manager waits
+        for the callbacks of its own owner when it closes its connections, so another operation must not have it
+
+        @since HttpClientIo 1.0
+    */
+    *object<Queue<hash<SocketPollResultInfo>>> submitPollOperation(hash<SocketPollOperationInfo> info) {
+        if (info.owner =~ /^HttpClientConnectionManager:/ || info.key =~ /^HttpClientConnectionManager:/) {
+            throw "PERMISSION-DENIED", "the owner and the key of an operation that is submitted to the I/O controller of "
+                "a connection manager may not be those of a connection manager";
+        }
+        return controller.submit(info);
     }
 
     #! Returns the in-memory trust store that server certificates are verified against, if any
@@ -757,7 +787,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns the cookie jar (NOTHING if cookies are disabled)
     /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
     */
-    *CookieJar getCookieJar() {
+    *CookieJar getCookieJar(*HttpClientCreatorProof proof) {
+        checkStateCaller("take the cookie jar of", proof);
         return cookie_jar;
     }
 
@@ -896,6 +927,99 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         *int caller = SandboxManager::getCallerProgramId();
         if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
             throw "PERMISSION-DENIED", "code that a sandbox restricts cannot lease or release a connection of a "
+                "connection manager that it does not own";
+        }
+    }
+
+    #! Raises an exception if restricted code that does not own the manager changes the state of its connections (qore#7828)
+    /** The connections, the races and the I/O controller of a manager serve the requests of every caller of it:
+        restricted code that does not own the manager may not close them, clean them up, migrate them, tear down a race of
+        another caller or take the controller, which would fail the requests of the other callers (see
+        checkAcquireCaller()).  Read-only information (getConnectionInfo(), getStats()) stays open.
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkStateCaller(string what = "change the state of the connections of",
+                                      *HttpClientCreatorProof proof) {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        # the proof that the host's connection or client holds is given by the module code that creates and watches the
+        # client for the code that the connection is lent to; that code cannot take it, and a proof is the host's only
+        # if its owner is the manager's (qore#7262)
+        if (proof && exists owner_pgm_id && HttpClientCreatorProof::genuine(proof)
+            && proof.getOwnerProgramId() == owner_pgm_id) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", sprintf("code that a sandbox restricts cannot %s a connection manager that it does "
+                "not own", what);
+        }
+    }
+
+    #! Raises an exception if the cookie jar is the manager's own and the calling code is restricted and does not own the manager
+    /** A client that shares the cookie jar of its manager (see
+        @ref RestClientIo::RestClientIo::getCookieJar() "RestClientIo::getCookieJar()") asks before it gives the jar to
+        its caller; a jar of another kind is not checked
+
+        @param jar the cookie jar
+
+        @throw PERMISSION-DENIED the jar is the manager's, and the calling code is restricted by a sandbox and does
+        not own the manager (qore#7837)
+
+        @since HttpClientIo 1.0
+    */
+    checkCookieJar(*CookieJar jar) {
+        if (isOwnJar(jar)) {
+            checkStateCaller("take the cookie jar of");
+        }
+    }
+
+    #! Returns @ref True if the cookie jar is the manager's own, which holds the cookies of the host (qore#7837)
+    private:internal bool isOwnJar(*CookieJar jar) {
+        return jar && cookie_jar && jar.uniqueHash() == cookie_jar.uniqueHash();
+    }
+
+    #! Raises an exception if restricted code that does not own the manager uses its secrets for a request (qore#7837)
+    /** The cookies of the manager's jar and the credentials of its proxy are sent for the requests of every caller; the
+        headers that prepareRequestHeaders() returns give them to the code that calls it, so code that a sandbox
+        restricts and that does not own the manager is refused when the request uses them
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkRequestSecretCaller(hash<auto> auth_state) {
+        if (proxy_auth || ((auth_state.cookies ?? True) && isOwnJar(auth_state.cookie_jar ?? cookie_jar))) {
+            checkStateCaller("use the cookies and the proxy credentials of");
+        }
+    }
+
+    #! Raises an exception if restricted code that does not own the manager asks for a pooled connection (qore#7813)
+    /** A pooled connection serves the requests of every caller of the manager: restricted code that does not own the
+        manager is not given it, as it could close it or lease it while a request of the host uses it (see
+        checkLeaseCaller())
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkAcquireCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot acquire a pooled connection of a "
                 "connection manager that it does not own";
         }
     }
@@ -1048,7 +1172,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @since HttpClientIo 1.0
     */
-    setFirstConnectionCallback(*code<nothing()> cb) {
+    setFirstConnectionCallback(*code<nothing()> cb, *HttpClientCreatorProof proof) {
+        checkStateCaller("set the first connection callback of", proof);
         AutoLock al(first_connection_lock);
         first_connection_callback = cb;
     }
@@ -1085,8 +1210,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Delegate to the V2 cancelable non-blocking entry so pre-warm uses the
         # same real H3/H2 happy-eyeballs race as the connection-monitor ping op
         # (and shares its per-key race state).  Never blocks the caller.
+        # the connection is not given to the caller, so the check of acquireConnectionAsync() does not apply
         *HttpClientConnection conn_out;
-        return acquireConnectionAsync(url, \conn_out);
+        return acquireConnectionAsyncIntern(url, \conn_out);
     }
 
     #! Acquires a stream and starts streaming with automatic retry on stale connections
@@ -1301,7 +1427,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         in_flight.inc();
         on_exit in_flight.dec();
         # Inject cookies from jar into request headers; the response body is decoded by the Future
-        headers = addDefaultHeaders(addCookieHeaders(url, path, headers));
+        headers = addDefaultHeaders(addCookieHeadersIntern(url, path, headers));
 
         int retries = 0;
         int max_retries = opts.max_request_retries;
@@ -1526,14 +1652,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<auto> auth_state = newRequestState(options);
         while (True) {
             hash<auto> resp = requestIntern(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                prepareRequestHeaders(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
+                prepareRequestHeadersIntern(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
             string request_url = rf.getRequestUrl();
 
             # Process Set-Cookie before checking redirect
-            storeStateCookies(auth_state, rf, resp.headers);
+            storeStateCookiesIntern(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request
-            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+            if (processAuthChallengeIntern(resp.status_code, resp.headers, auth, \auth_state)) {
                 continue;
             }
 
@@ -1602,7 +1728,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         });
         while (True) {
             HttpClientStreamHandle sh = acquireAndStartStreaming(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                prepareRequestHeaders(rf, auth, \auth_state, o.decode), False, rf.getBody());
+                prepareRequestHeadersIntern(rf, auth, \auth_state, o.decode), False, rf.getBody());
             # the stream is cancelled if the response cannot be returned
             bool keep = False;
             on_exit if (!keep) {
@@ -1661,11 +1787,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 pending += d.typeCode() == NT_BINARY ? d : binary(d);
             }
             string request_url = rf.getRequestUrl();
-            storeStateCookies(auth_state, rf, resp.headers);
+            storeStateCookiesIntern(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request; the body of the challenge response is
             # discarded
-            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+            if (processAuthChallengeIntern(resp.status_code, resp.headers, auth, \auth_state)) {
                 continue;
             }
 
@@ -1730,7 +1856,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     #! Returns the authenticator for the credentials in the proxy URL, if any
     /** @since HttpClientIo 1.0
     */
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7830):
+        the authenticator gives the credentials of the proxy
+    */
     *HttpAuthenticator getProxyAuthenticator() {
+        checkStateCaller("take the proxy credentials of");
         return proxy_auth;
     }
 
@@ -1747,6 +1877,32 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     bool processProxyConnectFailure(string url, *hash<auto> err) {
+        checkStateCaller("change the proxy authentication of");
+        return processProxyConnectFailureIntern(url, err);
+    }
+
+    #! Processes the proxy challenge for the code of this module, which acts for the request that it makes (qore#7830)
+    /** The public method, processProxyConnectFailure(), refuses code that a sandbox restricts and that does not own the
+        manager, as it changes the state of the proxy authentication that all callers share.  Reserved for the code of
+        this module (see HttpClientIoSocketAccess::processProxyConnectFailure())
+
+        @param access the token of the module
+        @param url the URL of the request
+        @param err the error of the connection
+
+        @return as processProxyConnectFailure()
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final bool processProxyConnectFailureFor(object access, string url, *hash<auto> err) {
+        HttpClientIoSocketAccess::check(access);
+        return processProxyConnectFailureIntern(url, err);
+    }
+
+    #! The body of processProxyConnectFailure(), for the callers that were checked
+    private:internal bool processProxyConnectFailureIntern(string url, *hash<auto> err) {
         if (!proxy_auth || err.status_code != 407) {
             return False;
         }
@@ -1828,10 +1984,32 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     */
     hash<auto> prepareRequestHeaders(HttpRedirectFollower rf, *HttpAuthenticator auth,
             reference<hash<auto>> auth_state, bool decoded = True) {
+        checkRequestSecretCaller(auth_state);
+        return prepareRequestHeadersIntern(rf, auth, \auth_state, decoded);
+    }
+
+    #! Returns the headers of the next request for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::prepareRequestHeaders())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final hash<auto> prepareRequestHeadersFor(object access, HttpRedirectFollower rf, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state, bool decoded = True) {
+        HttpClientIoSocketAccess::check(access);
+        return prepareRequestHeadersIntern(rf, auth, \auth_state, decoded);
+    }
+
+    #! The body of prepareRequestHeaders(), for the callers that were checked
+    private:internal hash<auto> prepareRequestHeadersIntern(HttpRedirectFollower rf, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state, bool decoded = True) {
         string origin = rf.getOrigin();
         string path = rf.getPath();
         hash<auto> hdr = addDefaultHeaders(auth_state.cookies ?? True
-            ? addCookieHeaders(origin, path, rf.getHeaders(), auth_state.cookie_jar)
+            ? addCookieHeadersIntern(origin, path, rf.getHeaders(), auth_state.cookie_jar)
             : rf.getHeaders(), decoded);
         remove auth_state.sent;
         remove auth_state.sent_proxy;
@@ -1874,6 +2052,30 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     */
     bool processAuthChallenge(int status_code, *hash<auto> resp_headers, *HttpAuthenticator auth,
             reference<hash<auto>> auth_state) {
+        if (proxy_auth) {
+            checkStateCaller("answer the proxy challenges of");
+        }
+        return processAuthChallengeIntern(status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! Processes an authentication challenge for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::processAuthChallenge())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final bool processAuthChallengeFor(object access, int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
+        HttpClientIoSocketAccess::check(access);
+        return processAuthChallengeIntern(status_code, resp_headers, auth, \auth_state);
+    }
+
+    #! The body of processAuthChallenge(), for the callers that were checked
+    private:internal bool processAuthChallengeIntern(int status_code, *hash<auto> resp_headers,
+            *HttpAuthenticator auth, reference<hash<auto>> auth_state) {
         if (status_code == 401 && auth && auth_state.sent && !auth_state.answered
                 && auth.processChallenge(resp_headers, auth_state.sent)) {
             auth_state.answered = True;
@@ -1953,7 +2155,16 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
 
         @since HttpClientIo 1.0
     */
-    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar) {
+    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar,
+            *HttpClientCreatorProof proof) {
+        if (isOwnJar(jar ?? cookie_jar)) {
+            checkStateCaller("take the cookies of", proof);
+        }
+        return addCookieHeadersIntern(url, path, headers, jar);
+    }
+
+    #! The body of addCookieHeaders(), for the callers that were checked
+    private:internal hash<auto> addCookieHeadersIntern(string url, string path, *hash<auto> headers, *CookieJar jar) {
         # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
         # {"X-Count": 1}), and adding the Cookie header would throw
         hash<auto!> req_headers = headers ?? {};
@@ -1985,7 +2196,16 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
 
         @since HttpClientIo 1.0
     */
-    storeResponseCookies(string url, string path, *hash<auto> resp_headers, *CookieJar jar) {
+    storeResponseCookies(string url, string path, *hash<auto> resp_headers, *CookieJar jar,
+            *HttpClientCreatorProof proof) {
+        if (isOwnJar(jar ?? cookie_jar)) {
+            checkStateCaller("store cookies in the jar of", proof);
+        }
+        storeResponseCookiesIntern(url, path, resp_headers, jar);
+    }
+
+    #! The body of storeResponseCookies(), for the callers that were checked
+    private:internal storeResponseCookiesIntern(string url, string path, *hash<auto> resp_headers, *CookieJar jar) {
         jar = jar ?? cookie_jar;
         if (jar && resp_headers) {
             hash<UrlInfo> url_info = parseRequestUrl(url);
@@ -2016,8 +2236,30 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     storeStateCookies(hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
+        if ((state.cookies ?? True) && isOwnJar(state.cookie_jar ?? cookie_jar)) {
+            checkStateCaller("store cookies in the jar of");
+        }
+        storeStateCookiesIntern(state, rf, resp_headers);
+    }
+
+    #! Stores the cookies of a response for the code of this module, which acts for the request that it makes (qore#7837)
+    /** Reserved for the code of this module (see HttpClientIoSocketAccess::storeStateCookies())
+
+        @param access the token of the module
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final storeStateCookiesFor(object access, hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
+        HttpClientIoSocketAccess::check(access);
+        storeStateCookiesIntern(state, rf, resp_headers);
+    }
+
+    #! The body of storeStateCookies(), for the callers that were checked
+    private:internal storeStateCookiesIntern(hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
         if (state.cookies ?? True) {
-            storeResponseCookies(rf.getOrigin(), rf.getPath(), resp_headers, state.cookie_jar);
+            storeResponseCookiesIntern(rf.getOrigin(), rf.getPath(), resp_headers, state.cookie_jar);
         }
     }
 
@@ -2142,7 +2384,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # a proxy that refused the CONNECT request with an authentication challenge is answered once with a
                 # new connection
                 if (ex.err == "HTTPCLIENT-CONNECT-ERROR" && !proxy_connect_retried
-                        && processProxyConnectFailure(url, ex.arg)) {
+                        && processProxyConnectFailureIntern(url, ex.arg)) {
                     proxy_connect_retried = True;
                     log(LoggerLevel::DEBUG, "answering the authentication challenge of the proxy for %s", url);
                     evictDeadConnections(url);
@@ -2305,7 +2547,16 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     }
 
     #! Closes all connections
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7828):
+        the manager's connections serve the requests of all of its callers
+    */
     closeAll() {
+        checkStateCaller();
+        closeAllIntern();
+    }
+
+    #! Closes all connections; the manager closes its own, whoever's code runs (see closeAll())
+    private:internal closeAllIntern() {
         {
             AutoWriteLock al(pool_lock);
             shutdown = True;
@@ -2576,7 +2827,15 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     }
 
     #! Removes idle connections older than the idle timeout
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7828)
+    */
     cleanupIdleConnections() {
+        checkStateCaller();
+        cleanupIdleConnectionsIntern();
+    }
+
+    #! Removes idle connections older than the idle timeout; the manager does so for its own, whoever's code runs
+    private:internal cleanupIdleConnectionsIntern() {
         # monotonic, not wall clock — see isConnectionAlive() for why
         int now_mono_us = clock_get_monotonic_us();
         int idle_limit_us = opts.idle_timeout * 1000;
@@ -2639,12 +2898,14 @@ printf("%d connection(s) migrated\n", migrated);
 
         @return the number of connections migrated
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7828)
         @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which drives the connections and so could
         never see the result of a migration
         @throw THREAD-CANCELLED the thread was cancelled; the connections not migrated yet are not changed
         @throw PROGRAM-INTERRUPTED the program was interrupted; the connections not migrated yet are not changed
     */
     int migrateAll(*timeout migration_timeout) {
+        checkStateCaller();
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -4340,6 +4601,10 @@ printf("%d connection(s) migrated\n", migrated);
         @ref NOTHING if a usable connection is already available (caller should
         proceed immediately)
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7813): the
+        connection given in \a conn_out is the pooled connection that the manager's other callers use, which such code
+        could close or lease while a request of the host uses it; a request that such code makes with the manager
+        (@ref requestAsync()) does not need this method
         @throw HTTPCLIENT-URL-ERROR the URL is invalid
         @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
         @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
@@ -4354,6 +4619,67 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     *EventNotifier acquireConnectionAsync(string url, reference<*HttpClientConnection> conn_out) {
+        checkAcquireCaller();
+        return acquireConnectionAsyncIntern(url, \conn_out);
+    }
+
+    #! Advances the acquisition of a connection like acquireConnectionAsync(), and gives its state, not the connection
+    /** The code that waits for a connection to be established and counts the attempts that fail needs the state of the
+        connection only (see @ref HttpClientConnectionStatus): this method gives it to every caller, also to code that a
+        sandbox restricts and that does not own the manager, which acquireConnectionAsync() refuses (qore#7813)
+
+        @note Like ensureConnectionAsync() and the requests that the module makes, this method does not call
+        acquireConnectionAsync(): a subclass of the manager that overrides acquireConnectionAsync() does not see these
+        calls
+
+        @param url the target URL (only scheme, host, and port are used)
+        @param status_out set to the state of the connection that the caller should track for failure detection (see
+        acquireConnectionAsync() for \a conn_out)
+
+        @return as acquireConnectionAsync()
+
+        @throw HTTPCLIENT-URL-ERROR the URL is invalid
+        @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
+        @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
+        connected either
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate
+        @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection
+        @throw HTTPCLIENT-CONNECT-ERROR no protocol connected
+
+        @since HttpClientIo 1.0
+    */
+    *EventNotifier acquireConnectionStatusAsync(string url, reference<*HttpClientConnectionStatus> status_out) {
+        *HttpClientConnection conn;
+        *EventNotifier rv = acquireConnectionAsyncIntern(url, \conn);
+        status_out = conn ? HttpClientIoSocketAccess::newStatus(conn) : NOTHING;
+        return rv;
+    }
+
+    #! Acquires a connection step for the code of this module, which acts for the request that it makes (qore#7813)
+    /** The public method, acquireConnectionAsync(), refuses code that a sandbox restricts and that does not own the
+        manager, as it gives the pooled connection, which the code of this module uses for the request that a restricted
+        caller makes with the manager (@ref requestAsync(), for example).  Reserved for the code of this module (see
+        HttpClientIoSocketAccess::acquireConnectionAsync())
+
+        @param access the token of the module
+        @param url the target URL (only scheme, host, and port are used)
+        @param conn_out set as by acquireConnectionAsync()
+
+        @return as acquireConnectionAsync()
+
+        @throw PERMISSION-DENIED the object is not the token
+
+        @since HttpClientIo 1.0
+    */
+    final *EventNotifier acquireConnectionAsyncFor(object access, string url,
+            reference<*HttpClientConnection> conn_out) {
+        HttpClientIoSocketAccess::check(access);
+        return acquireConnectionAsyncIntern(url, \conn_out);
+    }
+
+    #! The body of acquireConnectionAsync(), for the callers that were checked
+    private:internal *EventNotifier acquireConnectionAsyncIntern(string url,
+            reference<*HttpClientConnection> conn_out) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -4438,8 +4764,11 @@ printf("%d connection(s) migrated\n", migrated);
 
         @param url the target URL (only scheme, host, and port are used)
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7828):
+        the race is shared by every caller that connects to the URL
     */
     abandonAsyncHEForUrl(string url) {
+        checkStateCaller();
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -4460,6 +4789,7 @@ printf("%d connection(s) migrated\n", migrated);
         drops the race state.
     */
     abandonAsyncHEByKey(string key) {
+        checkStateCaller();
         AutoLock al(async_race_lock);
         if (!async_races.hasKey(key)) {
             return;
@@ -5991,6 +6321,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Sets the logger for this connection manager
     setLogger(*LoggerInterface logger) {
+        checkStateCaller("set the logger of");
         self.logger = logger;
     }
 
@@ -6002,6 +6333,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     setConnectTimeout(timeout ct) {
+        checkStateCaller("set the connect timeout of");
         opts.connect_timeout = ct;
     }
 
@@ -6017,6 +6349,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     */
     setRequestTimeout(timeout rt) {
+        checkStateCaller("set the request timeout of");
         opts.request_timeout = rt;
     }
 

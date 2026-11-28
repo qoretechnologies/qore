@@ -17,11 +17,15 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+%requires ../../TestSocketDir.qm
 
 %exec-class SandboxUnixSocketPinnedTest
 
 class SandboxUnixSocketPinnedTest inherits QUnit::Test {
     private {
+        #! the test's directory, short so that its socket paths fit sockaddr_un.sun_path (104 bytes on macOS) also
+        #! when each test has a temporary directory of its own (qore#7823)
+        *TestSocketDir socket_dir;
         string dir;
         string allowed;
         string real;
@@ -59,7 +63,8 @@ Socket sub bind(string path) {
 
     globalSetUp() {
         # short names: a UNIX socket path is limited to about 100 bytes
-        dir = make_tmp_dir("q7518u-");
+        socket_dir = new TestSocketDir();
+        dir = socket_dir.path;
         allowed = dir + DirSep + "a";
         real = allowed + DirSep + "r";
         link = allowed + DirSep + "l";
@@ -78,9 +83,8 @@ Socket sub bind(string path) {
     }
 
     globalTearDown() {
-        if (dir) {
-            remove_tree(dir);
-        }
+        # removes the directory and what the tests left in it
+        delete socket_dir;
     }
 
     setUp() {

@@ -12,16 +12,16 @@
           "message": "ファイルシステム接続"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "ファイルシステムの場所が読み取り専用であっても接続をダウンとしない。たとえば、接続が読み取り専用のベースディレクトリを指す場合に使用する。インターフェースディレクトリは通常書き込み可能であるべきである"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "ファイルシステムの場所が読み取り専用でも接続をダウンとしてマークせず、接続が返すデータプロバイダーを読み取り専用にします。データプロバイダーはその場所で作成、削除、移動、その場所へのコピー、ディレクトリの作成を行えません。たとえば、接続が読み取り専用のベースディレクトリを指す場合に使用します。インターフェースディレクトリは通常書き込み可能である必要があります"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "読み取り専用"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "接続の読み取り専用フラグを設定します"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "接続とそのデータプロバイダーを読み取り専用にします"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

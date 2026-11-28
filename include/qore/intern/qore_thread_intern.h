@@ -1284,6 +1284,19 @@ DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
+//! Pushes a file-system confinement on the current thread (SandboxManager::callWithFilesystemRoot(), qore#7821)
+/** Every policy check on the thread (qore_find_thread_sandbox_policy_manager_ref()) is also checked against \a sm until
+    the confinement is popped, except under a policy barrier, a system-policy capability or a module initialization
+    barrier established after it was pushed; the work of other threads, including the threads and operations that the
+    code starts, is not confined.  \a sm is referenced while it is pushed.
+
+    @return 0 for OK, -1 for no thread data or no memory (nothing is pushed)
+*/
+DLLLOCAL int qore_push_fs_confinement(QoreSandboxManager* sm);
+
+//! Pops the innermost file-system confinement pushed with qore_push_fs_confinement()
+DLLLOCAL void qore_pop_fs_confinement();
+
 //! Counts a piece of work that the module cleanup has handed over and that has not ended yet (qore#6928)
 /** See QoreModuleCleanupWorkFlag and qore_module_cleanup_drain_work()
 */
@@ -5825,5 +5838,13 @@ private:
 
 template <typename T, typename Tag>
 thread_local T* QoreThreadLocalObject<T, Tag>::ptr = nullptr;
+
+//! tells the async I/O controllers that a thread may be started again (a thread has ended and been joined, or the default
+//! thread stack size has changed): a controller whose callback worker could not be started, with work queued for it,
+//! starts one (qore#7834)
+/** Takes no lock unless such a controller is registered, and then only the leaf lock of the registry; needs no Qore
+    thread data (the reaper calls it) and never raises an exception
+*/
+DLLLOCAL void qore_async_io_worker_start_possible() noexcept;
 
 #endif

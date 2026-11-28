@@ -1316,6 +1316,11 @@ authenticate();
     @ref Util::check_creator_file_access() "check_creator_file_access()", so the objects that the host creates with
     its paths, and the data providers of the file connections that it lends, keep working for the code that it lends
     them to.  Both raise \c PERMISSION-DENIED; the file-system policy of a sandbox applies when the path is opened.
+    Such a data provider is confined to the directory that its creator gave (the connection's directory) by the real
+    paths of the files that it reaches, with symbolic links resolved, also against a concurrent change of a path (see
+    @ref filedataprovider_root_lock "FileDataProvider: Root Directory and Lock"); library code that confines the paths
+    of its callers to a directory in the same way runs the operation with
+    @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()".
 
     @since %Qore 3.0
 
@@ -1363,6 +1368,13 @@ authenticate();
     and the clients of an HTTP-based connection use the creator's file options; a changed file option, or one given
     as a runtime or data provider option, raises \c PERMISSION-DENIED
     (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
+
+    The @ref FileDataProvider::FileDataProvider "FileDataProvider" that
+    @ref ConnectionProvider::FilesystemConnection::getDataProvider() "FilesystemConnection::getDataProvider()"
+    returns has the connection's directory as its root and is locked to it, and it is read-only if the connection is
+    read-only, for any caller and whatever constructor options the caller gives: the code that a host lends a
+    read-only file connection to cannot create, change or delete files through its data provider
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
 
     A sandbox's file-system and network policy also applies to the connections that are lent to the code that it
     governs, including the paths and locations that the lending host configured them with (there is no exemption for

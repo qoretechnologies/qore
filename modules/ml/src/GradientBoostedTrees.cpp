@@ -684,59 +684,116 @@ std::vector<uint8_t> QoreGradientBoostedTrees::serializeState() const {
 
 QoreGradientBoostedTrees* QoreGradientBoostedTrees::deserializeState(
         const uint8_t* data, size_t len, ExceptionSink* xsink) {
+    using namespace MLSerialization;
     const uint8_t* ptr = data;
     size_t remaining = len;
 
-    int n_est = MLSerialization::readInt32(ptr, remaining, xsink);
+    int n_est = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double lr = MLSerialization::readScalar(ptr, remaining, xsink);
+    double lr = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int md = MLSerialization::readInt32(ptr, remaining, xsink);
+    int md = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int mss = MLSerialization::readInt32(ptr, remaining, xsink);
+    int mss = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int msl = MLSerialization::readInt32(ptr, remaining, xsink);
+    int msl = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double ss = MLSerialization::readScalar(ptr, remaining, xsink);
+    double ss = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::string task = MLSerialization::readString(ptr, remaining, xsink);
+    std::string task = readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double vf = MLSerialization::readScalar(ptr, remaining, xsink);
+    double vf = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int ninc = MLSerialization::readInt32(ptr, remaining, xsink);
+    int ninc = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double init_pred = MLSerialization::readScalar(ptr, remaining, xsink);
+    double init_pred = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nip = MLSerialization::readInt32(ptr, remaining, xsink);
+    std::vector<double> init_preds = readDoubleVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<double> init_preds(nip);
-    for (int i = 0; i < nip; ++i) {
-        init_preds[i] = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return nullptr; }
+    int actual = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int nf = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int nc = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> cls = readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    auto fnames = readStringVector(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string tf = readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    int nt = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    static const char* model = "GradientBoostedTrees";
+    bool classification = task == "classification";
+    if (checkOneOf(task, {"classification", "regression"}, model, "task", xsink)
+        || checkRange(n_est, 1, INT32_MAX, model, "n_estimators", xsink)
+        || checkRange(actual, 1, n_est, model, "the number of boosting rounds", xsink)
+        || checkRange(nf, 1, INT32_MAX, model, "the number of features", xsink)
+        || checkSize(nc, (int64_t)cls.size(), model, "the number of classes", xsink)
+        || (classification
+            ? checkRange(nc, 1, INT32_MAX, model, "the number of classes", xsink)
+            : checkSize(nc, 0, model, "the number of classes of a regression model", xsink))) {
+        return nullptr;
     }
-    int actual = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    int nf = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    int nc = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    int ncl = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    std::vector<double> cls(ncl);
-    for (int i = 0; i < ncl; ++i) {
-        cls[i] = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return nullptr; }
+    // the same comparisons as the constructor
+    if (lr <= 0) {
+        stateError(xsink, model, "learning_rate is %g but must be greater than 0", lr);
+        return nullptr;
     }
-    auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    std::string tf = MLSerialization::readString(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    int nt = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return nullptr; }
-    std::vector<FlatTree> trees(nt);
+    if (ss <= 0 || ss > 1.0) {
+        stateError(xsink, model, "subsample is %g but must be in (0, 1.0]", ss);
+        return nullptr;
+    }
+    // the number of trees: one per round, or one per class and round for more or fewer than 2 classes
+    int64_t expected_trees = actual;
+    if (classification) {
+        // the class labels are sorted and unique and are converted to integers
+        for (size_t i = 0; i < cls.size(); ++i) {
+            if (checkValueRange(cls[i], INT32_MIN, INT32_MAX, model, "a class label", xsink)) {
+                return nullptr;
+            }
+            if (i && !(cls[i - 1] < cls[i])) {
+                stateError(xsink, model, "the class labels must be sorted in ascending order without duplicates");
+                return nullptr;
+            }
+        }
+        if (checkFinite(init_pred, model, "the initial prediction", xsink)
+            || checkFinite(init_preds, model, "the initial predictions", xsink)) {
+            return nullptr;
+        }
+        if (nc != 2) {
+            if (checkSize(init_preds.size(), nc, model, "the number of initial predictions", xsink)) {
+                return nullptr;
+            }
+            expected_trees *= nc;
+        }
+    } else if (checkSize(init_preds.size(), 0, model, "the number of initial predictions of a regression model",
+            xsink)) {
+        return nullptr;
+    }
+    if (checkSize(nt, expected_trees, model, "the number of trees", xsink)
+        // each tree is written in more than 5 32-bit integers
+        || checkRange(nt, 0, (int64_t)(remaining / (5 * sizeof(int32_t))), model, "the number of trees", xsink)) {
+        return nullptr;
+    }
+
+    std::vector<FlatTree> trees;
+    trees.reserve(nt);
     for (int i = 0; i < nt; ++i) {
-        trees[i] = FlatTree::deserialize(ptr, remaining, xsink);
+        FlatTree tree = FlatTree::deserialize(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
+        // each tree is a regression tree fitted on all features
+        if (checkSize(tree.n_features, nf, model, "the number of features of a tree", xsink)
+            || checkSize(tree.n_classes, 0, model, "the number of classes of a tree", xsink)) {
+            return nullptr;
+        }
+        trees.push_back(std::move(tree));
+    }
+    if (checkEnd(remaining, model, xsink)) {
+        return nullptr;
     }
 
     auto* gbt = new QoreGradientBoostedTrees(n_est, lr, md, mss, msl, ss, task, vf, ninc, 42);

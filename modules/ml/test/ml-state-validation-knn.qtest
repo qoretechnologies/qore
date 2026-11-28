@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationKnnTest
+
+#! A restored KNN state, and the reading of any restored state, is checked against the invariants of a trained model
+/** (qore#7844) A state that breaks one is refused with ML-DESERIALIZE-ERROR, and no model is restored.
+*/
+class MlStateValidationKnnTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml restored state validation: KNN", "1.0", \ARGV) {
+        addTestCase("a well-formed KNN state is restored", \validTest());
+        addTestCase("a KNN state whose label count differs from its row count is refused", \labelCountTest());
+        addTestCase("a KNN state whose k is out of range is refused", \kTest());
+        addTestCase("a KNN state whose feature count differs from its columns is refused", \featureCountTest());
+        addTestCase("a KNN state with an invalid option is refused", \optionTest());
+        addTestCase("a KNN state without training rows is refused", \emptyTest());
+        addTestCase("a KNN state with a class label that is not finite is refused", \labelValueTest());
+        addTestCase("a fitted KNN model is restored", \roundTripTest());
+        addTestCase("a state with data after its end is refused", \trailingTest());
+        addTestCase("a state whose sizes exceed its data is refused", \sizeTest());
+        set_return_value(main());
+    }
+
+    #! the state of a KNN classifier over 3 rows of 2 features, with the given fields replaced
+    static binary state(*hash<auto> opt) {
+        return i32(opt.k ?? 2) + str(opt.metric ?? "euclidean") + str(opt.task ?? "classification")
+            + str(opt.weight_func ?? "uniform") + i32(opt.n_features ?? 2)
+            + (opt.ref_data ?? mat(3, 2, ("0", "0", "1", "1", "5", "5")))
+            + (opt.ref_labels ?? vec(("0", "0", "1")))
+            + (opt.field_names ?? strv(())) + str("")
+            + (opt.tail ?? binary());
+    }
+
+    refused(binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), ("KNN", state), what);
+    }
+
+    validTest() {
+        ML::KNN knn = cast<ML::KNN>(restore("KNN", state()));
+        assertEq(0, knn.predictClassificationMatrix(((0.5, 0.5),))[0].predicted_class);
+        knn = cast<ML::KNN>(restore("KNN", state({"k": 1, "field_names": strv(("a", "b"))})));
+        assertEq(1, knn.predictClassification({"a": 5.0, "b": 5.0}).predicted_class);
+    }
+
+    labelCountTest() {
+        refused(state({"ref_labels": vec(("0", "1"))}), "fewer labels than rows");
+        refused(state({"ref_labels": vec(("0", "1", "1", "0"))}), "more labels than rows");
+    }
+
+    kTest() {
+        refused(state({"k": 0}), "k = 0");
+        refused(state({"k": -1}), "a negative k");
+        refused(state({"k": 4}), "k greater than the number of rows");
+    }
+
+    featureCountTest() {
+        refused(state({"n_features": 3}), "more features than columns");
+        refused(state({"n_features": 1}), "fewer features than columns");
+    }
+
+    optionTest() {
+        refused(state({"metric": "other"}), "an unknown metric");
+        refused(state({"task": "other"}), "an unknown task");
+        refused(state({"weight_func": "other"}), "an unknown weight function");
+    }
+
+    emptyTest() {
+        refused(state({"k": 1, "ref_data": mat(0, 2, ()), "ref_labels": vec(())}), "no rows");
+        refused(state({"n_features": 0, "ref_data": mat(3, 0, ())}), "no columns");
+    }
+
+    labelValueTest() {
+        refused(state({"ref_labels": vec(("0", "nan", "1"))}), "a NaN class label");
+        refused(state({"ref_labels": vec(("0", "1e300", "1"))}), "a class label beyond the integer range");
+    }
+
+    roundTripTest() {
+        # a fit on data with a null cell
+        ML::KNN knn({"k": 1, "task": "classification"});
+        knn.fitMatrix(((0.0, 0.0), (NOTHING, 1.0), (5.0, 5.0)), (0, 1, 2));
+        ML::KNN r = cast<ML::KNN>(ML::ml_deserialize(ML::ml_serialize(knn)));
+        assertEq(2, r.predictClassificationMatrix(((5.0, 5.0),))[0].predicted_class, "data with a null cell");
+        # field names from a fit on hashes, then a fit on a matrix of another width
+        knn.fit(({"a": 0.0, "b": 0.0, "c": 0}, {"a": 5.0, "b": 5.0, "c": 1}), "c");
+        knn.fitMatrix(((0.0, 0.0, 0.0), (5.0, 5.0, 5.0)), (0, 1));
+        r = cast<ML::KNN>(ML::ml_deserialize(ML::ml_serialize(knn)));
+        assertEq(1, r.predictClassificationMatrix(((5.0, 5.0, 5.0),))[0].predicted_class, "a matrix of another width");
+    }
+
+    trailingTest() {
+        refused(state({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    sizeTest() {
+        # sizes that the data that follows cannot hold
+        refused(state({"ref_data": i32(0x40000000) + i32(0x40000000)}), "matrix dimensions beyond the data");
+        refused(state({"ref_labels": i32(0x7fffffff)}), "a vector size beyond the data");
+        refused(state({"field_names": le(0xffffffff, 4)}), "a string count beyond the data");
+    }
+}

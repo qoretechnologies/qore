@@ -305,6 +305,11 @@ class HandlerWaitController inherits HttpAsyncSocketIoController {
             : HttpAsyncSocketIoController(io, NOTHING, {"max_handler_threads": 2}) {
         handler_pool.active = count;
     }
+
+    #! submits the body with the runner of HTTP/1.1 dispatches (submitDispatchToHandlerPool(), qore#7769)
+    submitDispatch(HttpAsyncTarget target, code<nothing()> body) {
+        submitDispatchToHandlerPool(target, body);
+    }
 }
 
 #! Target whose handler returns a blocking InputStream body together with response_delay
@@ -1849,11 +1854,15 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
 
     #! Stops from a worker while its peer is held at a gate, including a stop in a target destructor.
     stopFromPoolWaitsTest() {
-        checkHandlerWait(False);
-        checkHandlerWait(True);
+        # with the generic runner, and with the runner of HTTP/1.1 dispatches, which keeps the pool identity for a
+        # stop in a destructor that the release of its work item runs (qore#6253, qore#7769)
+        foreach bool dispatch in ((False, True)) {
+            checkHandlerWait(False, dispatch);
+            checkHandlerWait(True, dispatch);
+        }
     }
 
-    private checkHandlerWait(bool in_destructor) {
+    private checkHandlerWait(bool in_destructor, bool dispatch) {
         AsyncSocketIoController io();
         HandlerWaitCounter count();
         HandlerWaitController ctrl(io, count);
@@ -1872,16 +1881,26 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertEq(0, entered.waitForZero(30s), "the peer is running");
         if (in_destructor) {
             Counter submitted(1);
-            ctrl.submitToHandlerPool(new StopOnReleaseTarget(ctrl, count.events), sub () {
+            code<nothing()> body = sub () {
                 submitted.waitForZero();
-            });
+            };
+            if (dispatch) {
+                ctrl.submitDispatch(new StopOnReleaseTarget(ctrl, count.events), body);
+            } else {
+                ctrl.submitToHandlerPool(new StopOnReleaseTarget(ctrl, count.events), body);
+            }
             # The caller has released the argument temporary. The worker now owns the last target reference.
             submitted.dec();
         } else {
-            ctrl.submitToHandlerPool(target, sub () {
+            code<nothing()> body = sub () {
                 ctrl.stop();
                 count.events.push("stop returned");
-            });
+            };
+            if (dispatch) {
+                ctrl.submitDispatch(target, body);
+            } else {
+                ctrl.submitToHandlerPool(target, body);
+            }
         }
         assertEq(("waiting", 1), count.events.get(30s), "the stop waits with its peer still running");
         release.dec();

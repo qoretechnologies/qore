@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/** FileCreateDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** FileCreateDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,9 +75,13 @@ public class FileCreateDataProvider inherits FileDataProviderBase {
         }
         checkReadOnly("create");
 
-        File f();
-        f.open2(req.path, O_CREAT | O_TRUNC | O_WRONLY, req.mode);
-        f.write(req."data");
+        # the file created must be under the root directory, also if the path changes after it was checked
+        # (qore#7821)
+        runConfined(sub () {
+            File f();
+            f.open2(req.path, O_CREAT | O_TRUNC | O_WRONLY, req.mode);
+            f.write(req."data");
+        });
         return {
             "path": req.path,
         };

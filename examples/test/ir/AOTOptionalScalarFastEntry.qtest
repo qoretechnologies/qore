@@ -1,9 +1,11 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
 
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
 %requires FsUtil
 
@@ -14,6 +16,16 @@ TmpDir tmp("qore-aot-optional-scalar-fast-entry-");
 sub test_exit(int rc) {
     remove_tree(tmp.path);
     exit(rc);
+}
+
+#! runs a qcc executable and returns its output (qore#7805)
+/** @return the output on stdout followed by the output on stderr, apart from the module loader's
+    warnings and the native compilation trace, which are not output of the program (see
+    ExecModeHarness::run_command()); the executable runs in its default environment, which only
+    traces native compilation
+*/
+string sub run_executable(string cmd) {
+    return ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1").out;
 }
 
 string qore_bin = TestInterpreter::qore_interpreter();
@@ -145,7 +157,8 @@ runner_file.write(source + "\nmain();\n");
 runner_file.close();
 
 string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
-string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
+# the qore run that the executables' output is compared with runs the same way
+string ast = run_executable(sprintf("%s %s --exec-mode=ast %s",
     env, qore_bin, runner_path));
 string enabled_compile = backquote(sprintf(
     "%s QORE_AOT_DEBUG=1 %s -O3 -c --output-dir=%s %s 2>&1",
@@ -183,8 +196,8 @@ if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     test_exit(2);
 }
 
-string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
-string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
+string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
+string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
 if (ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);

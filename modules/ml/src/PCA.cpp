@@ -30,6 +30,8 @@
 
 #include <Eigen/Eigenvalues>
 
+#include <algorithm>
+
 // Extern declaration for hashdecl (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclPCAResult;
 
@@ -433,6 +435,22 @@ QorePCA* QorePCA::deserializeState(const uint8_t* data, size_t len, ExceptionSin
     if (*xsink) { return nullptr; }
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that fit() establishes (qore#7844): it keeps between 1 component and
+    // one per feature, and no more than n_components when that is positive
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "PCA", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "PCA", "the number of features", xsink)
+        || checkRange(actual_n_components, 1, n_components > 0 ? std::min(n_components, n_features) : n_features,
+            "PCA", "the number of components kept", xsink)
+        || checkSize(components.rows(), actual_n_components, "PCA", "the number of component rows", xsink)
+        || checkSize(components.cols(), n_features, "PCA", "the number of component columns", xsink)
+        || checkSize(mean_vec.size(), n_features, "PCA", "the size of the mean vector", xsink)
+        || checkSize(stddev_vec.size(), n_features, "PCA", "the size of the standard deviation vector", xsink)
+        || checkSize(explained_variance_ratio_vec.size(), actual_n_components, "PCA",
+            "the size of the explained variance ratio vector", xsink)) {
+        return nullptr;
+    }
 
     std::unique_ptr<QorePCA> obj(new QorePCA(n_components, variance_threshold, center, pca_scale));
     obj->actual_n_components = actual_n_components;

@@ -21,6 +21,9 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
     subsets, then aggregates predictions (majority vote for classification,
     mean for regression).
 
+    A tie between classes in the majority vote goes to the smallest class label, so that
+    the same model and input give the same prediction on every run and platform.
+
     @par Example:
     @code{.py}
     %requires ml
