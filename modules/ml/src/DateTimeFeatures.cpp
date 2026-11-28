@@ -136,8 +136,20 @@ QoreDateTimeFeatures* QoreDateTimeFeatures::deserializeState(const uint8_t* data
         return nullptr;
     }
 
-    if (!validateFeatures(feats, xsink)) {
+    // the state must satisfy the invariants that the constructor establishes (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "DateTimeFeatures", xsink)) {
         return nullptr;
+    }
+    if (feats.empty()) {
+        stateError(xsink, "DateTimeFeatures", "at least one feature must be specified");
+        return nullptr;
+    }
+    for (const auto& f : feats) {
+        if (VALID_FEATURES.find(f) == VALID_FEATURES.end()) {
+            stateError(xsink, "DateTimeFeatures", "feature '%s' is not a valid value", f.c_str());
+            return nullptr;
+        }
     }
 
     return new QoreDateTimeFeatures(feats);

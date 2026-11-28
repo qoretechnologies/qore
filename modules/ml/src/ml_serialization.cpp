@@ -27,6 +27,8 @@
 
 #include "ml_serialization.h"
 
+#include <cmath>
+#include <cstdarg>
 #include <cstring>
 #include <map>
 
@@ -62,6 +64,104 @@ static bool checkRemaining(size_t remaining, size_t needed, ExceptionSink* xsink
         return false;
     }
     return true;
+}
+
+// --- Helper: check that a count of elements of the given size fits in the remaining bytes, before it is allocated
+
+static bool checkCount(uint64_t count, size_t elem_size, size_t remaining, ExceptionSink* xsink) {
+    if (count > remaining / elem_size) {
+        xsink->raiseException("ML-DESERIALIZE-ERROR",
+            "unexpected end of data: %llu elements of %zu bytes do not fit in the %zu bytes that remain",
+            static_cast<unsigned long long>(count), elem_size, remaining);
+        return false;
+    }
+    return true;
+}
+
+// --- Validation of restored model state ---
+
+int stateError(ExceptionSink* xsink, const char* model, const char* fmt, ...) {
+    QoreStringNode* desc = new QoreStringNodeMaker("invalid %s state: ", model);
+    va_list args;
+    while (true) {
+        va_start(args, fmt);
+        int rc = desc->vsprintf(fmt, args);
+        va_end(args);
+        if (!rc) {
+            break;
+        }
+    }
+    xsink->raiseException("ML-DESERIALIZE-ERROR", desc);
+    return -1;
+}
+
+int checkRange(int64_t v, int64_t lo, int64_t hi, const char* model, const char* field, ExceptionSink* xsink) {
+    if (v < lo || v > hi) {
+        return stateError(xsink, model, "%s is " QLLD " but must be in " QLLD " to " QLLD, field, (int64)v,
+            (int64)lo, (int64)hi);
+    }
+    return 0;
+}
+
+int checkValueRange(double v, double lo, double hi, const char* model, const char* field, ExceptionSink* xsink) {
+    if (!(v >= lo && v <= hi)) {
+        return stateError(xsink, model, "%s is %g but must be in %g to %g", field, v, lo, hi);
+    }
+    return 0;
+}
+
+int checkSize(int64_t size, int64_t expected, const char* model, const char* what, ExceptionSink* xsink) {
+    if (size != expected) {
+        return stateError(xsink, model, "%s is " QLLD " but must be " QLLD, what, (int64)size, (int64)expected);
+    }
+    return 0;
+}
+
+int checkOneOf(const std::string& v, std::initializer_list<const char*> allowed, const char* model,
+        const char* field, ExceptionSink* xsink) {
+    for (const char* a : allowed) {
+        if (v == a) {
+            return 0;
+        }
+    }
+    return stateError(xsink, model, "%s '%s' is not a valid value", field, v.c_str());
+}
+
+int checkFinite(const MatrixXd& m, const char* model, const char* what, ExceptionSink* xsink) {
+    if (!m.allFinite()) {
+        return stateError(xsink, model, "%s has a value that is not finite", what);
+    }
+    return 0;
+}
+
+int checkFinite(const VectorXd& v, const char* model, const char* what, ExceptionSink* xsink) {
+    if (!v.allFinite()) {
+        return stateError(xsink, model, "%s has a value that is not finite", what);
+    }
+    return 0;
+}
+
+int checkFinite(const std::vector<double>& v, const char* model, const char* what, ExceptionSink* xsink) {
+    for (double d : v) {
+        if (!std::isfinite(d)) {
+            return stateError(xsink, model, "%s has a value that is not finite", what);
+        }
+    }
+    return 0;
+}
+
+int checkFinite(double v, const char* model, const char* what, ExceptionSink* xsink) {
+    if (!std::isfinite(v)) {
+        return stateError(xsink, model, "%s is not finite", what);
+    }
+    return 0;
+}
+
+int checkEnd(size_t remaining, const char* model, ExceptionSink* xsink) {
+    if (remaining) {
+        return stateError(xsink, model, "%zu bytes follow the end of the state", remaining);
+    }
+    return 0;
 }
 
 // --- Write primitives ---
@@ -251,6 +351,10 @@ std::vector<std::string> readStringVector(const uint8_t*& ptr, size_t& remaining
     if (*xsink) {
         return {};
     }
+    // each string has a length of 4 bytes
+    if (!checkCount(count, sizeof(uint32_t), remaining, xsink)) {
+        return {};
+    }
     std::vector<std::string> result;
     result.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -268,6 +372,9 @@ std::vector<double> readDoubleVector(const uint8_t*& ptr, size_t& remaining,
     if (*xsink) {
         return {};
     }
+    if (!checkCount(count, sizeof(double), remaining, xsink)) {
+        return {};
+    }
     std::vector<double> result;
     result.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -282,6 +389,9 @@ std::vector<double> readDoubleVector(const uint8_t*& ptr, size_t& remaining,
 std::vector<int> readIntVector(const uint8_t*& ptr, size_t& remaining, ExceptionSink* xsink) {
     uint32_t count = readUint32(ptr, remaining, xsink);
     if (*xsink) {
+        return {};
+    }
+    if (!checkCount(count, sizeof(int32_t), remaining, xsink)) {
         return {};
     }
     std::vector<int> result;
@@ -303,6 +413,9 @@ VectorXd readVector(const uint8_t*& ptr, size_t& remaining, ExceptionSink* xsink
     if (size < 0) {
         xsink->raiseException("ML-DESERIALIZE-ERROR",
             "invalid vector size: %d", size);
+        return VectorXd();
+    }
+    if (!checkCount(static_cast<uint64_t>(size), sizeof(double), remaining, xsink)) {
         return VectorXd();
     }
     VectorXd vec(size);
@@ -327,6 +440,10 @@ MatrixXd readMatrix(const uint8_t*& ptr, size_t& remaining, ExceptionSink* xsink
     if (rows < 0 || cols < 0) {
         xsink->raiseException("ML-DESERIALIZE-ERROR",
             "invalid matrix dimensions: %d x %d", rows, cols);
+        return MatrixXd();
+    }
+    // the product of two 31-bit values cannot overflow 64 bits
+    if (!checkCount(static_cast<uint64_t>(rows) * static_cast<uint64_t>(cols), sizeof(double), remaining, xsink)) {
         return MatrixXd();
     }
     MatrixXd mat(rows, cols);

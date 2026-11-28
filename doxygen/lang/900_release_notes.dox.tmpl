@@ -3140,6 +3140,10 @@
       hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
       @ref hash_key_hardening;
       <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
+    - keys chosen to share their internal hash value can no longer make the lookups of the internal hash tables of
+      %Qore and of the \c json and \c dataframe modules slow when the data that they process chooses the keys: these
+      tables use the keyed hash function of the process from the start (see @ref keyed_internal_tables;
+      <a href="https://github.com/qoretechnologies/qore/issues/7750">issue 7750</a>)
     - an operand of an operator keeps the value of the variable that it read when a later operand changes the
       variable in place, as in <tt>a == (a += x)</tt>, in the AST interpreter as in the other execution modes
       (<a href="https://github.com/qoretechnologies/qore/issues/7722">issue 7722</a>)

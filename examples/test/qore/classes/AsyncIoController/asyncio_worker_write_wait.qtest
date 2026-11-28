@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../TestSocketDir.qm
 
 %exec-class AsyncIoWorkerWriteWaitTest
 
@@ -115,7 +116,8 @@ class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
         # a UNIX domain socket: its buffers have a fixed size, and the data sent counts against the sender's buffer
         # until the peer reads it, so the first step fills it whatever the speed of the process (the buffers of a TCP
         # connection grow while it sends, so it can take more steps)
-        TmpDir tmp("qore-asyncio-write-wait-");
+        # a short directory, so that the socket path fits a UNIX socket address with a deep TMPDIR (qore#7823)
+        TestSocketDir tmp();
         hash<auto> pair = makeConnection(tmp.path + "/sock");
         on_exit {
             pair.client.close();
@@ -196,7 +198,8 @@ class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("dbg_counting_poll_operation() is only registered in a library-debug build");
         }
-        TmpDir tmp("qore-asyncio-write-wait-");
+        # a short directory, so that the socket path fits a UNIX socket address with a deep TMPDIR (qore#7823)
+        TestSocketDir tmp();
         hash<auto> pair = makeConnection(tmp.path + "/sock");
         on_exit {
             pair.client.close();

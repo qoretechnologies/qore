@@ -260,6 +260,22 @@ QoreStandardScaler* QoreStandardScaler::deserializeState(const uint8_t* data, si
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that fit() establishes (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "StandardScaler", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "StandardScaler", "the number of features", xsink)
+        || checkSize(mean_vec.size(), n_features, "StandardScaler", "the number of means", xsink)
+        || checkSize(std_vec.size(), n_features, "StandardScaler", "the number of standard deviations", xsink)) {
+        return nullptr;
+    }
+    // fit() replaces a standard deviation that is not greater than 1e-10 with 1
+    for (Eigen::Index i = 0; i < std_vec.size(); ++i) {
+        if (checkValueRange(std_vec(i), 1e-10, std::numeric_limits<double>::infinity(), "StandardScaler",
+            "a standard deviation", xsink)) {
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreStandardScaler> obj(new QoreStandardScaler(with_mean, with_std));
     obj->n_features = n_features;
     obj->mean_vec = std::move(mean_vec);

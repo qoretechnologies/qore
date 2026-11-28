@@ -26,8 +26,17 @@
 #define JSONCONS_JSONSCHEMA_CHECK_RECURSION()
 #endif
 
+// Qore: the type of the sets of the property names of a validated instance, which the application can define, for
+// example to a set with a keyed hash (qore#7750)
+#ifndef JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET
+#define JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET std::unordered_set<std::string>
+#endif
+
 namespace jsoncons {
 namespace jsonschema {
+
+    // Qore: see JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET
+    using property_name_set = JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET;
     
     enum class walk_state {advance, abort};
 
@@ -194,7 +203,7 @@ namespace jsonschema {
     
     struct evaluation_results
     {
-        std::unordered_set<std::string> evaluated_properties;
+        property_name_set evaluated_properties;
         range_collection evaluated_items;
 
         void merge(const evaluation_results& results)
@@ -208,7 +217,7 @@ namespace jsonschema {
                 evaluated_items.insert(index_range);
             }
         }
-        void merge(std::unordered_set<std::string>&& properties)
+        void merge(property_name_set&& properties)
         {
             auto end = std::make_move_iterator(properties.end());
             for (auto it = std::make_move_iterator(properties.begin()); it != end; ++it)

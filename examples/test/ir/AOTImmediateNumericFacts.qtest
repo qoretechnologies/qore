@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-immediate-numeric-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -89,11 +100,8 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     unbounded(7));
 ";
 
-string root = "/tmp/qore-aot-immediate-numeric-" + string(getpid());
+string root = tmp.path + "/immediate-numeric";
 mkdir(root);
-on_exit {
-    backquote(sprintf("rm -rf %s", root));
-}
 
 string source_path = root + "/immediate-numeric.qr";
 File source();
@@ -113,7 +121,7 @@ hash<string, string> sub compile(string suffix, string compile_env) {
         compile_env, env, qcc_bin, exe, source_path));
     if (!is_file(exe)) {
         printf("AOT compile failed (%s):\n%s", suffix, output);
-        exit(2);
+        test_exit(2);
     }
     return {
         "compile": output,
@@ -132,7 +140,7 @@ if (enabled.run != expected || disabled.run != expected
     printf("execution mismatch:\nexpected:\n%sEnabled:\n%sDisabled:\n%s"
         + "Helper boxing:\n%s",
         expected, enabled.run, disabled.run, helper_boxing.run);
-    exit(2);
+    test_exit(2);
 }
 
 string sub functionIr(string ir, string name) {
@@ -162,7 +170,7 @@ foreach string name in (
         printf("immediate numeric facts did not reduce boxing in %s:\n"
             + "enabled:\n%s\ndisabled:\n%s",
             name, enabled_ir, disabled_ir);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -172,5 +180,5 @@ if (guarded_phi.find("box_inline") < 0
         || helper_phi.find("box_inline") >= 0) {
     printf("guarded dynamic integer boxing was not isolated correctly:\n"
         + "guarded:\n%s\nhelper:\n%s", guarded_phi, helper_phi);
-    exit(2);
+    test_exit(2);
 }

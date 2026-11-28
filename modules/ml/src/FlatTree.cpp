@@ -15,7 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
-#include <unordered_map>
+#include <map>
 
 // --- Impurity computation ---
 
@@ -40,7 +40,8 @@ double FlatTree::computeImpurity(const Eigen::VectorXd& y,
     }
 
     // Classification: count per class
-    std::unordered_map<int, int> counts;
+    // an ordered map: the impurity sums do not depend on the order of a hash table
+    std::map<int, int> counts;
     for (int i : indices) {
         counts[(int)y(i)]++;
     }
@@ -197,7 +198,9 @@ int FlatTree::buildNode(const Eigen::MatrixXd& X, const Eigen::VectorXd& y,
     // Leaf node
     if (task == "classification") {
         // Majority class and class probabilities
-        std::unordered_map<int, int> counts;
+        // an ordered map: a tie for the majority class goes to the smallest class label, whatever the order of a hash
+        // table
+        std::map<int, int> counts;
         for (int i : indices) {
             counts[(int)y(i)]++;
         }
@@ -352,50 +355,106 @@ void FlatTree::serialize(std::vector<uint8_t>& buf) const {
     }
 }
 
+// the smallest number of bytes that serialize() writes for a node
+static constexpr size_t FLAT_TREE_NODE_MIN_SIZE = 5 * sizeof(int32_t) + 4 * sizeof(double);
+
 FlatTree FlatTree::deserialize(const uint8_t*& ptr, size_t& remaining,
         ExceptionSink* xsink) {
+    // the tree must satisfy the invariants that fit() establishes (qore#7844); the model that holds the tree checks
+    // the tree against its own features, task and classes
+    using namespace MLSerialization;
+    static const char* model = "decision tree";
+
     FlatTree tree;
-    tree.n_features = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return tree; }
-    tree.n_classes = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return tree; }
-    tree.total_samples = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return tree; }
-    int n_classes_list = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return tree; }
-    tree.classes.resize(n_classes_list);
-    for (int i = 0; i < n_classes_list; ++i) {
-        tree.classes[i] = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
+    int32_t n_features = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return FlatTree(); }
+    int32_t n_classes = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return FlatTree(); }
+    int32_t total_samples = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return FlatTree(); }
+    std::vector<double> classes = readDoubleVector(ptr, remaining, xsink);
+    if (*xsink) { return FlatTree(); }
+    int32_t n_nodes = readInt32(ptr, remaining, xsink);
+    if (*xsink) { return FlatTree(); }
+
+    if (checkRange(n_features, 1, INT32_MAX, model, "the number of features", xsink)
+        || checkRange(total_samples, 1, INT32_MAX, model, "the number of training samples", xsink)
+        || checkSize(n_classes, (int64_t)classes.size(), model, "the number of classes", xsink)
+        // each node is written in at least FLAT_TREE_NODE_MIN_SIZE bytes
+        || checkRange(n_nodes, 1, (int64_t)std::min(remaining / FLAT_TREE_NODE_MIN_SIZE, (size_t)INT32_MAX), model,
+            "the number of nodes", xsink)) {
+        return FlatTree();
     }
-    int n_nodes = MLSerialization::readInt32(ptr, remaining, xsink);
-    if (*xsink) { return tree; }
-    tree.nodes.resize(n_nodes);
-    for (int i = 0; i < n_nodes; ++i) {
-        CARTNode& node = tree.nodes[i];
-        node.feature_index = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.threshold = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.value = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        int n_probs = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.class_probs.resize(n_probs);
-        for (int j = 0; j < n_probs; ++j) {
-            node.class_probs[j] = MLSerialization::readScalar(ptr, remaining, xsink);
-            if (*xsink) { return tree; }
+    // the class labels are sorted and unique
+    for (size_t i = 1; i < classes.size(); ++i) {
+        if (!(classes[i - 1] < classes[i])) {
+            stateError(xsink, model, "the class labels must be sorted in ascending order without duplicates");
+            return FlatTree();
         }
-        node.n_samples = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.impurity = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.weighted_impurity_reduction = MLSerialization::readScalar(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.left = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
-        node.right = MLSerialization::readInt32(ptr, remaining, xsink);
-        if (*xsink) { return tree; }
+    }
+
+    tree.n_features = n_features;
+    tree.n_classes = n_classes;
+    tree.total_samples = total_samples;
+    tree.classes = std::move(classes);
+    tree.nodes.resize(n_nodes);
+    for (int32_t i = 0; i < n_nodes; ++i) {
+        CARTNode& node = tree.nodes[i];
+        node.feature_index = readInt32(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.threshold = readScalar(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.value = readScalar(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.class_probs = readDoubleVector(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.n_samples = readInt32(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.impurity = readScalar(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.weighted_impurity_reduction = readScalar(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.left = readInt32(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+        node.right = readInt32(ptr, remaining, xsink);
+        if (*xsink) { return FlatTree(); }
+
+        if (checkRange(node.n_samples, 1, total_samples, model, "the number of samples of a node", xsink)) {
+            return FlatTree();
+        }
+        if (node.feature_index == -1) {
+            // a leaf has no children; a classification leaf has one probability per class and a class label
+            if (node.left != -1 || node.right != -1) {
+                stateError(xsink, model, "leaf node %d must have no children", (int)i);
+                return FlatTree();
+            }
+            if (checkSize(node.class_probs.size(), n_classes, model, "the number of class probabilities of a leaf",
+                    xsink)) {
+                return FlatTree();
+            }
+            for (double p : node.class_probs) {
+                if (checkValueRange(p, 0, 1, model, "a class probability", xsink)) {
+                    return FlatTree();
+                }
+            }
+            if (n_classes && checkValueRange(node.value, INT32_MIN, INT32_MAX, model, "the class label of a leaf",
+                    xsink)) {
+                return FlatTree();
+            }
+        } else {
+            // a split node splits on a feature of the tree and has two children that follow it in the node array
+            if (checkRange(node.feature_index, 0, n_features - 1, model, "the feature index of a node", xsink)
+                || checkRange(node.left, i + 1, n_nodes - 1, model, "the left child index of a node", xsink)
+                || checkRange(node.right, i + 1, n_nodes - 1, model, "the right child index of a node", xsink)
+                || checkSize(node.class_probs.size(), 0, model, "the number of class probabilities of a split node",
+                    xsink)) {
+                return FlatTree();
+            }
+            if (node.left == node.right) {
+                stateError(xsink, model, "split node %d must have two different children", (int)i);
+                return FlatTree();
+            }
+        }
     }
     return tree;
 }

@@ -240,7 +240,10 @@ void QoreKMeans::update(const MatrixXd& data, ExceptionSink* xsink) {
         }
 
         // Update centroid with learning rate 1/(count+1)
-        centroid_counts[best]++;
+        // the count saturates at its maximum, where the learning rate no longer changes
+        if (centroid_counts[best] < INT32_MAX - 1) {
+            ++centroid_counts[best];
+        }
         double lr = 1.0 / centroid_counts[best];
         centroids.row(best) = (1.0 - lr) * centroids.row(best) + lr * data.row(i);
     }
@@ -470,6 +473,24 @@ QoreKMeans* QoreKMeans::deserializeState(const uint8_t* data, size_t len,
     if (*xsink) { return nullptr; }
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "KMeans", xsink)
+        || checkOneOf(init_method, {"kmeans++", "random"}, "KMeans", "init_method", xsink)
+        || checkRange(k, 1, INT32_MAX, "KMeans", "k", xsink)
+        || checkRange(n_features, 1, INT32_MAX, "KMeans", "the number of features", xsink)
+        || checkSize(centroids.rows(), k, "KMeans", "the number of centroids", xsink)
+        || checkSize(centroids.cols(), n_features, "KMeans", "the number of centroid columns", xsink)
+        || checkSize(centroid_counts.size(), k, "KMeans", "the number of centroid counts", xsink)) {
+        return nullptr;
+    }
+    // update() increments a count before it divides by it
+    for (int count : centroid_counts) {
+        if (checkRange(count, 0, INT32_MAX - 1, "KMeans", "a centroid count", xsink)) {
+            return nullptr;
+        }
+    }
 
     std::unique_ptr<QoreKMeans> obj(new QoreKMeans(k, max_iterations, tolerance, 1,
         init_method));

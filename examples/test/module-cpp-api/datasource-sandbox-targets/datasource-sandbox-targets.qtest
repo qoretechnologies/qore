@@ -14,6 +14,7 @@
 %requires dbitargetprobe
 %requires QUnit
 %requires FsUtil
+%requires ../../TestSocketDir.qm
 
 %exec-class DatasourceSandboxTargetsTest
 
@@ -203,8 +204,9 @@ auto sub open_pool(string host) {
     }
 
     testSocket() {
-        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
-        TmpDir dir("dbi-sandbox-targets", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
+        # a short directory: a socket path in a deep TMPDIR (macOS keeps it under /private/var/folders, and each test
+        # has one of its own with QORE_TEST_TMP_LEAKS) does not fit a UNIX socket address (qore#7823)
+        TestSocketDir dir();
         string path = dir.path + "/.s.PGSQL.5432";
         # only the socket of the connection is denied
         SandboxManager deny_socket = denyTestNet();

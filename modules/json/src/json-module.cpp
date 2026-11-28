@@ -19,6 +19,7 @@
 */
 
 #include "qore-json-module.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "QC_JsonRpcClient.h"
 #include "QC_JsonSaxParser.h"
@@ -57,6 +58,11 @@ extern "C" DLLEXPORT void json_qore_module_desc(QoreModuleInfo& mod_info) {
 QoreNamespace JNS("Qore::Json");
 
 void json_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+   // the hash tables of the module that are keyed by data use the keyed hash of the process; its key is created
+   // here, where a failure is reported, so that constructing such a table later cannot fail (qore#7750)
+   if (qore_intern_hash_process_key_check(&xsink)) {
+      return;
+   }
    hashdeclJwtHeader = init_hashdecl_JwtHeader(JNS);
    hashdeclJwtClaims = init_hashdecl_JwtClaims(JNS);
    hashdeclJwtDecodeResult = init_hashdecl_JwtDecodeResult(JNS);

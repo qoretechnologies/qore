@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "qore/intern/qore_keyed_hash.h"
+
 QoreTextFeatures::QoreTextFeatures(const std::string& mode, int max_features, int min_df,
     const std::string& tokenizer_mode, void* tokenizer_handle)
     : mode(mode), tokenizer_mode(tokenizer_mode), tokenizer_handle(tokenizer_handle),
@@ -73,8 +75,14 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
 
     int64_t num_docs = documents->size();
 
-    // Count document frequency for each term
-    std::unordered_map<std::string, int> df_counts;
+    // Count document frequency for each term: the number of documents with the term, and the last document that
+    // counted it, so that a document counts each of its terms once with one search per token
+    struct df_entry {
+        int count = 0;
+        int64_t last_doc = -1;
+    };
+    qore_keyed_string_map<df_entry> df_counts;
+    QORE_KEYED_HASH_SITE("ml-1", df_counts);
 
     for (int64_t i = 0; i < num_docs; ++i) {
         QoreValue v = documents->retrieveEntry(i);
@@ -93,11 +101,11 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count unique terms in this document
-        std::unordered_map<std::string, bool> seen;
         for (const auto& tok : tokens) {
-            if (!seen[tok]) {
-                df_counts[tok]++;
-                seen[tok] = true;
+            df_entry& e = df_counts[tok];
+            if (e.last_doc != i) {
+                e.last_doc = i;
+                ++e.count;
             }
         }
     }
@@ -105,8 +113,8 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
     // Filter by min_df
     std::vector<std::pair<std::string, int>> filtered;
     for (const auto& entry : df_counts) {
-        if (entry.second >= min_df) {
-            filtered.push_back(entry);
+        if (entry.second.count >= min_df) {
+            filtered.emplace_back(entry.first, entry.second.count);
         }
     }
 
@@ -147,7 +155,7 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         idf_values.resize(n_features);
         for (const auto& entry : vocabulary) {
             // sklearn convention: idf = log((1 + n_docs) / (1 + df)) + 1
-            int df = df_counts[entry.first];
+            int df = df_counts[entry.first].count;
             idf_values[entry.second] = std::log((1.0 + n_docs) / (1.0 + df)) + 1.0;
         }
     }
@@ -190,7 +198,8 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
         std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count term frequencies
-        std::unordered_map<std::string, int> tf_counts;
+        qore_keyed_string_map<int> tf_counts;
+        QORE_KEYED_HASH_SITE("ml-2", tf_counts);
         for (const auto& tok : tokens) {
             tf_counts[tok]++;
         }
@@ -303,13 +312,37 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     // Read vocabulary
     int vocab_size = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkOneOf(mode, {"tfidf", "count"}, "TextFeatures", "mode", xsink)
+        || checkOneOf(tok_mode, {"whitespace", "subword"}, "TextFeatures", "tokenizer_mode", xsink)
+        || checkRange(max_features, 0, INT32_MAX, "TextFeatures", "max_features", xsink)
+        || checkRange(min_df, 1, INT32_MAX, "TextFeatures", "min_df", xsink)
+        || checkRange(n_docs, 1, INT32_MAX, "TextFeatures", "the number of documents", xsink)
+        // each term is written as a 32-bit length, its bytes and a 32-bit index
+        || checkRange(vocab_size, 0, remaining / (2 * sizeof(int32_t)), "TextFeatures", "the vocabulary size",
+            xsink)
+        || checkSize(n_features, vocab_size, "TextFeatures", "the number of features", xsink)
+        || (max_features && checkRange(vocab_size, 0, max_features, "TextFeatures", "the vocabulary size", xsink))) {
+        return nullptr;
+    }
+
+    // fit() numbers the terms in their sorted order, in which they are written
     std::map<std::string, int> vocab;
     for (int i = 0; i < vocab_size; ++i) {
         std::string word = MLSerialization::readString(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
         int idx = MLSerialization::readInt32(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
-        vocab[word] = idx;
+        if (i && word <= vocab.rbegin()->first) {
+            stateError(xsink, "TextFeatures", "the vocabulary terms must be in sorted order without duplicates");
+            return nullptr;
+        }
+        if (checkSize(idx, i, "TextFeatures", "the index of a vocabulary term", xsink)) {
+            return nullptr;
+        }
+        vocab.emplace_hint(vocab.end(), std::move(word), idx);
     }
 
     // Read IDF values
@@ -319,6 +352,14 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     // Read field names
     std::vector<std::string> fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    if (checkEnd(remaining, "TextFeatures", xsink)
+        // the IDF values are computed for each term in tfidf mode only
+        || checkSize(idf.size(), mode == "tfidf" ? vocab_size : 0, "TextFeatures", "the number of IDF values",
+            xsink)
+        || checkFinite(idf, "TextFeatures", "the IDF values", xsink)) {
+        return nullptr;
+    }
 
     auto* tf = new QoreTextFeatures(mode, max_features, min_df, tok_mode);
     tf->n_docs = n_docs;

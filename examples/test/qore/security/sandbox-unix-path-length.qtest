@@ -10,6 +10,7 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+%requires ../../TestSocketDir.qm
 
 %exec-class SandboxUnixPathLengthTest
 
@@ -19,8 +20,9 @@
 */
 class SandboxUnixPathLengthTest inherits QUnit::Test {
     private {
-        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
-        TmpDir tmp("sandbox-unix-path-length-", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
+        # a short directory, so that the paths that the test makes up to the limit start from a known short prefix
+        # whatever TMPDIR is (a deep one on macOS, also each test's own with QORE_TEST_TMP_LEAKS; qore#7823)
+        TestSocketDir tmp();
         Socket listener();
         #! the socket file that the sandbox does not allow
         string socket_path;

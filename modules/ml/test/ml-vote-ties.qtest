@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - ml module native vote and neighbor selection code as built with the platform's C++ library
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+
+%exec-class MlVoteTiesTest
+
+#! A tie between classes in the vote of a RandomForest or a KNN goes to the smallest class label (qore#7824)
+/** The predicted class of a tied vote must not depend on the order in which the votes were counted, nor on the
+    order of a hash table: the same model and input give the same prediction on every run and platform.
+*/
+class MlVoteTiesTest inherits QUnit::Test {
+    public {
+        #! the seeds of the forests
+        const Seeds = xrange(1, 64);
+    }
+
+    constructor() : QUnit::Test("ml vote ties", "1.0", \ARGV) {
+        addTestCase("KNN: a tie goes to the smallest label", \knnTieTest());
+        addTestCase("KNN: a weighted tie goes to the smallest label", \knnWeightedTieTest());
+        addTestCase("KNN: neighbors at the same distance are taken in training order", \knnDistanceTieTest());
+        addTestCase("KNN: a NaN distance is the farthest", \knnNanDistanceTest());
+        addTestCase("RandomForest: a tie goes to the smallest label", \forestTieTest());
+        set_return_value(main());
+    }
+
+    knnTieTest() {
+        ML::KNN knn({"k": 2, "task": "classification"});
+        knn.fitMatrix(((0.0, 0.0), (10.0, 10.0)), (3, 7));
+        # the nearest neighbor of each query has the other label: the vote is 1:1 whichever is counted first
+        foreach list<float> q in (((1.0, 1.0), (9.0, 9.0), (0.0, 10.0))) {
+            hash<ML::KNNClassificationResult> r = knn.predictClassificationMatrix((q,))[0];
+            assertEq(3, r.predicted_class, sprintf("query %y: the tie goes to the smallest label", q));
+            assertEq(0.5, r.confidence, sprintf("query %y: the vote is tied", q));
+        }
+        # no tie: the majority wins
+        ML::KNN knn3({"k": 3, "task": "classification"});
+        knn3.fitMatrix(((0.0, 0.0), (0.5, 0.5), (10.0, 10.0)), (7, 7, 3));
+        assertEq(7, knn3.predictClassificationMatrix(((9.0, 9.0),))[0].predicted_class, "the majority wins");
+    }
+
+    knnWeightedTieTest() {
+        ML::KNN knn({"k": 2, "task": "classification", "weight_func": "distance"});
+        knn.fitMatrix(((0.0, 0.0), (10.0, 10.0)), (7, 3));
+        # equidistant from both: equal weights
+        hash<ML::KNNClassificationResult> r = knn.predictClassificationMatrix(((5.0, 5.0),))[0];
+        assertEq(3, r.predicted_class, "the weighted tie goes to the smallest label");
+        # nearer to the larger label: no tie
+        r = knn.predictClassificationMatrix(((1.0, 1.0),))[0];
+        assertEq(7, r.predicted_class, "the heavier vote wins");
+    }
+
+    knnDistanceTieTest() {
+        # the query is equidistant from all training points: the k nearest are the first k of the training data
+        ML::KNN knn({"k": 1, "task": "classification"});
+        knn.fitMatrix(((0.0, 0.0), (10.0, 10.0), (0.0, 10.0), (10.0, 0.0)), (7, 3, 5, 1));
+        hash<ML::KNNClassificationResult> r = knn.predictClassificationMatrix(((5.0, 5.0),))[0];
+        assertEq(7, r.predicted_class, "k = 1: the first training point");
+        assertEq(0, r.neighbors[0].index, "k = 1: the neighbor is the first training point");
+        ML::KNN knn3({"k": 3, "task": "classification"});
+        knn3.fitMatrix(((0.0, 0.0), (10.0, 10.0), (0.0, 10.0), (10.0, 0.0)), (7, 3, 5, 1));
+        r = knn3.predictClassificationMatrix(((5.0, 5.0),))[0];
+        assertEq((0, 1, 2), (map $1.index, r.neighbors), "k = 3: the first three training points");
+        assertEq(3, r.predicted_class, "k = 3: the tie of the first three goes to the smallest label");
+
+        # a nearer point after two points at the same distance: the second neighbor is the first of those two
+        ML::KNN knn2({"k": 2, "task": "classification"});
+        knn2.fitMatrix(((3.0, 4.0), (4.0, 3.0), (1.0, 0.0)), (7, 3, 5));
+        r = knn2.predictClassificationMatrix(((0.0, 0.0),))[0];
+        assertEq((2, 0), (map $1.index, r.neighbors), "k = 2: the nearest, then the first at the next distance");
+        assertEq(5, r.predicted_class, "k = 2: the tie of labels 5 and 7 goes to the smallest label");
+
+        # a large k over points at the same distance: the first k of the training data, a tie of five labels
+        ML::KNN knn70({"k": 70, "task": "classification"});
+        knn70.fitMatrix((map (1.0, 1.0), xrange(80)), (map $1 % 5 + 1, xrange(80)));
+        r = knn70.predictClassificationMatrix(((0.0, 0.0),))[0];
+        assertEq((map $1, xrange(70)), (map $1.index, r.neighbors), "k = 70: the first 70 training points");
+        assertEq(1, r.predicted_class, "k = 70: the tie of five labels goes to the smallest label");
+    }
+
+    knnNanDistanceTest() {
+        # the distance to a training point with a NaN feature is NaN: it is the farthest, and each neighbor is a
+        # distinct point
+        ML::KNN knn({"k": 3, "task": "classification"});
+        knn.fitMatrix(((0.0, 0.0), (@NaN@, 0.0), (1.0, 1.0), (2.0, 2.0)), (1, 2, 3, 4));
+        hash<ML::KNNClassificationResult> r = knn.predictClassificationMatrix(((0.0, 0.0),))[0];
+        assertEq((0, 2, 3), (map $1.index, r.neighbors), "k = 3: the three points at a finite distance");
+        ML::KNN knn4({"k": 4, "task": "classification"});
+        knn4.fitMatrix(((0.0, 0.0), (@NaN@, 0.0), (1.0, 1.0), (2.0, 2.0)), (1, 2, 3, 4));
+        r = knn4.predictClassificationMatrix(((0.0, 0.0),))[0];
+        assertEq((0, 2, 3, 1), (map $1.index, r.neighbors), "k = 4: the point at a NaN distance is the last");
+        assertEq(@inf@, r.neighbors[3].distance, "k = 4: a NaN distance is reported as infinite");
+    }
+
+    forestTieTest() {
+        # two trees of one feature each: a tree on feature 0 and a tree on feature 1 vote for different classes at
+        # (0, 1) and (1, 0); a forest whose trees took different features has a tied vote there, which its class
+        # probabilities (0.5 each) show
+        int ties = 0;
+        foreach int seed in (Seeds) {
+            ML::RandomForest rf({"n_trees": 2, "task": "classification", "max_features": "sqrt",
+                "bootstrap": False, "seed": seed});
+            rf.fitMatrix(((0.0, 0.0), (1.0, 1.0)), (3, 7));
+            foreach list<float> q in (((0.0, 1.0), (1.0, 0.0))) {
+                hash<ML::RandomForestClassificationResult> r = rf.predictClassificationMatrix((q,))[0];
+                if (r.probabilities == (0.5, 0.5)) {
+                    ++ties;
+                    assertEq(3, r.predicted_class, sprintf("seed %d query %y: the tie goes to the smallest label",
+                        seed, q));
+                } else {
+                    # both trees took the same feature: a unanimous vote
+                    assertEq(1.0, r.max_probability, sprintf("seed %d query %y: a unanimous vote", seed, q));
+                }
+            }
+        }
+        assertGt(0, ties, "some forests have a tied vote");
+    }
+}
