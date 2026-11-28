@@ -11,6 +11,9 @@
 # object that trusted code created before the call.  The owner rule still applies to the objects that a sandbox owns
 # (that its code created, or that trusted code handed over to it), which the code of a trusted class reads as a whole
 # only for that sandbox, and sandboxed code gets no non-public state of an object of trusted code, nor deletes it.
+# In debug builds, an object that a sandbox should own but whose owner could not be recorded (an allocation failure,
+# injected with dbg_sandbox_fail_next_owned_creations()) matches no sandboxed caller: it is refused to every tenant and
+# to trusted code that serves one, its copies and the objects created in its methods as well (fails closed).
 # The trusted code (sandbox-trusted-created-objects/host.q) runs in a trusted Program of each execution mode, with
 # tenants of the same mode, and in a host compiled with qcc.
 
@@ -75,10 +78,29 @@ class SandboxTrustedCreatedObjectsTest inherits QUnit::Test {
             "A's object deleted by B's code": "SANDBOX-OBJECT-ACCESS-ERROR",
             "transferred serialized for A": "PASS",
             "transferred serialized for B": "SERIALIZATION-ERROR",
+            # an object that trusted class code creates in a method of an object that a sandbox owns is that sandbox's
+            "child serialized for A": "PASS",
+            "child serialized for B": "SERIALIZATION-ERROR",
+        };
+
+        #! the result of each case of an object whose owner could not be recorded (debug builds only): it matches no
+        #! sandboxed caller, so the object is refused to every tenant and to trusted code that serves one
+        const UnrecordedOwnerExpected = {
+            "unrecorded owner serialized for A": "SERIALIZATION-ERROR",
+            "unrecorded owner serialized for B": "SERIALIZATION-ERROR",
+            "unrecorded owner copy for A": "SERIALIZATION-ERROR",
+            "unrecorded owner serialized by trusted code": "PASS",
+            "unrecorded owner serialized by its method for the host": "SERIALIZATION-ERROR",
+            "unrecorded owner deleted by A's code": "SANDBOX-OBJECT-ACCESS-ERROR",
+            "unrecorded owner transferred to A": "SANDBOX-ACCESS-ERROR",
+            "unrecorded owner child serialized for A": "SERIALIZATION-ERROR",
+            "unrecorded owner child serialized by trusted code": "PASS",
         };
     }
 
     private {
+        #! the expected results of this build
+        hash<auto> expected = Expected;
         string host_src;
         string qore_bin;
         string libqore_dir;
@@ -86,6 +108,9 @@ class SandboxTrustedCreatedObjectsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("objects that trusted code creates for a sandbox call", "1.0", \ARGV) {
+%ifdef QoreDebug
+        expected += UnrecordedOwnerExpected;
+%endif
         host_src = ReadOnlyFile::readTextFile(get_script_dir() + "sandbox-trusted-created-objects" + DirSep
             + "host.q");
         qore_bin = TestInterpreter::qore_interpreter();
@@ -122,8 +147,8 @@ class SandboxTrustedCreatedObjectsTest inherits QUnit::Test {
         int count = mode == "tiered" ? 600 : 1;
         for (int i = 0; i < count; ++i) {
             hash<auto> r = host.callFunction("probe_run_cases", ExecModes{mode});
-            if (r != Expected || i == count - 1) {
-                assertEq(Expected, r, mode + ": run " + (i + 1));
+            if (r != expected || i == count - 1) {
+                assertEq(expected, r, mode + ": run " + (i + 1));
                 break;
             }
         }
@@ -155,17 +180,17 @@ class SandboxTrustedCreatedObjectsTest inherits QUnit::Test {
                 results{m[0]} = m[1];
             }
         }
-        hash<string, string> expected;
-        foreach hash<auto> i in (Expected.pairIterator()) {
+        hash<string, string> exp;
+        foreach hash<auto> i in (expected.pairIterator()) {
             if (i.value.typeCode() == NT_HASH) {
                 foreach hash<auto> j in (i.value.pairIterator()) {
-                    expected{i.key + "." + j.key} = j.value;
+                    exp{i.key + "." + j.key} = j.value;
                 }
             } else {
-                expected{i.key} = i.value;
+                exp{i.key} = i.value;
             }
         }
-        assertEq(expected, results, "compiled host output:\n" + r.out);
+        assertEq(exp, results, "compiled host output:\n" + r.out);
         assertEq(0, r.rc);
     }
 

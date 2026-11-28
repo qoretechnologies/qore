@@ -11248,10 +11248,49 @@ QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext
     }
 }
 
+#ifdef DEBUG
+//! the number of calls of qore_sandbox_owned_creation_context() that fail as if no memory could be allocated
+static std::atomic<int> dbg_fail_owned_creation_contexts{0};
+
+void qore_dbg_fail_next_owned_creation_contexts(int count) {
+    dbg_fail_owned_creation_contexts.store(count > 0 ? count : 0);
+}
+
+//! Returns true if a call of qore_sandbox_owned_creation_context() must fail (debug builds, for tests)
+static bool qore_dbg_fail_owned_creation_context() {
+    int count = dbg_fail_owned_creation_contexts.load();
+    while (count > 0) {
+        if (dbg_fail_owned_creation_contexts.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+QoreSandboxContext* qore_sandbox_unrecorded_owner() {
+    // static storage, constructed in place on first use without allocating (the owner is needed when an allocation
+    // has failed) and never destroyed, so that the objects that exist at the exit of the process can still release it
+    alignas(QoreSandboxContext) static unsigned char storage[sizeof(QoreSandboxContext)];
+    static QoreSandboxContext* owner = new (storage) QoreSandboxContext(false, false,
+        QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+    return owner;
+}
+
 QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
         const QoreSandboxContext* creation) {
     assert(owner && creation);
+    // the owner that could not be recorded is not a context to copy: the new object takes it as well (fails closed)
+    if (owner == qore_sandbox_unrecorded_owner()) {
+        owner->ref();
+        return const_cast<QoreSandboxContext*>(owner);
+    }
     try {
+#ifdef DEBUG
+        if (qore_dbg_fail_owned_creation_context()) {
+            throw std::bad_alloc();
+        }
+#endif
         std::vector<const QoreSandboxManager*> owner_managers;
         qore_add_sandbox_context_managers(*owner, owner_managers);
         std::vector<const QoreSandboxManager*> creation_managers;

@@ -135,6 +135,23 @@ DLLLOCAL QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandb
 */
 DLLLOCAL QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
     const QoreSandboxContext* creation);
+//! Returns the owner of an object that a sandbox owns but whose owner context could not be made (qore#7921)
+/** When qore_sandbox_owned_creation_context() fails, the object is given this owner, which names no sandbox manager:
+    no sandboxed caller at the enforcement level of tenant isolation created it (qore_sandbox_current_code_created()),
+    so the owner rules refuse it to every such caller, and the reads of the whole object are refused to trusted code
+    that serves sandboxed code, as for an object that another sandbox owns; only code that no sandbox governs (or only
+    sandboxes at the enforcement level of code safety) reads it as a whole.  An object created by trusted class code in
+    a method of such an object takes this owner as well, and such an object cannot be transferred.
+
+    A static context that is never freed, made without allocating: it is referenced and dereferenced as any owner
+    context (its reference count never drops to zero), so the code that releases owners needs no special case
+*/
+DLLLOCAL QoreSandboxContext* qore_sandbox_unrecorded_owner();
+#ifdef DEBUG
+//! Makes the next \a count calls of qore_sandbox_owned_creation_context() fail as if no memory could be allocated
+//! (debug builds, for tests; qore#7921)
+DLLLOCAL void qore_dbg_fail_next_owned_creation_contexts(int count);
+#endif
 //! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
 /** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
     is the code of a module (a library module or one loaded by its path, also when module code creates it), whose

@@ -215,7 +215,17 @@ void qore_object_private::setCreatorOwnership() {
     if (owner_provenance && owner_provenance != sandbox_provenance) {
         QoreSandboxContext* ctx = qore_sandbox_owned_creation_context(owner_provenance, sandbox_provenance);
         if (!ctx) {
-            // the provenance cannot be set: the object is owned by no sandbox (fails closed)
+            // the provenance cannot be set: the object, which a sandbox owns, is given the owner that matches no
+            // sandboxed caller (fails closed: an object owned by no sandbox would be read as a whole by trusted code
+            // for any caller, qore#7921); it keeps the provenance of the creating code, which governs it
+            QoreSandboxContext* unrecorded = qore_sandbox_unrecorded_owner();
+            unrecorded->ref();
+            sandbox_owner.store(unrecorded, std::memory_order_relaxed);
+            return;
+        }
+        if (ctx == qore_sandbox_unrecorded_owner()) {
+            // the object whose method creates this one has that owner: so has this object, with its own provenance
+            sandbox_owner.store(ctx, std::memory_order_relaxed);
             return;
         }
         sandbox_provenance->deref();
@@ -291,7 +301,12 @@ bool qore_creator_is_sandbox_owner(const QoreSandboxContext*& owner_provenance) 
         return false;
     }
     const QoreSandboxContext* self_owner = qore_object_private::get(*self)->getSandboxOwner();
-    if (!self_owner || !qore_sandbox_current_code_created(self_owner, true)) {
+    if (!self_owner) {
+        return false;
+    }
+    // an object whose owner could not be recorded (qore_sandbox_unrecorded_owner()) matches no caller: what trusted
+    // class code creates in its methods while sandboxed code exists takes that owner too (fails closed, qore#7921)
+    if (self_owner != qore_sandbox_unrecorded_owner() && !qore_sandbox_current_code_created(self_owner, true)) {
         return false;
     }
     owner_provenance = self_owner;
@@ -2965,7 +2980,9 @@ bool qore_object_private::callerReadsNonPublicMembersIntern() const {
                 return true;
             }
         } else {
-            const QoreProgram* pgm = getProgram();
+            // the Program of the calling code (the global ::getProgram()), never the object's: tenant code without a
+            // class context is refused by it; qualified so that a member function of the same name cannot shadow it
+            const QoreProgram* pgm = ::getProgram();
             if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
                 return true;
             }
