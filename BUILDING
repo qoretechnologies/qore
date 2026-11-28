@@ -203,25 +203,6 @@ a directory to rename it, such as macOS 15, the directory itself is not writable
 stops with a permissions diagnostic.
 
 
-Installing Into Another Prefix
-------------------------------
-
-Every file is installed below the install prefix: "cmake --install build --prefix <dir>" installs
-the whole installation below <dir> instead of the prefix given when the build was configured, and
-DESTDIR stages it as before (for packages).  The installed QoreConfig.cmake takes its paths from its
-own location, so external modules built against the relocated installation find it there, and
-aot-link.conf names the library directory of the install-time prefix.
-
-The paths compiled into the programs and the library (the module directories and the location of
-aot-link.conf) stay those of the configured prefix; a relocated installation runs with them given
-in the environment, for example:
-
-    export LD_LIBRARY_PATH=<dir>/lib/x86_64-linux-gnu
-    export QORE_MODULE_DIR=<dir>/lib/x86_64-linux-gnu/qore-modules/<version>:<dir>/share/qore-modules/<version>
-    export QORE_LIBDIR=<dir>/lib/x86_64-linux-gnu
-
-(with the library directory of the platform: lib64 or lib on other systems).
-
 Downloaded Dependency Sources
 -----------------------------
 

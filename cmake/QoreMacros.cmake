@@ -2444,14 +2444,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
 
     if (APPLE)
         # It should allow to use full path in the module reference itself. otool -L /path/to/module.qmod, 1st line.
-        # the install name is a path of the installed library, which a relative install directory names below the
-        # configured prefix (qore#7849)
-        if (IS_ABSOLUTE "${QORE_MODULES_DIR}")
-            set_target_properties(${_module_name} PROPERTIES INSTALL_NAME_DIR ${QORE_MODULES_DIR})
-        else()
-            set_target_properties(${_module_name} PROPERTIES INSTALL_NAME_DIR
-                "${CMAKE_INSTALL_PREFIX}/${QORE_MODULES_DIR}")
-        endif()
+        set_target_properties(${_module_name} PROPERTIES INSTALL_NAME_DIR ${QORE_MODULES_DIR})
     endif (APPLE)
     set_target_properties(${_module_name} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 
@@ -3671,13 +3664,7 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
     if (ARGC GREATER 2)
         set(_qore_catalog_install_component "${ARGV2}")
     endif()
-    # the source tree's catalogs are installed relative to the install prefix (qore#7849); an external module's in the
-    # absolute catalog directory of QoreConfig.cmake
-    if (DEFINED QORE_CATALOG_INSTALL_DIR AND NOT "${QORE_CATALOG_INSTALL_DIR}" STREQUAL "")
-        set(_qore_catalog_install_dir "${QORE_CATALOG_INSTALL_DIR}")
-    else()
-        set(_qore_catalog_install_dir "${QORE_CATALOG_DIR}")
-    endif()
+    set(_qore_catalog_install_dir "${QORE_CATALOG_DIR}")
     if (ARGC GREATER 3)
         set(_qore_catalog_install_dir "${ARGV3}")
     endif()
@@ -3833,10 +3820,6 @@ FUNCTION (QORE_FINALIZE_CATALOG_INSTALL)
         set(_qore_catalog_sweep_flat FALSE)
         if (DEFINED QORE_CATALOG_DIR AND NOT "${QORE_CATALOG_DIR}" STREQUAL ""
                 AND "${_qore_catalog_root}" STREQUAL "${QORE_CATALOG_DIR}")
-            set(_qore_catalog_sweep_flat TRUE)
-        endif()
-        if (DEFINED QORE_CATALOG_INSTALL_DIR AND NOT "${QORE_CATALOG_INSTALL_DIR}" STREQUAL ""
-                AND "${_qore_catalog_root}" STREQUAL "${QORE_CATALOG_INSTALL_DIR}")
             set(_qore_catalog_sweep_flat TRUE)
         endif()
 
