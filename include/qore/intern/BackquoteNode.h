@@ -73,6 +73,7 @@ DLLLOCAL QoreStringNode *backquoteEval(const char* cmd, int& rc, ExceptionSink* 
 
 #ifndef _Q_WINDOWS
 #include <sys/types.h>
+#include <sys/wait.h>
 
 //! the result of qore_wait_child_process()
 enum class QoreChildWaitResult {
@@ -122,6 +123,22 @@ DLLLOCAL void qore_kill_child_process(pid_t pid, pid_t kill_target);
 /** @return 0 if the process was reaped and \a status is set, -1 if waitpid() failed (errno is set)
 */
 DLLLOCAL int qore_reap_child_process(pid_t pid, int& status);
+
+//! returns the exit code of a shell command from the status of the process that waitpid() reaped (qore#7912)
+/** The exit status of a process that exited, else 128 + the number of the signal that ended it, as a shell reports a
+    command that a signal ended: the code does not depend on whether \c /bin/sh ran the command in a child of its own
+    (dash, bash) or in its own process (busybox \c sh, which executes the last command of \c -c in place of the
+    shell); -1 for any other status (backquote(), system())
+*/
+DLLLOCAL inline int qore_child_exit_code(int status) {
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return -1;
+}
 #endif
 
 #endif

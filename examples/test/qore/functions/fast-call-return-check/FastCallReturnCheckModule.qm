@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the module of FastCallReturnCheck.q: a call of its function from the script's compiled code enters the module's
+# Program through the runtime's fast call of a function (qore_rt_call_fast())
+
+%modern
+
+module FastCallReturnCheckModule {
+    version = "1.0";
+    desc = "a function whose return value fails its declared type, for fast-call-return-check.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public int sub mod_checked(string s) {
+    auto v = s == "ok" ? 1 : s;
+    return v;
+}

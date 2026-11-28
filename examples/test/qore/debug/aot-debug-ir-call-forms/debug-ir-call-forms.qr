@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# AOT code makes pseudo-method calls of substr(), index() and rindex() of strings, and fuses case conversions with the
+# string calls that consume their results; the debug IR that runs while a debugger is attached must give the results
+# and the exception frames of the source (qore#7733): each call below is made through the runtime with a debugger
+# attached, and the output is compared with the AST interpreter's
+
+class Recorder inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+# a string with an invalid UTF-8 byte, which the string calls reject
+string sub invalid() {
+    return binary_to_string(<61ff62>, "UTF-8");
+}
+
+# the frame of the exception that a call raises: its error and the function of the innermost frame
+string sub frameOf(code c) {
+    try {
+        return sprintf("%y", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s", ex.err, ex.callstack[0].function);
+    }
+}
+
+# case conversions fused with the string calls that consume their results
+list<auto> sub caseCalls(string s) {
+    return (s.lwr().contains("b"), s.lwr().contains("B"), s.upr().size(), s.upr().startsWith("A"));
+}
+
+# function forms of string calls that succeed
+list<auto> sub stringCalls(string s) {
+    return (substr(s, 1, 2), substr(s, -2), index(s, "c"), rindex(s, "b"), index(s, "c", 1));
+}
+
+# function forms that raise: the frame is the builtin's
+string sub substrFrame() {
+    string s = invalid();
+    try {
+        return substr(s, 1, 1);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s", ex.err, ex.callstack[0].function);
+    }
+}
+string sub indexFrame() {
+    string s = invalid();
+    try {
+        return index(s, "b").toString();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s", ex.err, ex.callstack[0].function);
+    }
+}
+string sub rindexFrame() {
+    string s = invalid();
+    try {
+        return rindex(s, "b").toString();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s", ex.err, ex.callstack[0].function);
+    }
+}
+
+class Calls {
+    static string indexFrame() {
+        string s = invalid();
+        try {
+            return index(s, "b").toString();
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s %s", ex.err, ex.callstack[0].function);
+        }
+    }
+    string substrFrame() {
+        string s = invalid();
+        try {
+            return substr(s, 0, 1);
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s %s", ex.err, ex.callstack[0].function);
+        }
+    }
+}
+
+sub report(string label) {
+    printf("%s: case calls: %y\n", label, call_function("caseCalls", "ABC"));
+    printf("%s: string calls: %y\n", label, call_function("stringCalls", "abcabc"));
+    foreach string name in (("substrFrame", "indexFrame", "rindexFrame")) {
+        printf("%s: %s: %s\n", label, name, call_function(name));
+    }
+    printf("%s: static method: %s\n", label, Calls::indexFrame());
+    printf("%s: method: %s\n", label, (new Calls()).substrFrame());
+}
+
+# warm up the native code, then the calls with a debugger attached (the frames of the native code without one are
+# qore#7711's)
+for (int i = 0; i < 8; ++i) {
+    caseCalls("ABC");
+    stringCalls("abcabc");
+    substrFrame();
+    indexFrame();
+    rindexFrame();
+}
+
+Recorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+report("debugger");
+recorder.removeProgram(pc);

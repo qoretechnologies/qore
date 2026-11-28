@@ -100,6 +100,21 @@ DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const 
 //! the handlers: no element index, which is an int, has this value
 constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
 
+//! The calls of AOT code that check whether a debugger is attached before they call a fast entry (qore#7676)
+/** A call through a fast entry or a summary of the callee does not report the call to a debugger, so while one is
+    attached such a call is made by the runtime call path, which does.  The check is debug support that costs
+    performance, so it is emitted only in code compiled with debugging (qcc -g).
+*/
+enum class AOTDebuggerChecks : uint8_t {
+    //! code compiled without debugging: no call checks; a debugger can miss the entry and exit of its calls
+    None,
+    //! code with debugging of a Program that cannot be debugged (PO_NO_DEBUGGING): only its calls into another
+    //! module's Program check
+    CrossModule,
+    //! code with debugging of a Program that can be debugged: every call that a debugger must see checks
+    All,
+};
+
 //! Returns the terminator of a block, or nullptr if it has none yet
 /** LLVM 23 changed getTerminator(): it no longer returns nullptr for a block whose last instruction is not a
     terminator (it asserts the block is well formed, and returns its last instruction in a release build of LLVM), and
@@ -190,6 +205,14 @@ public:
         aot_direct_closure_fast_entry = direct_closure_fast_entry;
     }
 
+    //! Sets which calls of the AOT code check whether a debugger is attached (qore#7676)
+    /** AOTDebuggerChecks::All is the default; AOT compilation sets it for each Program (aotDebuggerChecks() in
+        QoreAOT.cpp)
+    */
+    void setAOTDebuggerChecks(AOTDebuggerChecks checks) {
+        aot_debugger_checks = checks;
+    }
+
     //! Sets the name of the native function generated for the IR function, if not its own name
     /** Lets a function be compiled again under another symbol without changing the IR function, which is shared by
         every thread running it.
@@ -244,13 +267,16 @@ public:
     //! @param return_kind native or boxed fast-entry return ABI
     //! @param return_type the declared return type from the signature; a fast entry applies it to its return
     //! values itself, since it is called directly instead of through a runtime helper that applies it
+    //! @param signature_loc the location of the signature, which locates the error of a missing return value of a
+    //! type that rejects NOTHING, as the caller of a standard entry does (UserVariantBase::evalIntern(), qore#7787)
     void setFastEntryMode(const std::string& name,
             const std::unordered_map<const void*, llvm::Value*>* args,
             const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
             const std::unordered_set<const void*>* borrowed_args = nullptr,
             BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed,
-            const QoreTypeInfo* return_type = nullptr) {
+            const QoreTypeInfo* return_type = nullptr, const QoreProgramLocation* signature_loc = nullptr) {
         fast_entry_name = name;
+        fast_entry_signature_loc = signature_loc;
         fast_entry_args = args;
         fast_entry_arg_kinds = arg_kinds;
         fast_entry_borrowed_args = borrowed_args;
@@ -326,8 +352,18 @@ private:
     // The ExceptionSink* parameter for the current function
     llvm::Value* xsink_arg = nullptr;
 
+    //! the state of the inline cancellation polls of the function that cancel_poll_func names (emitLoopCancelPoll()):
+    //! the stack slots that hold the addresses of the two words that a poll reads, and the QoreCancelPollWords that
+    //! qore_rt_check_cancel_poll() fills; made in the entry block of the function by its first poll
+    llvm::Function* cancel_poll_func = nullptr;
+    llvm::AllocaInst* cancel_poll_bits_slot = nullptr;
+    llvm::AllocaInst* cancel_poll_count_slot = nullptr;
+    llvm::AllocaInst* cancel_poll_words = nullptr;
+
     // AOT mode: emit _aot helper calls with slot indices instead of embedded pointers
     bool aot_mode = false;
+    //! The calls that check whether a debugger is attached (see setAOTDebuggerChecks())
+    AOTDebuggerChecks aot_debugger_checks = AOTDebuggerChecks::All;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
     //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
@@ -448,6 +484,8 @@ private:
     bool fast_entry_rejects_nothing_return = false;
     //! the declared return type of a fast entry
     const QoreTypeInfo* fast_entry_return_type = nullptr;
+    //! the location of the signature of a fast entry, of the error of a missing return value (qore#7787)
+    const QoreProgramLocation* fast_entry_signature_loc = nullptr;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -1771,6 +1809,28 @@ private:
             const FastEntryTakeOver* take_over = nullptr,
             const AbstractQoreFunctionVariant* ref_fast_variant = nullptr);
 
+    //! Emits a call through a context-independent fast entry or its body summary that is made only while no debugger
+    //! is attached (qore#7676)
+    /** @a emit_fast emits the call without the runtime in the block that the check of the debugger leads to while no
+        debugger is attached, and returns its result in the return kind of @a callee_info's fast entry, or nullptr with
+        @a error set; it sets its argument to true if the call cannot raise an exception.  While a debugger is
+        attached, the call is made through @a fallback_name or, with @a has_arg_cleanups, through
+        @a fallback_consume_name, which reports it; if the fast call cannot raise, that call's exception is checked
+        right after it, as the code after the call checks none: by branching to the exception edge of
+        @a exception_target, the exception target of an Invoke, or else with emitExceptionCheck().
+
+        @param fast_nothrow [out] true if the call made without the runtime cannot raise an exception
+
+        @return the result in the return kind of the fast entry, or nullptr with @a error set
+    */
+    llvm::Value* emitAotDebuggerGuardedFastCall(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, int32_t slot, const BatchCalleeInfo& callee_info,
+            const std::vector<llvm::Value*>& raw_args, const std::vector<uint32_t>& raw_arg_ids,
+            const std::vector<llvm::Value*>& boxed_args, llvm::Value* arg_cleanups, int nargs,
+            bool has_arg_cleanups, const char* fallback_name, const char* fallback_consume_name,
+            llvm::BasicBlock* exception_target, const std::function<llvm::Value*(bool&)>& emit_fast,
+            bool& fast_nothrow, std::string& error);
+
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
         (qore_rt_call_direct_aot()); the insert point is then the block of the call.
@@ -1923,6 +1983,9 @@ private:
     llvm::Constant* getNothingReturnValue() const;
     //! Emits the declared return type's conversion of a returned value, or of a missing return value when
     //! @p boxed is null, and returns the converted NaN-boxed value; the result is released by invoke cleanup
+    /** The error of a missing return value is located at the signature of the fast entry
+        (fast_entry_signature_loc), as the caller of a standard entry locates it (qore#7787).
+    */
     llvm::Value* emitReturnTypeConversion(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type);
     //! Converts a NaN-boxed return value to the fast-entry return ABI
@@ -2816,6 +2879,15 @@ private:
     */
     void emitExceptionBranch(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, bool force_function_error, llvm::Value* pending = nullptr);
+    //! Emits the cancellation check of the branch \a inst into a block that starts an iteration of a loop statement,
+    //! with the label \a operation, and its exception check
+    /** The check is an inline poll of the thread's cancellation word and of the count of requested sandbox
+        interrupts, which calls qore_rt_check_cancel_poll() only when one of them is set; the first poll of an
+        invocation finds the words unresolved and calls it as well (see "Inline polls of native code" in
+        design/cooperative-cancellation.md)
+    */
+    void emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm_func, const QoreIRInstruction* inst,
+            const char* operation);
 
     // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,
@@ -3203,6 +3275,86 @@ private:
     bool buildArgsArray(const QoreIRInstruction* inst, int arg_start,
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
+
+    //! Returns true if AOT code calls the call reference of \a inst (a CallClosureDirect or its invoke form, whose
+    //! target is not known) through the call-reference entry of its function first (qore#5578)
+    DLLLOCAL bool callRefEntryCallEligible(const QoreIRInstruction* inst) const;
+
+    //! Emits the call of \a inst through a call-reference entry with no argument or one native argument, if it has
+    //! that shape (qore#5578)
+    /** Calls qore_rt_call_ref_value_<a>_v1() with the native argument, and if it made no call, the generic call path
+        (qore_rt_call_closure_fast()) with the argument boxed in the fallback block, which releases it there; the two
+        NaN-boxed results, which the caller owns, are joined.
+
+        @param result set to the joined result, or left nullptr if the call does not have that shape (nothing is emitted)
+        @param closure_helpers true if the generic call path is made by qore_rt_call_closure_0() or
+        qore_rt_call_closure_1(), as the invoke form of the call makes it, instead of qore_rt_call_closure_fast()
+
+        @return false on error
+    */
+    DLLLOCAL bool emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llvm::Value* ref_boxed,
+            llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error,
+            bool closure_helpers = false);
+
+    //! Emits the call of \a inst through a call-reference entry with no argument or one native argument giving a native
+    //! value, when its value is stored into a native local of that kind (qore#5578)
+    /** Applies when \a next, the instruction after the call in its block, is the only use of the call's value: a plain
+        store into a native int, float or bool local of exactly that type.  Calls qore_rt_call_ref_<r>_<a>_v1(), and
+        if it made no call, the generic call path (qore_rt_call_closure_fast()), whose NaN-boxed value is then checked
+        and converted with the local's type there, as the store would check and convert it (the value of the kind
+        as it is, any other value with qore_rt_coerce_value_by_type_path_aot()), and released; the native values are
+        joined, so the store takes a native value, as from a direct call of a native fast entry.
+
+        @param result set to the joined native value, or left nullptr if the call does not have that shape (nothing
+        is emitted)
+        @param kind set to the kind of the native value
+
+        @return false on error
+    */
+    DLLLOCAL bool emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst, const QoreIRInstruction* next,
+            llvm::Value* ref_boxed, llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result,
+            BatchCalleeReturnKind& kind, std::string& error);
+
+    //! Emits the call of \a inst through a call-reference entry with NaN-boxed arguments (qore#5578)
+    /** Calls qore_rt_call_ref_boxed_v1() and, if it made no call, the generic call path (qore_rt_call_closure_fast())
+        with the same arguments, and returns the joined NaN-boxed result, which the caller owns.
+
+        @param arg_cleanups nullptr, or the cleanup slots of the temporaries that the call gives to the callee
+        (buildArgCleanupArray()): the helper (qore_rt_call_ref_boxed_given_v1()) releases them in the frame of the call
+        that it makes, and the generic call path (qore_rt_call_closure_fast_consume_args()) takes them over otherwise;
+        an array that the call gives only when a read through a reference holds its value (nullable_arg_cleanups) is
+        tested first, and the call is made as one that gives nothing without it
+        @param cleanups_given true if \a arg_cleanups is known to be given (the branch of emitGivenOrPlainCall() that
+        gives it)
+    */
+    DLLLOCAL llvm::Value* emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
+            llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func, bool cleanups_given = false);
+
+    //! Emits the test of a call site's last value that was not a function reference (qore#5578)
+    /** A call site keeps the last value with which a call-reference helper returned QORE_RT_CALL_REF_NOT_FUNCREF (a
+        closure, for example) in a slot of the function's entry block, which holds NOTHING when the function is
+        entered: a call with that value goes to \a generic_bb, the generic call path, without the helper, which costs a
+        closure called through the site one load and one compare.  The generic call path is always correct, so a value
+        that the slot keeps after it was released, and whose address a reference to a function took, only takes it
+        too.  Leaves the builder in the block of the helper's call.
+
+        @return the slot, which emitCallRefSiteNote() writes
+    */
+    DLLLOCAL llvm::AllocaInst* emitCallRefSiteSkip(llvm::Value* ref_boxed, llvm::Function* llvm_func,
+            llvm::BasicBlock* generic_bb);
+    //! Returns a block that keeps the value in the slot of emitCallRefSiteSkip() and goes to \a generic_bb
+    DLLLOCAL llvm::BasicBlock* emitCallRefSiteNote(llvm::AllocaInst* not_funcref, llvm::Value* ref_boxed,
+            llvm::Function* llvm_func, llvm::BasicBlock* generic_bb);
+
+    //! Returns the entry-block slot of the result of a call through a call-reference entry
+    DLLLOCAL llvm::AllocaInst* getCallRefEntryResultSlot(llvm::Function* llvm_func);
+    //! the slot of getCallRefEntryResultSlot(), or nullptr
+    llvm::AllocaInst* callref_entry_result_slot = nullptr;
+    //! Returns the entry-block slot that owns the value that the conversion of the generic call's value in
+    //! emitNativeStoreCallRefEntryCall() gives, which is released at once
+    DLLLOCAL llvm::AllocaInst* getCallRefEntryCoerceCleanupSlot(llvm::Function* llvm_func);
+    //! the slot of getCallRefEntryCoerceCleanupSlot(), or nullptr
+    llvm::AllocaInst* callref_entry_coerce_cleanup_slot = nullptr;
 
     // Emit the assigned branch of an argument-taking string pseudo-method
     // whose statically typed operands may still contain NOTHING.  Leaves the

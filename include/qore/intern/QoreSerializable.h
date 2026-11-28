@@ -210,15 +210,57 @@ public:
         return unrestricted;
     }
 
+    //! sets the object that a builtin method of Serializable serializes: its own provenance does not count for the
+    //! calling code (see qore_receiver_caller_is_restricted())
+    DLLLOCAL void setReceiver(const QoreObject* obj) {
+        receiver = obj;
+    }
+
+    //! returns the object that a builtin method of Serializable serializes, if any
+    DLLLOCAL const QoreObject* getReceiver() const {
+        return receiver;
+    }
+
+    //! for a builtin method of Serializable that serializes its receiver: decides, once at the start of the call,
+    //! whether the code that called it is trusted code with the receiver's provenance frame left out, which reads the
+    //! non-public members of objects as the static form's caller does (the owner rule of qore#7033; qore#7146)
+    DLLLOCAL void decideReceiverCaller();
+
+    //! returns true if decideReceiverCaller() found that the calling code is trusted code
+    DLLLOCAL bool receiverCallerTrusted() const {
+        return receiver_caller_trusted;
+    }
+
+    //! returns true if restricted code is in the chain of callers (qore_receiver_caller_is_restricted()), decided once
+    //! for the serialization: also for a trusted API, for the rule of shared objects
+    DLLLOCAL bool chainSandboxed();
+
+    //! for a trusted API: sets whether the owner rule of the non-public members of objects with the provenance of a
+    //! sandbox (qore#7033) is lifted, which is decided once for the calling code (qore#7146)
+    DLLLOCAL void setOwnerRuleLifted(bool lifted) {
+        owner_rule_lifted = unrestricted && lifted;
+    }
+
+    //! returns true if the owner rule of the non-public members of objects is lifted (see setOwnerRuleLifted())
+    DLLLOCAL bool ownerRuleLifted() const {
+        return owner_rule_lifted;
+    }
+
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
     //! true once class_ctx was read (or for a trusted API, which does not use it)
     bool class_ctx_known = false;
-    //! qore_caller_is_sandboxed(), when it is needed: -1 = not known yet
+    //! the object that a builtin method of Serializable serializes, if any
+    const QoreObject* receiver = nullptr;
+    //! qore_receiver_caller_is_restricted(), when it is needed: -1 = not known yet
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
     bool unrestricted = false;
+    //! true if the code that called a builtin method that serializes its receiver is trusted code
+    bool receiver_caller_trusted = false;
+    //! true if the owner rule of the non-public members of objects is lifted for a trusted API
+    bool owner_rule_lifted = false;
 
 #ifdef DEBUG
     // The lazy reads of restricts() are correct only if the thread's frame is the one that this object was created in
@@ -342,6 +384,9 @@ public:
 
     //! Serializes \a val for trusted code with all state (Program::serializeToData(), qore#7146)
     DLLLOCAL static QoreHashNode* serializeToDataTrusted(QoreValue val, int64 flags, ExceptionSink* xsink);
+
+    //! Serializes the receiver of a builtin method of Serializable for the code that called the method (qore#7146)
+    DLLLOCAL static QoreHashNode* serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink);
 
     //! Serializes \a val for trusted code with all state to \a stream (Program::serialize(), qore#7146)
     DLLLOCAL static void serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,

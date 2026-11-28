@@ -1422,6 +1422,14 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
    return 0;
 }
 
+int qore_string_private::raiseGrowFailure(ExceptionSink* xsink) {
+    if (!xsink) {
+        qore_throw_bad_alloc();
+    }
+    qore_raise_allocation_failure(xsink, "the growth of a string");
+    return -1;
+}
+
 int qore_string_private::concat(const QoreString* str, ExceptionSink* xsink) {
     //printd(5, "concat() buf='%s' str='%s'\n", ownedBuffer(), str->priv->effective_buf());
     // if it's not a null string
@@ -1434,6 +1442,26 @@ int qore_string_private::concat(const QoreString* str, ExceptionSink* xsink) {
 
     // if priv->buffer needs to be resized
     check_char(cstr->priv->len + len + STR_CLASS_EXTRA);
+    // concatenate new string (source may be a view)
+    memcpy(ownedBuffer() + len, cstr->priv->effective_buf(), cstr->priv->len);
+    len += cstr->priv->len;
+    ownedBuffer()[len] = '\0';
+    return 0;
+}
+
+int qore_string_private::concatRaising(const QoreString* str, ExceptionSink* xsink) {
+    // if it's not a null string
+    if (!str || !str->priv->len)
+        return 0;
+
+    TempEncodingHelper cstr(str, getEncoding(), xsink);
+    if (*xsink)
+        return -1;
+
+    // memory that cannot be allocated raises an exception and leaves the string unchanged (qore#7466)
+    if (check_char(cstr->priv->len + len + STR_CLASS_EXTRA, xsink)) {
+        return -1;
+    }
     // concatenate new string (source may be a view)
     memcpy(ownedBuffer() + len, cstr->priv->effective_buf(), cstr->priv->len);
     len += cstr->priv->len;

@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# a user module for IRFloatLocalAddScenario.qr: its function runs in the module's Program, so += of its result on a
+# float local of the scenario takes the lvalue path
+%modern
+
+module IRFloatLocalAddModule {
+    version = "1.0";
+    desc = "float function of another Program for IRFloatLocalAdd.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace IRFloatLocalAddModule {
+    public float sub moduleStep(float value) {
+        return value + 0.5;
+    }
+}

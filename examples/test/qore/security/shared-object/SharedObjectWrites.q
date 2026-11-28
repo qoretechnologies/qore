@@ -3,7 +3,10 @@
 # Sandboxed code cannot change the members of an object that trusted code marked as shared with
 # SandboxManager::shareObject(), or delete it, in any form of write, also through Reflection and the methods of the
 # object's own class; reads work, trusted callers can change it, and an object that is not marked is not affected
-# (qore#6843); see shared-object-writes.qtest
+# (qore#6843); see shared-object-writes.qtest.  The objects that are not shared that the tenant changes are its own
+# (its sandbox created them), as the owner rules of tenant isolation (qore#6842) refuse it the deletion of an object
+# that it did not create and the change of its non-public members; the order of the two rules is checked at the end:
+# the shared-object rule answers first, then the owner rules
 
 %modern
 %enable-all-warnings
@@ -130,6 +133,43 @@ string sub own_class_code(SharedTarget t) {
 string sub change_copy(SharedTarget t) {
     return try_change(sub () { SharedTarget c = t.copy(); c.s = \"copy\"; });
 }
+
+# an object that the tenant creates: its sandbox owns it (qore#6842)
+SharedTarget sub create_target() {
+    return new SharedTarget();
+}
+
+# an object of a class of the tenant, whose destructor the tenant can call with Reflection
+class TenantObject {
+    public {
+        string s = \"orig\";
+    }
+
+    destructor() {
+    }
+}
+
+TenantObject sub create_tenant_object() {
+    return new TenantObject();
+}
+
+string sub reflection_delete(object o) {
+    return try_change(sub () {
+        Reflection::DestructorMethod d = Reflection::Class::getClass(o).getDestructorMethod();
+        d.call(o);
+    });
+}
+
+string sub delete_object(object o) {
+    return try_change(sub () { delete o; });
+}
+
+string sub delete_thread_data_object(object o) {
+    save_thread_data({\"tenant-object\": o});
+    string rv = try_change(sub () { delete_thread_data(\"tenant-object\"); });
+    remove_thread_data(\"tenant-object\");
+    return rv;
+}
 ";
 
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
@@ -159,8 +199,9 @@ foreach string name in (p.callFunction("change_names")) {
     string before = snapshot(target);
     string rv = p.callFunction("try_one", name, target);
     string after = snapshot(target);
-    # the same change of an object that is not marked
-    SharedTarget plain();
+    # the same change of an object that is not marked, which the tenant created: neither the shared-object rule nor
+    # the owner rules refuse it
+    SharedTarget plain = p.callFunction("create_target");
     string plain_before = snapshot(plain);
     string plain_rv = p.callFunction("try_one", name, plain);
     string plain_after = snapshot(plain);
@@ -189,3 +230,51 @@ SharedTarget deleted = shared_target();
 SharedTarget other_ref = deleted;
 delete deleted;
 printf("trusted code deletes a shared object: %s\n", snapshot(other_ref));
+
+# the order of the checks: the shared-object rule answers first, whoever created the object, then the owner rules of
+# tenant isolation, which refuse an object that is not shared that the tenant did not create
+
+# the result of a check by the code of a Program, and whether the object still exists
+string sub check(Program pgm, string f, SharedTarget t) {
+    string rv = pgm.callFunction(f, t);
+    return sprintf("%s (%s)", rv, snapshot(t) == "OBJECT-ALREADY-DELETED" ? "deleted" : "kept");
+}
+
+SharedTarget sub shared_own() {
+    SharedTarget t = p.callFunction("create_target");
+    SandboxManager::shareObject(t);
+    return t;
+}
+
+foreach string f in ("delete_object", "delete_thread_data_object") {
+    printf("order: %s: a shared object of the host: %s; a shared object of the tenant: %s; one of the host that is "
+        "not shared: %s; one of the tenant that is not shared: %s\n", f, check(p, f, shared_target()),
+        check(p, f, shared_own()), check(p, f, new SharedTarget()), check(p, f, p.callFunction("create_target")));
+}
+{
+    # the explicit deletion with Reflection, which can only be of an object of the tenant's own classes
+    object shared_own = p.callFunction("create_tenant_object");
+    SandboxManager::shareObject(shared_own);
+    object plain_own = p.callFunction("create_tenant_object");
+    # a deleted object is passed as no value
+    code exists_str = string sub (auto o) {
+        try {
+            return exists o.s ? "kept" : "deleted";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "OBJECT-ALREADY-DELETED" ? "deleted" : ex.err;
+        }
+    };
+    printf("order: Reflection destructor call: a shared object of the tenant: %s (%s); one of the tenant that is not "
+        "shared: %s (%s)\n", p.callFunction("reflection_delete", shared_own), exists_str(shared_own),
+        p.callFunction("reflection_delete", plain_own), exists_str(plain_own));
+}
+# at the enforcement level of code safety, the owner rules do not apply; the shared-object rule does
+{
+    Program cs(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+    SandboxManager sm();
+    sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+    cs.setSandboxManager(sm);
+    cs.parse(TenantCode, "tenant-code-safety");
+    printf("order at code safety: delete: a shared object of the host: %s; one of the host that is not shared: %s\n",
+        check(cs, "delete_object", shared_target()), check(cs, "delete_object", new SharedTarget()));
+}

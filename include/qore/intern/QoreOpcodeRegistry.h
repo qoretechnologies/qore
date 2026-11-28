@@ -516,6 +516,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::CopyCallArg, "CopyCallArg", false, false, false, 1, "Capture a call argument", true, false, "ParseNode", true, false, false, false, false }, // 444
     { QoreIROpcode::ReleaseCallArgSource, "ReleaseCallArgSource", false, false, false, OPCODE_MIN_OPERANDS(1), "Release the source of an evaluated argument", true, false, "ParseNode", false, false, false, false, false }, // 445
     { QoreIROpcode::ReadReferenceThrough, "ReadReferenceThrough"    , true , false, false,  1, "Read the value of the lvalue that a reference element names", false, true , "QoreReadReferenceOperatorNode", true , false, false, false, false }, // 446
+    { QoreIROpcode::HandlerAbandonReturn, "HandlerAbandonReturn"    , false, false, false, OPCODE_MIN_OPERANDS(0), "Release what a handler run handed over when a debugger's request abandons the return (debug IR)", true , true , "StatementBlock", false, false, false, false, false }, // 447
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

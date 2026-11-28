@@ -177,6 +177,12 @@ public:
         is removed, a declared member keeps its slot with no value, and a member that is not set is not created
         (qore#7179, qore#7208)
 
+        An object that the current code may not delete is not deleted: a system constant object is refused with
+        \c SYSTEM-OBJECT-ERROR, and the member is left as it is, unless the member is held in external storage, which
+        its accessor clears; for sandboxed code at the enforcement level of tenant isolation, an object that its
+        sandbox does not own is refused with \c SANDBOX-OBJECT-ACCESS-ERROR after the member is removed: the object
+        is released, not deleted.
+
         @param key the name of the member to delete
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
@@ -186,6 +192,12 @@ public:
     /** The member is removed as by the Qore \c delete operator: the key of a member that the class does not declare
         is removed, a declared member keeps its slot with no value, and a member that is not set is not created
         (qore#7179, qore#7208)
+
+        An object that the current code may not delete is not deleted: a system constant object is refused with
+        \c SYSTEM-OBJECT-ERROR, and the member is left as it is, unless the member is held in external storage, which
+        its accessor clears; for sandboxed code at the enforcement level of tenant isolation, an object that its
+        sandbox does not own is refused with \c SANDBOX-OBJECT-ACCESS-ERROR after the member is removed: the object
+        is released, not deleted.
 
         @param key the name of the member to delete, assumed to be in the default encoding (QCS_DEFAULT)
         @param xsink if an error occurs, the Qore-language exception information will be added here

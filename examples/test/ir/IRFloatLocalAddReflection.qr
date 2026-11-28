@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# += on a float local whose operand's call changes the local through reflection: the operand is evaluated before the
+# local is read (IRFloatLocalAdd.qtest; the source tiers only, as compiled code has no reflection frames)
+%modern
+%allow-debugger
+
+float sub changeLocal() {
+    set_local_var_value(1, "value", 7.5);
+    return 2.5;
+}
+
+float sub reflectedAdd() {
+    float value = 1.5;
+    value += changeLocal();
+    return value;
+}
+
+printf("reflected: %y\n", reflectedAdd());

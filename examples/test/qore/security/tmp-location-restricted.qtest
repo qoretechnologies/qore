@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set the execution modes of their Programs themselves
+# test-platform: macos - the platform's temporary directory is a symbolic link (/tmp to /private/tmp) on the branch of the current directory
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class TmpLocationRestrictedTest
+
+#! Library code gives code restricted from external information the platform's temporary directory unresolved
+/** Without a temporary directory of its %Program, code restricted from external information (PO_NO_EXTERNAL_INFO) gets
+    the platform default (\c /tmp, \c c:\\temp on Windows) from Util::tmp_location(), also as the directory of the
+    temporary directories and files that FsUtil creates for it without a directory: an absolute path, as it is, which
+    is the same whatever the current directory is.  It was given through the form of realpath() for such code, which
+    is relative to the current directory when the canonical form of the path shares more leading directories with the
+    current directory than the path does: on macOS, \c /tmp is a link to \c /private/tmp, and with the current
+    directory below \c /private (as the temporary directories of the environment are), the result was a path relative
+    to it (ex: \c "../../../../tmp"), which named the depth of the current directory and no longer reached the
+    directory after a change of the current directory.
+
+    The worker (\c tmp-location-restricted/tmp-location-restricted-worker.q) runs in a directory below a temporary
+    directory of the environment, with \c TMPDIR set to a symbolic link to another temporary directory; code that may
+    read external information still gets the canonical form of \c TMPDIR.
+*/
+class TmpLocationRestrictedTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string dir = normalize_dir(get_script_dir());
+        string worker = dir + DirSep + "tmp-location-restricted" + DirSep + "tmp-location-restricted-worker.q";
+        TmpDir tmp("qore-tmp-location-restricted-");
+        #! the platform default that restricted code gets
+        string default_dir = PlatformOS == "Windows" ? "c:\\temp" : "/tmp";
+        #! the current directory of the worker
+        string cwd;
+        #! the TMPDIR of the worker: a symbolic link to env_dir
+        string env_link;
+        #! the directory that TMPDIR names
+        string env_dir;
+    }
+
+    constructor() : QUnit::Test("TmpLocationRestrictedTest", "1.0", \ARGV) {
+        # a current directory a few levels below the temporary directory, so that a path relative to it is not "."
+        cwd = tmp.path + DirSep + "cwd" + DirSep + "a" + DirSep + "b";
+        if (mkdir(cwd, 0755, True)) {
+            throw "SETUP-ERROR", sprintf("cannot create %y: %s", cwd, strerror());
+        }
+        env_dir = tmp.path + DirSep + "env-tmp";
+        if (mkdir(env_dir)) {
+            throw "SETUP-ERROR", sprintf("cannot create %y: %s", env_dir, strerror());
+        }
+        env_link = tmp.path + DirSep + "env-link";
+        symlink(env_dir, env_link);
+        addTestCase("every execution mode gives restricted code the unresolved platform default", \testModes());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! returns the environment of the worker, as a command prefix
+    private string env() {
+        return (map sprintf("%s=%s ", $1.key, TmpLocationRestrictedTest::quote($1.value)), {
+            "QORE_MODULE_DIR": dir + "/../../../../qlib" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            "LD_LIBRARY_PATH": libdir,
+            "DYLD_LIBRARY_PATH": libdir,
+            "QORE_LIBDIR": libdir,
+            "TMPDIR": env_link,
+            "TMP": env_link,
+            "TEMP": env_link,
+            "TEMPDIR": env_link,
+        }.pairIterator()).join("");
+    }
+
+    #! returns the "<caller>/<check>" lines of the worker's output as a hash
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv();
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z-]+\/[a-z]+)=(.*)$/);
+            if (m) {
+                rv{m[0]} = m[1] ?? "";
+            }
+        }
+        return rv;
+    }
+
+    testModes() {
+        string env_real = realpath(env_dir);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run_stdout(sprintf("cd %s && %s%s -b --enable-debug --exec-mode=%s %s %s",
+                quote(cwd), env(), quote(qore_bin), mode, quote(worker), mode));
+            hash<string, string> r = parse(out);
+            assertEq(9, r.size(), mode + ": number of checks; output: " + out);
+            foreach string kind in (("restricted", "sandboxed-restricted")) {
+                foreach string check in (("loc", "tmpdir", "tmpfile")) {
+                    string key = kind + "/" + check;
+                    assertTrue(absolute_path(r{key} ?? ""), sprintf("%s: %s is absolute: %y", mode, key, r{key}));
+                    assertEq(default_dir, r{key}, mode + ": " + key);
+                }
+            }
+            # code that may read external information gets the canonical form of the directory of the environment
+            foreach string check in (("loc", "tmpdir", "tmpfile")) {
+                string key = "unrestricted/" + check;
+                assertTrue(absolute_path(r{key} ?? ""), sprintf("%s: %s is absolute: %y", mode, key, r{key}));
+                assertEq(env_real, r{key}, mode + ": " + key);
+            }
+        }
+    }
+}

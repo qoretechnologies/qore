@@ -53,6 +53,13 @@ DLLLOCAL void qore_dbg_fail_allocation(int64 n, size_t min_size);
 
 //! true if the debug hook armed with qore_dbg_fail_allocation() makes this allocation of \a size bytes fail
 DLLLOCAL bool qore_dbg_allocation_fails(size_t size);
+
+//! Makes the \a n th creation of a hash member that follows in the current thread fail with std::bad_alloc (debug
+//! builds only; qore#7466); 0 disarms it
+DLLLOCAL void qore_dbg_fail_hash_member(int64 n);
+
+//! true if the debug hook armed with qore_dbg_fail_hash_member() makes this creation of a hash member fail
+DLLLOCAL bool qore_dbg_hash_member_fails();
 #endif
 
 //! Throws std::bad_alloc; out of line, so that the allocation functions below add only a test to the code that calls
@@ -109,6 +116,18 @@ DLLLOCAL inline void* qore_malloc_or_throw(size_t size) {
     @param context what needed the memory, for the description of the exception
 */
 DLLLOCAL void qore_raise_allocation_failure(ExceptionSink* xsink, const char* context) noexcept;
+
+//! Ends the process for a std::bad_alloc that left native (JIT, AOT) code (qore#7466)
+/** Called by the handler of a std::bad_alloc at a boundary of the C++ code with the native code that it calls, while
+    the exception is handled.  The runtime helpers that grow a value raise \c MEMORY-ALLOCATION-ERROR themselves, so
+    that the native code fails as on any exception (see QORE_RT_CATCH_ALLOCATION_FAILURE() in JITRuntime.cpp and the
+    growth of lists and strings with a sink); a std::bad_alloc that reaches a boundary comes from an allocation that
+    no helper handles.  Native code has no landing pads by default, so the exception left every native frame below
+    the boundary, the frame that the boundary called included, without releasing its values, running its handlers
+    or unlocking what it holds: the thread cannot go on, and the process ends with std::terminate(), whose handler
+    reports the std::bad_alloc (qore_install_terminate_handler()), as before the exception could be raised
+*/
+[[noreturn]] DLLLOCAL void qore_native_allocation_failure() noexcept __attribute__((cold));
 
 //! Installs the terminate handler that reports a std::bad_alloc that no code could handle before the process ends,
 //! and holds back the memory for the exception of an allocation that fails (qore#7466); called by qore_init()

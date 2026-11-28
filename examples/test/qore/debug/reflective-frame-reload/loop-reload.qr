@@ -1,0 +1,212 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# Each loop reads a parameter or body local before the first call in its body;
+# that call replaces the variable in this frame through set_local_var_value(),
+# so the next iteration must read the replacement.
+
+class Stepper {
+    int step() { return 1; }
+}
+class Replaced inherits Stepper {
+    int step() { return 10; }
+}
+# replaces its caller's "receiver" with a Replaced object
+class Replacer inherits Stepper {
+    int step() {
+        set_local_var_value(1, "receiver", new Replaced());
+        return 1;
+    }
+}
+
+# replaces the named variable of its caller's frame
+sub replaceLocal(string name, auto value) {
+    set_local_var_value(1, name, value);
+}
+
+class Writer {
+    # replaces the named variable of its caller's frame
+    write(string name, auto value) {
+        set_local_var_value(1, name, value);
+    }
+}
+
+int sub forObjectParam(Stepper receiver) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += receiver.step();
+    }
+    return sum;
+}
+
+int sub whileObjectLocal(Stepper start) {
+    Stepper receiver = start;
+    int sum = 0;
+    int i = 0;
+    while (i < 4) {
+        sum += receiver.step();
+        ++i;
+    }
+    return sum;
+}
+
+int sub foreachObjectParam(Stepper receiver, list<int> items) {
+    int sum = 0;
+    foreach int item in (items) {
+        sum += receiver.step() * item;
+    }
+    return sum;
+}
+
+int sub forScalarParam(int value) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += value;
+        replaceLocal("value", value * 2);
+    }
+    return sum;
+}
+
+int sub whileScalarLocal(int start) {
+    int value = start;
+    int sum = 0;
+    int i = 0;
+    while (i < 4) {
+        sum += value;
+        replaceLocal("value", value + 100);
+        ++i;
+    }
+    return sum;
+}
+
+int sub foreachScalarLocal(int start, list<int> items) {
+    int value = start;
+    int sum = 0;
+    foreach int item in (items) {
+        sum += value * item;
+        replaceLocal("value", value + 1);
+    }
+    return sum;
+}
+
+string sub foreachStringParam(string text, list<int> items, Writer writer) {
+    string result;
+    foreach int item in (items) {
+        result += sprintf("%s%d,", text, item);
+        writer.write("text", text + "x");
+    }
+    return result;
+}
+
+int sub forObjectLocalByFunction(Stepper start) {
+    Stepper receiver = start;
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += receiver.step();
+        replaceLocal("receiver", new Replaced());
+    }
+    return sum;
+}
+
+class Methods {
+    int forIntParam(int value) {
+        int sum = 0;
+        for (int i = 0; i < 4; ++i) {
+            sum += value;
+            replaceLocal("value", value * 3);
+        }
+        return sum;
+    }
+
+    static float whileFloatParam(float value) {
+        float sum = 0.0;
+        int i = 0;
+        while (i < 4) {
+            sum += value;
+            replaceLocal("value", value / 2.0);
+            ++i;
+        }
+        return sum;
+    }
+}
+
+int sub foreachBoolParam(bool flag, list<int> items) {
+    int sum = 0;
+    foreach int item in (items) {
+        if (flag) {
+            sum += item;
+        }
+        replaceLocal("flag", !flag);
+    }
+    return sum;
+}
+
+# replaces the named variable of its caller's frame and throws
+sub replaceAndThrow(string name, auto value) {
+    set_local_var_value(1, name, value);
+    throw "REPLACED";
+}
+
+# the parameter is read only before the call that replaces it
+int sub readBeforeReflection(int value) {
+    int doubled = value * 2;
+    replaceLocal("value", 1000);
+    return doubled;
+}
+
+# the parameter is assigned after the call that replaces it, before it is read
+int sub assignedAfterReflection(int value) {
+    replaceLocal("value", 1000);
+    value = 5;
+    return value;
+}
+
+# the parameter is read in the handler of the exception thrown after replacing it
+int sub readInHandlerAfterReflection(int value) {
+    try {
+        replaceAndThrow("value", 7);
+    } catch (hash<ExceptionInfo> ex) {
+        return value;
+    }
+    return -1;
+}
+
+# cannot reach reflection: compiled code keeps its native entry and private locals
+int sub reflectionFree(int value) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += value + i;
+    }
+    return sum;
+}
+
+list<int> items = (1, 2, 3, 4);
+code closureIntParam = int sub (int value) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += value;
+        replaceLocal("value", value + 5);
+    }
+    return sum;
+};
+# each function runs twice so that the tiered mode also runs it compiled
+for (int pass = 0; pass < 2; ++pass) {
+    printf("forObjectParam: %d\n", forObjectParam(new Replacer()));
+    printf("whileObjectLocal: %d\n", whileObjectLocal(new Replacer()));
+    printf("foreachObjectParam: %d\n", foreachObjectParam(new Replacer(), items));
+    printf("forScalarParam: %d\n", forScalarParam(1));
+    printf("whileScalarLocal: %d\n", whileScalarLocal(1));
+    printf("foreachScalarLocal: %d\n", foreachScalarLocal(1, items));
+    printf("foreachStringParam: %s\n", foreachStringParam("a", items, new Writer()));
+    printf("forObjectLocalByFunction: %d\n", forObjectLocalByFunction(new Stepper()));
+    printf("methodIntParam: %d\n", (new Methods()).forIntParam(1));
+    printf("staticFloatParam: %g\n", Methods::whileFloatParam(8.0));
+    printf("foreachBoolParam: %d\n", foreachBoolParam(True, items));
+    printf("closureIntParam: %d\n", closureIntParam(1));
+    printf("straightLine: %d %d %d\n", readBeforeReflection(3), assignedAfterReflection(3),
+        readInHandlerAfterReflection(3));
+    printf("reflectionFree: %d\n", reflectionFree(pass));
+}

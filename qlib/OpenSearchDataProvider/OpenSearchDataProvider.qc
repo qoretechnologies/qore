@@ -80,8 +80,8 @@ public class OpenSearchDataProvider inherits OpenSearchDataProviderBase {
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     static AbstractRestClient getRestConnection(*hash<auto> options) {

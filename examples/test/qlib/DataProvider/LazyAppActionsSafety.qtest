@@ -262,7 +262,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             "            \"action_code\": DPAT_API});\n"
             "    });\n"
             "}\n"
-            "auto sub value(int id) { return DataProviderActionCatalog::getLazyValue(id); }\n", "restricted");
+            "auto sub value(int id) { return LazyAppActionsValues::Values::getValue(id); }\n", "restricted");
         # lazy and pending registrations of trusted code, read directly and through a trusted module
         assertEq(("eager-a", "lazy-b", "lazy-c"), r.callFunction("read", lazy));
         assertEq(("pending-a",), r.callFunction("read_via_module", pending));
@@ -280,8 +280,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS, True);
         r.loadModule(get_script_dir() + "/LazyAppActionsRestrictedValues.qm");
         r.parse("%requires DataProvider\n"
-            "auto sub get() { return DataProviderActionCatalog::getLazyValue(\n"
-            "    LazyAppActionsRestrictedValues::RestrictedValues::getId()); }\n"
+            "auto sub get() { return LazyAppActionsRestrictedValues::RestrictedValues::getValue(); }\n"
             "int sub runs() { return LazyAppActionsRestrictedValues::RestrictedValues::getRuns(); }\n",
             "restricted-load");
         # the module was loaded by code that no sandbox governs: its value is built on first use
@@ -749,10 +748,17 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \load_module(), (path,));
         assertEq(0, loader.callFunction("get", "getRuns"));
         int id = loader.callFunction("get", "getId");
-        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        # only the module's code reads its value: a reader of another Program is refused before the value is built,
+        # and the builder does not run for it
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \DataProviderActionCatalog::getLazyValue(), id);
+        assertEq(0, loader.callFunction("get", "getRuns"));
+        assertEq("governed", loader.callFunction("get", "getValue"));
         assertEq(1, loader.callFunction("get", "getRuns"));
-        assertEq("governed", DataProviderActionCatalog::getLazyValue(id));
+        # built once: the second read of the module's code gets the same value
+        assertEq("governed", loader.callFunction("get", "getValue"));
         assertEq(1, loader.callFunction("get", "getRuns"));
+        # and a reader of another Program is still refused once it is built
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", \DataProviderActionCatalog::getLazyValue(), id);
     }
 
     valueCycleTest() {
@@ -772,7 +778,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         # what the module's initialization does under the sandbox of the Program loading it: it reads the value
         loadSandboxed("LazyAppActionsSandboxedValueLoad", sub () {
             try {
-                result = DataProviderActionCatalog::getLazyValue(Values::counted);
+                result = Values::getValue(Values::counted);
             } catch (hash<ExceptionInfo> ex) {
                 result = ex.err;
             }
@@ -780,7 +786,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         # built on the thread loading the module, as trusted code, with no wait for a worker (qore#7712)
         assertEq("counted", result);
         assertEq(1, Values::runs);
-        assertEq("counted", DataProviderActionCatalog::getLazyValue(Values::counted));
+        assertEq("counted", Values::getValue(Values::counted));
         assertEq(1, Values::runs);
     }
 
@@ -986,7 +992,7 @@ string sub test() {
     return sprintf(\"%y %y %y %y\", (map $1.action, DataProviderActionCatalog::getActionsNoInit(\"RestrictedApp\")),
         DataProviderActionCatalog::hasLazyAppActions(\"RestrictedApp\"),
         LazyAppActionsGovernedValues::GovernedValues::runs,
-        DataProviderActionCatalog::getLazyValue(LazyAppActionsGovernedValues::GovernedValues::id));
+        LazyAppActionsGovernedValues::GovernedValues::getValue());
 }
 ");
         string script = dir + "/restricted.q";
@@ -1606,7 +1612,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     #! Reads an app and a lazy value for a sandboxed caller under a policy barrier; returns the thread's TID
     private static int readBarrier(string app, int value) {
         DataProviderActionCatalog::getActions(app, False);
-        DataProviderActionCatalog::getLazyValue(value);
+        Values::getValue(value);
         return gettid();
     }
 
@@ -1716,7 +1722,7 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
     private static getValue(int id, Counter done, Queue results) {
         on_exit done.dec();
         try {
-            results.push(DataProviderActionCatalog::getLazyValue(id));
+            results.push(Values::getValue(id));
         } catch (hash<ExceptionInfo> ex) {
             results.push(ex.err);
         }

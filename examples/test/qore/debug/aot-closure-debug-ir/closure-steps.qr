@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# A closure of AOT code compiled with debugging runs its debug IR while a debugger is attached, as a function does,
+# also when native code that was running when the debugger attached creates it (qore#7752): the step events of the
+# closures' statements (the lines in ClosureLines) and the results are compared with the AST interpreter's
+%modern
+%allow-debugger
+
+class Recorder inherits DebugProgram {
+    public {
+        list<int> lines = ();
+        int enters = 0;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid) {
+            int line = pgm.getStatementIdInfo(sid).start_line;
+            if (ClosureLines{line}) {
+                lines += line;
+            }
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { ++enters; rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+# the lines of the statements of the closures below
+const ClosureLines = {
+    "43": True, "44": True, "49": True, "50": True, "59": True, "60": True, "71": True, "72": True, "76": True,
+    "77": True,
+};
+
+Recorder r();
+ProgramControl pc = ProgramControl::getProgram();
+
+code sub make(int add) {
+    return int sub (int v) {
+        int x = v + add;
+        return x * 2;
+    };
+}
+code sub makeLoop() {
+    return int sub (int n) {
+        int t = 0;
+        for (int i = 0; i < n; ++i) { t += i; }
+        return t;
+    };
+}
+
+class Holder {
+    public { int base = 7; }
+    code get() {
+        return int sub (int v) {
+            int y = v + base;
+            return y - 1;
+        };
+    }
+}
+
+# attaches the debugger while this function runs natively, then creates closures in this frame
+int sub attachAndCreate() {
+    r.addProgram(pc);
+    int add = 5;
+    # a closure literal created by a frame that was running when the debugger attached, with a capture
+    code lit = int sub (int v) {
+        int z = v * add;
+        return z + 1;
+    };
+    # one without captures
+    code plain = int sub (int v) {
+        int w = v - 1;
+        return w;
+    };
+    return lit(2) + lit(3) + plain(4);
+}
+
+# created and called natively before the debugger attaches
+code before = make(1);
+int sum = before(3);
+code loop = makeLoop();
+sum += loop(3);
+# the closure keeps no reference to the object that created it
+Holder holder();
+code method_closure = holder.get();
+sum += method_closure(1);
+
+sum += attachAndCreate();
+# a closure created before the debugger attached, called after it
+sum += before(4);
+# closures created after the debugger attached
+code after = make(2);
+sum += after(5);
+sum += loop(2);
+sum += method_closure(2);
+sum += holder.get()(3);
+r.removeProgram(pc);
+
+# no events once the debugger is gone
+sum += before(1) + loop(1) + method_closure(1);
+# the exits are not compared: a frame of native code that was running when the debugger attached, as
+# attachAndCreate(), reports no exit (qore#5567)
+printf("sum=%d enters=%d lines=%y\n", sum, r.enters, r.lines);

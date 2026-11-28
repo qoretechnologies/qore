@@ -1,0 +1,416 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc, the executables that it links and qore in child processes started
+# without an execution mode
+# test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires ../ExecModeHarness.qm
+%requires FsUtil
+
+%exec-class AOTClassInjectionTest
+
+#! the class injections of a compiled module are loaded, and an injection that leads back to the class is refused
+#! (qore#7664)
+/** A class of a compiled program can be injected in place of another class of the program; the loader relates the
+    classes again, and the injected class references the class that it stands in for.  A class injected in place of
+    itself, or in place of a class that reaches it through the classes that it references (the class that it is
+    injected in place of, or its base classes), would keep the classes alive for ever, and is refused.  No compiler
+    writes such a module: the DEBUG-build hook QORE_AOT_TEST_INJECTED_CLASS writes the injections given for the
+    classes named; the cases that use it skip in other builds.
+
+    Each refused class releases the reference that it took, also when the image has more than one refused injection;
+    and a script linked from several compiled objects is checked once the base classes of all of its objects are
+    attached, as a class can reach the class that it is injected in place of through the classes of another object.
+    The classes are checked also when the type resolution fails after base classes were attached (the DEBUG-build
+    hook QORE_AOT_TEST_UNRESOLVED_TYPEDEF writes the typedef named with a type that is not found), and again when a
+    source is compiled with the objects of others preloaded, once the source is committed, as an AOT class can
+    inherit a class of the source, whose own base classes are attached then.  In a library-debug build, the
+    processes report the declarations of their Programs that were not freed at exit (QORE_TEARDOWN_REPORT), which
+    must be none.
+*/
+class AOTClassInjectionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+
+        #! the module: two classes with other signatures, and a subclass of one of them; and another class with a
+        #! subclass
+        const ModuleSource = "%modern
+module InjectProbe {
+    version = \"1.0\";
+    desc = \"classes for the class injection of a compiled module\";
+    author = \"Qore Technologies, s.r.o.\";
+}
+
+public namespace InjectProbe {
+    public class Base {
+        string value() { return \"base\"; }
+    }
+
+    public class Stand {
+        string value() { return \"stand\"; }
+        int extra() { return 1; }
+    }
+
+    public class Sub inherits Base {
+    }
+
+    public class Base2 {
+    }
+
+    public class Sub2 inherits Base2 {
+    }
+
+    public typedef ProbeAlias = int;
+}
+";
+
+        #! the child: loads the module and reports whether a Stand is a Base
+        const ChildSource = "%modern
+try {
+    load_module(\"InjectProbe\");
+} catch (hash<ExceptionInfo> ex) {
+    # not exit(): the library cleanup reports the declarations left
+    printf(\"load: %s: %s\\n\", ex.err, ex.desc);
+    return;
+}
+Program p(PO_MODERN);
+p.parse(\"%requires InjectProbe
+bool sub is_base() { return new InjectProbe::Stand() instanceof InjectProbe::Base; }
+string sub as_base() {
+    try {
+        # checked at run time: the declared types are unrelated unless the module relates them
+        object o = new InjectProbe::Stand();
+        InjectProbe::Base b = o;
+        return b.value();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+\", \"probe\");
+printf(\"is base: %y\\n\", p.callFunction(\"is_base\"));
+printf(\"as base: %s\\n\", p.callFunction(\"as_base\"));
+";
+
+        #! a script linked from two objects: X is in the first one with Y, which inherits Z of the second one, which
+        #! inherits X
+        const ScriptA = "class X {
+    string value() { return \"x\"; }
+}
+
+class Y inherits Z {
+}
+";
+
+        const ScriptB = "class Z inherits X {
+}
+
+typedef ScriptAlias = int;
+
+int sub main() {
+    printf(\"loaded: %y\\n\", new Y() instanceof X);
+    return 0;
+}
+";
+
+        #! a source compiled with the object of another one preloaded: Z of this one inherits X of the other one
+        const ScriptSourceA = "class Z inherits X {
+}
+
+int sub main() {
+    printf(\"loaded: %y\\n\", new Y() instanceof X);
+    return 0;
+}
+";
+
+        #! the other source: X, and Y, which inherits Z of the first one
+        const ScriptSourceB = "class X {
+    string value() { return \"x\"; }
+}
+
+class Y inherits Z {
+}
+";
+
+        #! what the child reports for a module without injections
+        const Unrelated = "is base: False
+as base: RUNTIME-TYPE-ERROR
+";
+
+        #! what the child reports for a module in which Stand is injected in place of Base
+        const Injected = "is base: True
+as base: stand
+";
+    }
+
+    constructor() : QUnit::Test("AOTClassInjectionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a module parsed from source", \sourceTest());
+        addTestCase("a compiled module", \compiledTest());
+        addTestCase("a compiled module with a class injection", \injectedTest());
+        addTestCase("a compiled module with a class injected in place of itself", \selfTest());
+        addTestCase("a compiled module with a cycle of class injections", \cycleTest());
+        addTestCase("a compiled module with a class injected in place of its subclass", \subclassTest());
+        addTestCase("a compiled module with two refused class injections", \twoCyclesTest());
+        addTestCase("a script linked from objects whose classes lead back to an injected class", \batchTest());
+        addTestCase("a compiled module with a refused class injection and a type that is not found",
+            \typeFailureTest());
+        addTestCase("a script whose classes lead back to an injected class and a type that is not found",
+            \batchTypeFailureTest());
+        addTestCase("a source whose class leads back to an injected class of a preloaded object",
+            \sourceParseTest());
+        addTestCase("a source whose class leads back to an injected class of a preloaded object, and that is not "
+            "%modern", \sourceParseOptionsTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-aot-class-injection-");
+        string src_dir = writeModule(tmp.path);
+        assertEq(Unrelated, child(tmp.path, src_dir), "source");
+    }
+
+    compiledTest() {
+        TmpDir tmp("qore-aot-class-injection-");
+        assertEq(Unrelated, child(tmp.path, compile(tmp.path)), "qmod");
+    }
+
+    injectedTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertEq(Injected, child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Base")), "qmod with an injection");
+    }
+
+    selfTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertRegex("^load: .*'Stand' cannot be injected in place of 'InjectProbe::Stand': the injection leads back "
+            "to the class itself", child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Stand")));
+    }
+
+    cycleTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertRegex("^load: .*cannot be injected in place of .*: the injection leads back to the class itself",
+            child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Base,Base=InjectProbe::Stand")));
+    }
+
+    subclassTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        # the subclass references the class through its base class list
+        assertRegex("^load: .*'Base' cannot be injected in place of '(::)?InjectProbe::Sub': the injection leads "
+            "back to the class itself", child(tmp.path, compile(tmp.path, "Base=InjectProbe::Sub")));
+    }
+
+    twoCyclesTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        # each class keeps its subclass and is kept by it: both references are released when the module is refused
+        assertRegex("^load: .*'Base2?' cannot be injected in place of '(::)?InjectProbe::Sub2?': the injection leads "
+            "back to the class itself",
+            child(tmp.path, compile(tmp.path, "Base=InjectProbe::Sub,Base2=InjectProbe::Sub2")));
+    }
+
+    batchTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        list<string> srcs = (writeFile(tmp.path, "a.qr", ScriptA), writeFile(tmp.path, "b.qr", ScriptB));
+        # without the injection, the script loads
+        assertEq("loaded: True\n", run(link(tmp.path, "plain", srcs)), "plain script");
+        # X is injected in place of Y, which reaches X through Z of the other object
+        assertRegex("'X' cannot be injected in place of '(::)?Y': the injection leads back to the class itself",
+            run(link(tmp.path, "cycle", srcs, "X=Y"), True), "script with the injection");
+    }
+
+    typeFailureTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        # the type resolution fails after the base classes that close the cycle are attached: the error of the type
+        # resolution is reported, and the class releases its reference all the same
+        assertRegex("^load: .*cannot resolve type 'QoreAOTTestUnresolvedType' for typedef",
+            child(tmp.path, compile(tmp.path, "Base=InjectProbe::Sub", "ProbeAlias")));
+    }
+
+    batchTypeFailureTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        list<string> srcs = (writeFile(tmp.path, "a.qr", ScriptA), writeFile(tmp.path, "b.qr", ScriptB));
+        # the type resolution of the second object attaches the base class that closes the cycle, then fails
+        assertRegex("cannot resolve type 'QoreAOTTestUnresolvedType' for typedef",
+            run(link(tmp.path, "cycle", srcs, "X=Y", "ScriptAlias"), True), "script with the injection");
+    }
+
+    sourceParseTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        # the objects of both sources, in which X is injected in place of Y; here Y, of the second object, inherits Z
+        # of the first one, which inherits X
+        list<string> srcs = (writeFile(tmp.path, "a.qr", ScriptSourceA), writeFile(tmp.path, "b.qr", ScriptSourceB));
+        string obj_dir = tmp.path + DirSep + "obj";
+        mkdir(obj_dir);
+        string out = backquote(sprintf("%s QORE_AOT_TEST_INJECTED_CLASS=X=Y %s -O0 -c --output-dir=%s %s 2>&1", env,
+            qcc_bin, obj_dir, (foldl $1 + " " + $2, srcs)));
+        assertEq(2, glob(obj_dir + DirSep + "*.qo").size(), "qcc: " + out);
+        # the first source compiled again with the objects preloaded: Y's base class is Z of the source, whose own
+        # base class is attached when the source is committed
+        string out_dir = tmp.path + DirSep + "out";
+        mkdir(out_dir);
+        int rc;
+        out = backquote(sprintf("%s %s %s -O0 -c -L %s --output-dir=%s %s 2>&1", env, teardownEnv(), qcc_bin,
+            obj_dir, out_dir, srcs[0]), \rc);
+        assertNeq(0, rc, "qcc: " + out);
+        assertRegex("'X' cannot be injected in place of '(::)?Y': the injection leads back to the class itself",
+            checkTeardown(out));
+    }
+
+    sourceParseOptionsTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        list<string> srcs = (writeFile(tmp.path, "a.qr", ScriptSourceA), writeFile(tmp.path, "b.qr", ScriptSourceB));
+        string obj_dir = tmp.path + DirSep + "obj";
+        mkdir(obj_dir);
+        string out = backquote(sprintf("%s QORE_AOT_TEST_INJECTED_CLASS=X=Y %s -O0 -c --output-dir=%s %s 2>&1", env,
+            qcc_bin, obj_dir, (foldl $1 + " " + $2, srcs)));
+        list<string> objs = glob(obj_dir + DirSep + "*.qo");
+        assertEq(2, objs.size(), "qcc: " + out);
+        # only the object of the other source is preloaded with the source compiled below
+        foreach string obj in (objs) {
+            if (obj =~ /_a_qr\.qo$/) {
+                unlink(obj);
+            }
+        }
+        # the first source again, as a .q file, which is not %modern: the compile fails once the source is committed,
+        # before the preloaded objects are finalized
+        string src = writeFile(tmp.path, "a.q", ScriptSourceA);
+        string out_dir = tmp.path + DirSep + "out";
+        mkdir(out_dir);
+        int rc;
+        out = backquote(sprintf("%s %s %s -O0 -c -L %s --output-dir=%s %s 2>&1", env, teardownEnv(), qcc_bin,
+            obj_dir, out_dir, src), \rc);
+        assertNeq(0, rc, "qcc: " + out);
+        assertRegex("AOT compilation requires %modern parse semantics", checkTeardown(out));
+    }
+
+    #! the environment of qcc for the injections and the typedef with a type that is not found given, if any
+    private static string hookEnv(*string injections, *string unresolved_typedef) {
+        string rv = injections ? "QORE_AOT_TEST_INJECTED_CLASS=" + injections : "";
+        if (unresolved_typedef) {
+            rv += " QORE_AOT_TEST_UNRESOLVED_TYPEDEF=" + unresolved_typedef;
+        }
+        return rv;
+    }
+
+    #! links the sources given into an executable, with the injections given, if any, and returns its path
+    private string link(string dir, string name, list<string> srcs, *string injections,
+            *string unresolved_typedef) {
+        string exe = dir + DirSep + name;
+        string out = backquote(sprintf("%s %s %s -O0 -o %s %s 2>&1", env, hookEnv(injections, unresolved_typedef),
+            qcc_bin, exe, (foldl $1 + " " + $2, srcs)));
+        assertTrue(is_file(exe), "qcc: " + out);
+        return exe;
+    }
+
+    #! runs an executable; returns what it printed, without the teardown report, which it checks
+    /** the output on stdout of an executable that runs, which writes nothing else on stderr, or the output on stdout
+        and stderr of one that fails; the module loader's warnings are not output of the program (qore#7805)
+    */
+    private string run(string exe, *bool fails) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env, teardownEnv(),
+            exe), NOTHING, "QORE_JIT_TIMING=1");
+        if (fails) {
+            assertNeq(0, r.rc, exe + ": " + r.out);
+            return checkTeardown(r.out);
+        }
+        assertEq(0, r.rc, exe + ": " + r.out);
+        assertEq("", checkTeardown(r.stderr), exe + ": stderr");
+        return r.stdout;
+    }
+
+    #! the environment that makes a library-debug build report the declarations left at exit
+    private static string teardownEnv() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? "QORE_TEARDOWN_REPORT=1" : "";
+    }
+
+    #! checks that no declaration of a Program was left at exit, and returns the output without the report
+    private string checkTeardown(string out) {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            *list<string> left = (out =~ x/\[TEARDOWN\] declarations of Programs left after qore_cleanup\(\): (\d+)/);
+            assertEq("0", left ? left[0] : "no report", "declarations left: " + out);
+        }
+        string rv = "";
+        foreach string line in (out.split("\n")) {
+            if (line && line !~ /^\[TEARDOWN\]/) {
+                rv += line + "\n";
+            }
+        }
+        return rv;
+    }
+
+    #! writes a file to a directory and returns its path
+    private static string writeFile(string dir, string name, string text) {
+        string path = dir + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+        return path;
+    }
+
+    private checkHook() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("QORE_AOT_TEST_INJECTED_CLASS is only available in a library-debug build");
+        }
+    }
+
+    #! writes the module source to a directory of its own and returns the directory
+    private static string writeModule(string dir) {
+        string src_dir = dir + DirSep + "src";
+        mkdir(src_dir);
+        File f();
+        f.open2(src_dir + DirSep + "InjectProbe.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        return src_dir;
+    }
+
+    #! compiles the module, with the injections given, if any, and returns the directory of the qmod
+    private string compile(string dir, *string injections, *string unresolved_typedef) {
+        string src_dir = writeModule(dir);
+        string art_dir = dir + DirSep + "art";
+        mkdir(art_dir);
+        string qmod = art_dir + DirSep + "InjectProbe.qmod";
+        string out = backquote(sprintf("%s %s %s -O0 -m -o %s %s 2>&1", env, hookEnv(injections, unresolved_typedef),
+            qcc_bin, qmod, src_dir + DirSep + "InjectProbe.qm"));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        return art_dir;
+    }
+
+    #! runs the child with the module directory first in the module path; returns what it printed
+    private string child(string dir, string mod_dir) {
+        string script = dir + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        int rc;
+        string out = backquote(sprintf("%s %s QORE_MODULE_DIR=%s %s %s 2>&1", env, teardownEnv(), mod_dir, qore_bin,
+            script), \rc);
+        assertEq(0, rc, "child: " + out);
+        return checkTeardown(out);
+    }
+}

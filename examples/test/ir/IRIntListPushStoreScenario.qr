@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The scenario of IRIntListPushStore.qtest: push to a list<int> local that is on the runtime stack (its element is
+# changed with += as well), whose store native code skips when the variable holds the list that the push changed in
+# place, and makes with the generic coercion and assignment otherwise.  Every tier and every compiled executable must
+# print what the AST interpreter prints.
+
+%modern
+%allow-weak-references
+%allow-debugger
+
+# the list_mutate kernel of bench/runtime-comparison
+int sub pushLoop(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+        data[i] += 1;
+    }
+    int sum = 0;
+    foreach int v in (data) {
+        sum += v;
+    }
+    return sum;
+}
+
+# a list that another variable holds too is copied by the push, and the copy is stored
+string sub sharedList() {
+    list<int> l = (1, 2);
+    list<int> m = l;
+    push l, 3;
+    l[0] += 10;
+    push m, 4;
+    m[1] -= 10;
+    return sprintf("%y %y", l, m);
+}
+
+# a list that a weak reference designates
+string sub weakList() {
+    list<int> l = (1, 2);
+    list<int> w := l;
+    push l, 3;
+    l[0] += 10;
+    push w, 4;
+    return sprintf("%y %y", l, w);
+}
+
+# values outside the inline range of integers, and an operand of no type
+string sub wideValues() {
+    list<int> l = ();
+    auto a = 5;
+    push l, 0x7fffffffffffffff;
+    push l, a;
+    push l, -0x800000000000;
+    l[1] += 1;
+    return sprintf("%y", l);
+}
+
+# a value that the element type rejects raises an exception; the list keeps its elements
+string sub rejected() {
+    list<int> l = (1,);
+    auto v = "x";
+    string rv;
+    try {
+        push l, v;
+        rv = "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err;
+    }
+    l[0] += 1;
+    return sprintf("%s %y", rv, l);
+}
+
+# the variable is replaced between pushes
+string sub replaced() {
+    list<int> l = (1,);
+    for (int i = 0; i < 4; ++i) {
+        push l, i;
+        l[0] += i;
+        if (i == 1) {
+            l = (100,);
+        }
+    }
+    return sprintf("%y", l);
+}
+
+# the list is passed to a function and returned between pushes
+list<int> sub pass(list<int> l) {
+    push l, 50;
+    return l;
+}
+
+string sub passed() {
+    list<int> l = (1,);
+    push l, 2;
+    list<int> r = pass(l);
+    push l, 3;
+    l[0] += 1;
+    return sprintf("%y %y", l, r);
+}
+
+# another thread holds the list too
+string sub otherThread() {
+    list<int> l = (1, 2);
+    Queue q();
+    Counter c(1);
+    background sub (list<int> copy) {
+        q.push(copy);
+        c.waitForZero();
+    }(l);
+    list<int> copy = q.get();
+    push l, 3;
+    l[2] += 1;
+    c.dec();
+    return sprintf("%y %y", l, copy);
+}
+
+
+sub replaceList() {
+    set_local_var_value(1, "l", (41, 42));
+}
+
+# the variable is replaced through reflection between pushes
+string sub reflected() {
+    list<int> l = (1, 2);
+    push l, 3;
+    l[0] += 1;
+    call_function("replaceList");
+    push l, 4;
+    l[2] += 1;
+    return sprintf("%y %s", l, l.fullType());
+}
+
+printf("loop: %d %d %d\n", pushLoop(0, 7), pushLoop(17, 7), pushLoop(4096, 65535));
+printf("shared: %s\n", sharedList());
+printf("weak: %s\n", weakList());
+printf("wide: %s\n", wideValues());
+printf("rejected: %s\n", rejected());
+printf("replaced: %s\n", replaced());
+printf("passed: %s\n", passed());
+printf("thread: %s\n", otherThread());
+printf("reflected: %s\n", reflected());

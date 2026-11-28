@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation of weak assignments of parameters and references
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class WeakAssignmentParameterTest
+
+#! a weak reference to a parameter designates the call's copy of a value passed by value, the caller's variable for a
+#! reference
+/** A parameter passed by value is a variable of the call: when its container is also the caller's value, the parameter
+    gets a copy of its own, which the call releases, so a weak reference to it is empty after the call; passed by
+    reference, the weak assignment designates the caller's variable (qore#7618).  Every execution mode and a compiled
+    executable must give the expected values.
+*/
+class WeakAssignmentParameterTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string worker = get_script_dir() + "/weak-assignment-parameter-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("WeakAssignmentParameter", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("weak assignments of parameters in every execution mode", \checkModes());
+        addTestCase("weak assignments of parameters in a compiled program", \checkCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkOutput(string out, string mode) {
+        list<string> lines = select out.split("\n"), $1;
+        assertEq(6, lines.size(), mode + ": all cases ran");
+        assertEq((), (select lines, !($1 =~ /^PASS /)), mode + ": every case gives the expected value");
+    }
+
+    checkModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker)), mode);
+        }
+        checkOutput(ExecModeHarness::run_ir_tier(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker)), ExecModeHarness::IRTierName);
+    }
+
+    checkCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-weak-param-");
+        string exe = tmp.path + DirSep + "weak-param";
+        ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        checkOutput(ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"), "AOT");
+    }
+}

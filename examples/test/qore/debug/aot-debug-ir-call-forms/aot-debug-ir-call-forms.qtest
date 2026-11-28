@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - AOT code generation and the serialized debug IR of compiled code under a debugger
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotDebugIrCallFormsTest
+
+#! the debug IR of AOT code keeps the calls of substr(), index() and rindex() and gives the source's results
+/** The lowering makes pseudo-method instructions of these calls of strings and holds the function call as their
+    expression, which the serialized IR did not keep: with a debugger attached, AOT code compiled at -O3 ran the
+    pseudo-method, and its exceptions had the caller's frame instead of the builtin's (qore#7733).  The case
+    conversions that the AOT code fuses with the string calls that consume their results gave other results (fixed with
+    qore#7696).  The worker calls its functions through the runtime with a debugger attached; every execution mode and
+    the programs compiled at -O0 and -O3 must print what the AST interpreter prints.
+*/
+class AotDebugIrCallFormsTest inherits QUnit::Test {
+    public {
+        const Worker = "debug-ir-call-forms";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AotDebugIrCallForms", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("debug IR", \debugIrTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    debugIrTest() {
+        string worker = get_script_dir() + "/" + Worker + ".qr";
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast "
+            + quote(worker), ExecModeHarness::NativeCheck::None);
+        # the frames are the builtins'
+        assertRegex("debugger: indexFrame: INVALID-ENCODING index", ast, "the AST interpreter gives the builtin's frame");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        TmpDir tmp("qore-aot-debug-ir-call-forms-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + Worker + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -g -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), opt + ": qcc produced the executable");
+            assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt);
+        }
+    }
+}

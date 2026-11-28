@@ -54,6 +54,12 @@ class qore_qd_private {
 protected:
     const QoreEncoding* enc;
     std::string dirname;
+    //! the process's current directory that the object started in, while its path derives from it, or empty: the
+    //! path was set by an absolute path that the code gave (qore#7662)
+    /** The path of such an object is a directory of the host that the code did not give; code that is not given host
+        directories (qore_caller_no_host_dirs()) gets it relative to this directory
+    */
+    std::string cwd_base;
     mutable QoreThreadLock m;
 
     DLLLOCAL static bool is_dir_sep(const std::string& str) {
@@ -204,14 +210,52 @@ public:
         }
         ON_BLOCK_EXIT(free, cwd);
 
-        if (getcwd(cwd, (size_t)QORE_PATH_MAX))
+        if (getcwd(cwd, (size_t)QORE_PATH_MAX)) {
             dirname = cwd;
+            cwd_base = dirname;
+        }
     }
 
     DLLLOCAL qore_qd_private(ExceptionSink* xsink, const qore_qd_private &old) {
         AutoLocker al(old.m);
         enc = old.enc;
         dirname = old.dirname;
+        cwd_base = old.cwd_base;
+    }
+
+    //! returns the path with the argument appended, and in \a base the process's current directory that it derives
+    //! from, or an empty string, read together (qore#7662)
+    DLLLOCAL std::string getPath(const char* sub, std::string& base) const {
+        AutoLocker al(m);
+        base = cwd_base;
+        return getPathIntern(sub);
+    }
+
+    //! returns the process's current directory that the path derives from, or an empty string (qore#7662)
+    DLLLOCAL std::string getCwdBase() const {
+        AutoLocker al(m);
+        return cwd_base;
+    }
+
+    //! sets the process's current directory that the path derives from (an object for a subdirectory, qore#7662)
+    DLLLOCAL void setCwdBase(const std::string& base) {
+        AutoLocker al(m);
+        cwd_base = base;
+    }
+
+    //! returns the path for the code running on the thread, or nullptr if no path is set
+    /** A path that derives from the process's current directory is given relative to it to code that is not given
+        host directories that it did not give itself (qore#7662)
+    */
+    DLLLOCAL QoreStringNode* get_dir_string_for_caller() const {
+        AutoLocker al(m);
+        if (dirname.empty()) {
+            return nullptr;
+        }
+        if (!cwd_base.empty() && qore_caller_no_host_dirs()) {
+            return new QoreStringNode(qore_path_relative_to_base(dirname.c_str(), cwd_base), enc);
+        }
+        return new QoreStringNode(dirname, enc);
     }
 
     DLLLOCAL QoreStringNode* get_dir_string() const {
@@ -269,8 +313,11 @@ public:
             }
 
             ds = dirname + QORE_DIR_SEP + std::string(ndir);
-        } else
+        } else {
             ds = ndir;
+            // the code gave the path: it no longer derives from the process's current directory (qore#7662)
+            cwd_base.clear();
+        }
 
         ds = normalizePath(ds);
         dirname = ds;
@@ -282,11 +329,14 @@ public:
 
     DLLLOCAL int mkdir(const char* subdir, int mode, ExceptionSink* xsink) const {
         assert(subdir);
-        AutoLocker al(m);
+        return mkdirPath(getPath(subdir), mode, xsink);
+    }
 
-        std::string path = getPathIntern(subdir);
+    //! creates the directory at the given path, which getPath() gave (qore#7662: the path that the policy checked)
+    DLLLOCAL static int mkdirPath(const std::string& path, int mode, ExceptionSink* xsink) {
         if (::mkdir(path.c_str(), mode)) {
-            xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'", path.c_str());
+            xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'",
+                qore_msg_path(path.c_str()).c_str());
             return -1;
         }
         return 0;
@@ -294,11 +344,14 @@ public:
 
     DLLLOCAL int rmdir(const char* subdir, ExceptionSink* xsink) const {
         assert(subdir);
-        AutoLocker al(m);
+        return rmdirPath(getPath(subdir), xsink);
+    }
 
-        std::string path = getPathIntern(subdir);
+    //! removes the directory at the given path, which getPath() gave (qore#7662: the path that the policy checked)
+    DLLLOCAL static int rmdirPath(const std::string& path, ExceptionSink* xsink) {
         if (::rmdir(path.c_str())) {
-            xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'", path.c_str());
+            xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'",
+                qore_msg_path(path.c_str()).c_str());
             return -1;
         }
 
@@ -326,7 +379,8 @@ public:
         for (const std::string& path : missing) {
             if (::mkdir(path.c_str(), mode)) { // failed
                 if (xsink) {
-                    xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path.c_str());
+                    xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'",
+                        qore_msg_path(path.c_str()).c_str());
                 }
                 return -1;
             }
@@ -353,7 +407,8 @@ public:
         }
 
         if (::chmod(dirname.c_str(), mode)) {
-            xsink->raiseErrnoException("DIR-CHMOD-FAILURE", errno, "error in Dir::chmod() on '%s'", dirname.c_str());
+            xsink->raiseErrnoException("DIR-CHMOD-FAILURE", errno, "error in Dir::chmod() on '%s'",
+                qore_msg_path(dirname.c_str()).c_str());
             return -1;
         }
 
@@ -370,7 +425,8 @@ public:
         }
 
         if (::chown(dirname.c_str(), uid, gid)) {
-            xsink->raiseErrnoException("DIR-CHOWN-FAILURE", errno, "error in Dir::chown() on '%s'", dirname.c_str());
+            xsink->raiseErrnoException("DIR-CHOWN-FAILURE", errno, "error in Dir::chown() on '%s'",
+                qore_msg_path(dirname.c_str()).c_str());
             return 0;
         }
 
@@ -388,7 +444,8 @@ public:
 
         struct stat sbuf;
         if (::stat(dirname.c_str(), &sbuf)) {
-            xsink->raiseErrnoException("DIR-STAT-FAILURE", errno, "stat() call failed on '%s'", dirname.c_str());
+            xsink->raiseErrnoException("DIR-STAT-FAILURE", errno, "stat() call failed on '%s'",
+                qore_msg_path(dirname.c_str()).c_str());
             return 0;
         }
 
@@ -408,7 +465,8 @@ public:
 
         struct statvfs vfs;
         if (::statvfs(dirname.c_str(), &vfs)) {
-            xsink->raiseErrnoException("DIR-STATVFS-FAILURE", errno, "statvfs() call failed on '%s'", dirname.c_str());
+            xsink->raiseErrnoException("DIR-STATVFS-FAILURE", errno, "statvfs() call failed on '%s'",
+                qore_msg_path(dirname.c_str()).c_str());
             return nullptr;
         }
 

@@ -46,5 +46,9 @@ DLLLOCAL TypedHashDecl* init_hashdecl_FilesystemSecurityConfigInfo(QoreNamespace
 DLLLOCAL TypedHashDecl* init_hashdecl_NetworkSecurityConfigInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SandboxConfigInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SandboxTimeZonePathInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ImmediateCallerInfo(QoreNamespace& ns);
+
+//! the ImmediateCallerInfo hashdecl (SandboxManager::getImmediateCaller(), qore#7302)
+DLLLOCAL extern const TypedHashDecl* hashdeclImmediateCallerInfo;
 
 #endif // _QORE_CLASS_QC_SANDBOXMANAGER_H

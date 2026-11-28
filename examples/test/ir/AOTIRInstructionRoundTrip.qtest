@@ -56,7 +56,7 @@ class AOTIRInstructionRoundTripTest inherits QUnit::Test {
     private aotMode(bool strip) {
         TmpDir tmp("qore-ir-instruction-");
         string exe = tmp.path + "/worker";
-        ExecModeHarness::run_any(prefix + quote(qcc) + " -O2" + (strip ? " --strip-source" : "")
+        ExecModeHarness::run_any(prefix + quote(qcc) + " -O2 -g" + (strip ? " --strip-source" : "")
             + " -o " + quote(exe) + " " + quote(worker));
         foreach bool debugging in ((True, False)) {
             assertEq(expected(debugging), ExecModeHarness::run_any(prefix + quote(exe)

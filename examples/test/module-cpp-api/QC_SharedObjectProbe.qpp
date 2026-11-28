@@ -1,0 +1,334 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_SharedObjectProbe.qpp a builtin class that uses the shared object C++ API (qore#7669) */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+#include "QC_SharedObjectProbe.h"
+
+#include <mutex>
+#include <stdexcept>
+#include <string>
+
+// the C++ state of a SharedObjectProbe: a value that its caller sets and a cache that it builds on first use
+class SharedObjectProbeData : public AbstractPrivateData {
+public:
+    std::mutex mutex;
+    std::string value = "orig";
+    std::string cache;
+    int64 updates = 0;
+};
+
+// what the C++ update of a probe does
+struct ProbeUpdateArg {
+    // the state of the probe to build, or nullptr for an object of another class
+    SharedObjectProbeData* probe = nullptr;
+    // code to call in the scope, or nullptr
+    const ResolvedCallReferenceNode* inner = nullptr;
+    // creates an object with no Program in the scope and marks it as shared
+    bool make_child = false;
+    // throws a C++ exception in the scope
+    bool throw_cpp = false;
+    // a file to open in the scope with the sandbox check of a builtin (QoreFile::open2()), or nullptr
+    const char* open_path = nullptr;
+    // checks the inner code with qore_check_shared_object_callback() before it is called
+    bool check_inner = false;
+};
+
+// creates a probe that no Program owns, as C++ code of a module does
+static QoreObject* create_unowned_probe() {
+    return new QoreObject(QC_SHAREDOBJECTPROBE, nullptr, new SharedObjectProbeData);
+}
+
+// the C++ update of a shared object (see qore_update_shared_object())
+static QoreValue probe_update(QoreObject* obj, void* arg, ExceptionSink* xsink) {
+    const ProbeUpdateArg* a = static_cast<const ProbeUpdateArg*>(arg);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("can_share", qore_caller_can_share_objects(), xsink);
+    if (a->probe) {
+        std::lock_guard<std::mutex> lock(a->probe->mutex);
+        // the new state is computed from the object itself
+        a->probe->cache = "built from " + a->probe->value;
+        ++a->probe->updates;
+    }
+    if (a->throw_cpp) {
+        throw std::runtime_error("the probe update failed");
+    }
+    if (a->make_child) {
+        ReferenceHolder<QoreObject> child(create_unowned_probe(), xsink);
+        if (qore_share_object(*child, xsink)) {
+            return QoreValue();
+        }
+        rv->setKeyValue("child_shared", qore_object_is_shared(*child), xsink);
+    }
+    if (a->open_path) {
+        // the update is trusted module code, but the caller that it serves is still the caller: the sandbox that
+        // governs the caller decides what the update does for it
+        rv->setKeyValue("creates_shared", qore_caller_creates_shared_objects(), xsink);
+        ExceptionSink open_xsink;
+        QoreFile f;
+        if (f.open2(&open_xsink, a->open_path)) {
+            rv->setKeyValue("open", open_xsink ? QoreValue(open_xsink.getExceptionErr().refSelf())
+                : QoreValue(new QoreStringNode("failed")), xsink);
+            open_xsink.clear();
+        } else {
+            rv->setKeyValue("open", new QoreStringNode("ok"), xsink);
+        }
+    }
+    if (a->inner && a->check_inner
+            && qore_check_shared_object_callback(obj, a->inner, "run code in the update scope", xsink)) {
+        return QoreValue();
+    }
+    if (a->inner) {
+        ValueHolder v(a->inner->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        rv->setKeyValue("inner", v.release(), xsink);
+    }
+    return rv.release();
+}
+
+// runs the update of \a obj in an update scope
+static QoreValue run_probe_update(QoreObject* obj, ProbeUpdateArg& arg, ExceptionSink* xsink) {
+    return qore_update_shared_object(obj, probe_update, &arg, xsink);
+}
+
+//! a builtin class with C++ state that uses the shared object C++ API of the library (qore#7669)
+/** The value is changed on behalf of the caller with SharedObjectProbe::set(), which checks the change with
+    qore_check_shared_object_change(), and the cache is built on first use with SharedObjectProbe::build(), in an
+    update scope with qore_update_shared_object() if the object is shared
+*/
+qclass SharedObjectProbe [arg=SharedObjectProbeData* probe; ns=Qore::CppApiTest];
+
+//! creates the probe and marks it as shared as asked
+/** @param share 1: marks it with qore_share_object(); 0: does not mark it; -1: marks it if
+    qore_caller_creates_shared_objects() returns @ref True
+
+    @throw SHARED-OBJECT-ERROR the calling code cannot share objects
+*/
+SharedObjectProbe::constructor(int share = -1) {
+    self->setPrivate(CID_SHAREDOBJECTPROBE, new SharedObjectProbeData);
+    bool mark = share < 0 ? qore_caller_creates_shared_objects() : share > 0;
+    if (mark) {
+        qore_share_object(self, xsink);
+    }
+}
+
+//! returns the value
+/** used by shared-object-cpp-api.qtest */
+string SharedObjectProbe::get() [flags=CONSTANT] {
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    return new QoreStringNode(probe->value);
+}
+
+//! sets the value on behalf of the caller
+/** @throw SHARED-OBJECT-ERROR the object is shared and the calling code is sandboxed
+*/
+nothing SharedObjectProbe::set(string value) {
+    if (qore_check_shared_object_change(self, "set the value", xsink)) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    probe->value = value->c_str();
+}
+
+//! builds the cache on first use, in an update scope if the object is shared, and returns it
+/** used by shared-object-cpp-api.qtest */
+string SharedObjectProbe::build() {
+    {
+        std::lock_guard<std::mutex> lock(probe->mutex);
+        if (!probe->cache.empty()) {
+            return new QoreStringNode(probe->cache);
+        }
+    }
+    if (qore_object_is_shared(self)) {
+        ProbeUpdateArg arg;
+        arg.probe = probe;
+        ValueHolder rv(run_probe_update(self, arg, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    } else {
+        std::lock_guard<std::mutex> lock(probe->mutex);
+        probe->cache = "built from " + probe->value;
+        ++probe->updates;
+    }
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    return new QoreStringNode(probe->cache);
+}
+
+//! returns the cache, or an empty string if it has not been built
+/** used by shared-object-cpp-api.qtest */
+string SharedObjectProbe::getCache() [flags=CONSTANT] {
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    return new QoreStringNode(probe->cache);
+}
+
+//! returns the number of updates of the cache
+/** used by shared-object-cpp-api.qtest */
+int SharedObjectProbe::updates() [flags=CONSTANT] {
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    return probe->updates;
+}
+
+//! rebuilds the cache in an update scope and reports what the scope allowed
+/** @param inner code to call in the scope, whose return value is given as \c inner
+    @param make_child creates a probe with no Program in the scope and marks it as shared
+    @param throw_cpp throws a C++ exception in the scope
+    @param open_path a file to open in the scope with QoreFile::open2(), which the caller's sandbox governs
+    @param check_inner checks \a inner with qore_check_shared_object_callback() before it is called
+
+    @return a hash with \c can_share: qore_caller_can_share_objects() in the scope, \c child_shared, \c inner, and
+    for \a open_path \c creates_shared: qore_caller_creates_shared_objects() in the scope and \c open: \c "ok" or
+    the error of the open
+
+    @throw SHARED-OBJECT-ERROR the scope cannot be opened, the C++ update threw a C++ exception, or the child cannot
+    be marked
+*/
+hash<auto> SharedObjectProbe::update(*code inner, bool make_child = False, bool throw_cpp = False,
+        *string open_path, bool check_inner = False) {
+    ProbeUpdateArg arg;
+    arg.probe = probe;
+    arg.inner = inner;
+    arg.make_child = make_child;
+    arg.throw_cpp = throw_cpp;
+    arg.open_path = open_path ? open_path->c_str() : nullptr;
+    arg.check_inner = check_inner;
+    return run_probe_update(self, arg, xsink);
+}
+
+//! runs code that its caller gives, checked as a method that holds the state of the object checks it
+/** No lock is held (the code can call the other methods of the probe); only the check is tested
+
+    @throw SHARED-OBJECT-ERROR the object is shared, the calling code is sandboxed and \a c is not a closure of a
+    trusted class
+*/
+auto SharedObjectProbe::runLocked(code c) {
+    if (qore_check_shared_object_callback(self, c, "run code locked", xsink)) {
+        return QoreValue();
+    }
+    return c->execValue(nullptr, xsink);
+}
+
+//! returns @ref True if the object has a Program
+/** used by shared-object-cpp-api.qtest */
+bool SharedObjectProbe::hasProgram() [flags=CONSTANT] {
+    return self->getProgram() != nullptr;
+}
+
+//! returns qore_caller_creates_shared_objects()
+/** used by shared-object-cpp-api.qtest */
+static bool SharedObjectProbe::createsSharedObjects() [flags=CONSTANT] {
+    return qore_caller_creates_shared_objects();
+}
+
+//! returns qore_caller_can_share_objects()
+/** used by shared-object-cpp-api.qtest */
+static bool SharedObjectProbe::canShareObjects() [flags=CONSTANT] {
+    return qore_caller_can_share_objects();
+}
+
+//! marks the object as shared with qore_share_object()
+/** @throw SHARED-OBJECT-ERROR the calling code cannot share objects
+*/
+static nothing SharedObjectProbe::share(object obj) {
+    qore_share_object(const_cast<QoreObject*>(obj), xsink);
+}
+
+//! returns qore_object_is_shared() for the object, or for a null pointer if it is @ref nothing
+/** used by shared-object-cpp-api.qtest */
+static bool SharedObjectProbe::isShared(*object obj) [flags=CONSTANT] {
+    return qore_object_is_shared(obj);
+}
+
+//! calls qore_check_shared_object_change() for the object, or for a null pointer if it is @ref nothing
+/** used by shared-object-cpp-api.qtest */
+static nothing SharedObjectProbe::checkChange(*object obj, string what) {
+    qore_check_shared_object_change(obj, what->c_str(), xsink);
+}
+
+//! calls qore_check_shared_object_callback() for the object and the code, null pointers for @ref nothing
+/** used by shared-object-cpp-api.qtest */
+static nothing SharedObjectProbe::checkCallback(*object obj, *code callback, string what) {
+    qore_check_shared_object_callback(obj, callback, what->c_str(), xsink);
+}
+
+//! runs qore_update_shared_object() for any object, calling code that its caller gives in the scope
+/** A test hook that shows the documented hazard: a module must never call code that its caller gives in an update
+    scope, nor open one for an object of a class that is not its own, as code of a Program that no sandbox governs
+    runs in it with the rights of the scope, whoever supplied it
+
+    @param obj the object to update
+    @param inner code to call in the scope
+
+    @return a hash with \c can_share and \c inner, as update()
+*/
+static hash<auto> SharedObjectProbe::updateObject(object obj, *code inner) {
+    ProbeUpdateArg arg;
+    arg.inner = inner;
+    return run_probe_update(const_cast<QoreObject*>(obj), arg, xsink);
+}
+
+//! creates a probe that no Program owns, as C++ code of a module does, and marks it as shared as asked
+/** @throw SHARED-OBJECT-ERROR the calling code cannot share objects
+*/
+static object SharedObjectProbe::createUnowned(bool share) {
+    ReferenceHolder<QoreObject> obj(create_unowned_probe(), xsink);
+    if (share && qore_share_object(*obj, xsink)) {
+        return QoreValue();
+    }
+    return obj.release();
+}
+
+//! calls the functions of the API with null pointers and returns the results
+/** @return a hash with the results; \c share and \c update are the exceptions raised
+*/
+static hash<auto> SharedObjectProbe::nullArgs() {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("is_shared", qore_object_is_shared(nullptr), xsink);
+    rv->setKeyValue("check_change", (int64)qore_check_shared_object_change(nullptr, "change", xsink), xsink);
+    rv->setKeyValue("check_callback", (int64)qore_check_shared_object_callback(nullptr, nullptr, "run", xsink),
+        xsink);
+    {
+        ExceptionSink xs;
+        rv->setKeyValue("share_rc", (int64)qore_share_object(nullptr, &xs), xsink);
+        rv->setKeyValue("share", xs ? QoreValue(xs.getExceptionErr().refSelf()) : QoreValue(), xsink);
+        xs.clear();
+    }
+    {
+        ExceptionSink xs;
+        ValueHolder v(qore_update_shared_object(nullptr, probe_update, nullptr, &xs), xsink);
+        rv->setKeyValue("update", xs ? QoreValue(xs.getExceptionErr().refSelf()) : QoreValue(), xsink);
+        xs.clear();
+    }
+    {
+        ExceptionSink xs;
+        ReferenceHolder<QoreObject> obj(create_unowned_probe(), xsink);
+        ValueHolder v(qore_update_shared_object(*obj, nullptr, nullptr, &xs), xsink);
+        rv->setKeyValue("update_no_function", xs ? QoreValue(xs.getExceptionErr().refSelf()) : QoreValue(), xsink);
+        xs.clear();
+    }
+    return rv.release();
+}

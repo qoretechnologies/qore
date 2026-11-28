@@ -1021,6 +1021,28 @@ static std::mutex aot_json_diag_lock;
 static std::vector<QoreDiagnostic> aot_json_diags;
 static bool aot_json_diags_flushed = false;
 
+//! Returns true if the definition context of the module being compiled could not be opened
+/** The context reserves the module's name while the module is parsed and raises \c LOAD-MODULE-ERROR if another
+    thread is loading a module of the name (QoreModuleManager::reserveCompiledModuleName(), #7808); nothing is parsed
+    then: the context is closed and \a error gives the exception, which is cleared
+
+    @param mod_ctx the context, opened just before
+    @param xsink the sink that the context raised its error into
+    @param error receives the description of the error
+*/
+static bool qoreAotModuleContextFailed(QoreUserModuleDefContextHelper& mod_ctx, ExceptionSink& xsink,
+        std::string& error) {
+    if (!xsink) {
+        return false;
+    }
+    QoreStringDataHelper err(xsink.getExceptionErr());
+    QoreStringDataHelper desc(xsink.getExceptionDesc());
+    error = std::string(err ? err.c_str() : "LOAD-MODULE-ERROR") + ": " + (desc ? desc.c_str() : "");
+    mod_ctx.close();
+    xsink.clear();
+    return true;
+}
+
 //! Reports the exceptions in \a sink, those of the parse of code being compiled, as diagnostics, and clears it
 /** In the form that QORE_DIAG_FORMAT / QORE_CODE_FRAMES select; by default each is one line on stderr, in the form of
     other compilers (issue #6555): <file>:<line>[:<col>]: error|warning: <code>: <message>; the column is 1-based.
@@ -1165,9 +1187,49 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
-// A different Program can attach after native code has entered the caller.
+//! Returns true if the code is compiled with debugging (qcc -g, which sets QORE_AOT_DEBUGGING; qore#7676)
+/** Debug support that costs performance at run time is emitted only in code compiled with debugging: the debugger
+    checks of its calls (aotDebuggerChecks()), the calls of closures through the runtime, the calls that -O0 keeps for
+    a debugger to step into (aotPreserveDebugCalls()) and the function forms of string calls in top-level code.  The
+    serialized IR of every function is written without it too, separately lowered when the native code's IR is not
+    one that the IR interpreter can run (aotLowerUnrewrittenDebugIR()): a source-stripped build runs it at parse time
+    as well as a debugger, and it costs only compile time.  The binary records the choice in its header
+    (QORE_AOT_FLAG_DEBUGGING), and a debugger attached to a Program with code compiled without it gets a warning
+    (qore_aot_note_code_without_debugging()).
+*/
+static bool aotCompileWithDebugging() {
+    static constinit QoreEnvFlag debugging_env("QORE_AOT_DEBUGGING");
+    return debugging_env.get();
+}
+
+//! Returns the header flags of a binary written by this compilation: the given ones and QORE_AOT_FLAG_DEBUGGING for
+//! code compiled with debugging (qore#7676)
+/** A binary linked from objects (qcc -F, -a) is written with the flags of the link, whose debug IR and slot maps it
+    makes again; qcc links only objects compiled with the same choice (see check_link_inputs_debugging() in qcc)
+*/
+static uint16_t aotHeaderFlags(uint16_t flags) {
+    return aotCompileWithDebugging() ? static_cast<uint16_t>(flags | QORE_AOT_FLAG_DEBUGGING) : flags;
+}
+
+//! Returns the calls of the Program's native code that check whether a debugger is attached (qore#7676)
+/** Code compiled without debugging checks none.  The code of a Program that cannot be debugged (PO_NO_DEBUGGING)
+    checks only its calls into another module's Program, which can be debugged (see
+    QoreIRToLLVM::setAOTDebuggerChecks()).
+*/
+static AOTDebuggerChecks aotDebuggerChecks(QoreProgram* pgm) {
+    if (!aotCompileWithDebugging()) {
+        return AOTDebuggerChecks::None;
+    }
+    return !pgm || qore_program_private::get(*pgm)->checkAllowDebugging(nullptr)
+        ? AOTDebuggerChecks::All : AOTDebuggerChecks::CrossModule;
+}
+
+//! Returns true if the native code keeps the calls of the Program that a debugger can step into
+/** Only at -O0 and in code compiled with debugging (qcc -O0 -g); a different Program can attach after native code has
+    entered the caller.
+*/
 static bool aotPreserveDebugCalls(int opt_level, QoreProgram* pgm) {
-    return opt_level == 0 && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
+    return opt_level == 0 && aotCompileWithDebugging() && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
 }
 
 static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
@@ -1346,6 +1408,8 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
     qore_program_private* pp, const char* cancel_context, const char* skip_feature = nullptr,
     const std::vector<std::string>* explicit_deps = nullptr);
+static std::vector<std::string> aotLoadedReexports(const qore_program_private* pp,
+    const std::vector<std::string>& reexports);
 static void aotAddDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
     const std::string& dep, const char* skip_feature = nullptr);
 static void aotAddFeatureDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
@@ -1561,6 +1625,10 @@ struct AOTCompiledFunc {
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Owned full function IR for source-stripped debugging and handler IR lifetime.
     std::unique_ptr<QoreIRFunction> debug_ir;
+    //! The IR that the native code was lowered from, when it is not debug_ir (see aotLowerUnrewrittenDebugIR())
+    /** The slot map refers to its instructions (QoreIRLValuePathInstruction slots), so it is kept with the function.
+    */
+    std::unique_ptr<QoreIRFunction> native_ir;
     //! the source file of the function's code (the file of its first location; see aotIRFunctionSourceFile())
     std::string source_file;
 };
@@ -2328,6 +2396,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("opt-level", std::to_string(opt_level));
     add("include-source", include_source ? "true" : "false");
     add("debug-info", QORE_ENV_IS_SET("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
+    add("debugging", aotCompileWithDebugging() ? "true" : "false");
     QoreEnvironmentValue big_fn_holder("QORE_AOT_BIG_FN_THRESHOLD");
     const char* big_fn = big_fn_holder.c_str();
     add("big-fn-threshold", big_fn ? big_fn : "");
@@ -2949,7 +3018,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         const QoreFunction* source_qf = nullptr,
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
-        const AOTConstantReverseMap* constant_reverse_map = nullptr) {
+        const AOTConstantReverseMap* constant_reverse_map = nullptr, bool debug_ir = false) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2961,6 +3030,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // debugger is attached, so in a Program that can be debugged it has the step event of every statement, as the
     // AST interpreter has (#5558); the native code ignores the instructions
     ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+    // the separately lowered debug IR keeps the calls that the serialized IR cannot express otherwise (qore#7733)
+    ir_func->lower_call_forms_for_debug_ir = debug_ir;
     // Set source identity before QoreIRBuilder lowers statements; direct-call
     // self-recursion detection requires exact variant identity because
     // overloads share the same QoreFunction family.
@@ -3164,6 +3235,42 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     return 0;
+}
+
+//! Lowers the debug IR of a function whose IR the AOT-only interprocedural rewrites changed (#7696), or whose lowering
+//! made calls that the serialized IR cannot express (#7733)
+/** The debug IR runs in the IR interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()), so
+    it must run as the source does and make every call that the source makes: the rewrites of the native code's IR
+    (fusions of calls with the expressions that consume their results, projections that replace calls by their known
+    results, specializations from the facts of the callees) are not serialized and are unknown to the interpreter.
+    The function is therefore lowered again from its parse tree, as for a generic specialized fast entry, without
+    them, and with the calls of substr(), index() and rindex() kept as calls
+    (QoreIRFunction::lower_call_forms_for_debug_ir): the pseudo-method instructions that the lowering makes of them
+    hold the function call as their expression, which the serialized IR does not keep.
+
+    @return the unrewritten IR, or nullptr with \a error set if the lowering failed
+*/
+static std::unique_ptr<QoreIRFunction> aotLowerUnrewrittenDebugIR(const QoreIRFunction& native_ir,
+        UserVariantBase* uvb, const char* name, QoreProgram* pgm, const QoreFunction* source_qf,
+        const AOTConstantReverseMap* constant_reverse_map, std::string& error) {
+    QoreIRFunction* ir_func = nullptr;
+    if (tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, nullptr, nullptr, constant_reverse_map, true)
+            || !ir_func) {
+        delete ir_func;
+        if (error.empty()) {
+            error = "no IR";
+        }
+        return nullptr;
+    }
+#ifndef NDEBUG
+    // the slot map takes the local slots of both from their IR slot IDs (buildAOTSlotMap()), which the lowering
+    // assigns alike
+    for (const auto& [lv, slot_id] : ir_func->local_var_slots) {
+        auto it = native_ir.local_var_slots.find(lv);
+        assert(it == native_ir.local_var_slots.end() || it->second == slot_id);
+    }
+#endif
+    return std::unique_ptr<QoreIRFunction>(ir_func);
 }
 
 // AOTConstantReverseMap typedef is in QoreAOTBinary.h
@@ -5988,7 +6095,7 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
 }
 
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
-        llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
+        AOTDebuggerChecks debugger_checks, llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     for (auto& h : helpers) {
@@ -6000,6 +6107,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, b
         }
         QoreIRToLLVM lowerer(ctx);
         lowerer.setAOTMode(&slots, !preserve_debug_calls);
+        lowerer.setAOTDebuggerChecks(debugger_checks);
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
@@ -6264,6 +6372,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots, false);
+    lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -8017,9 +8126,11 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
 
     const auto* method_op =
         static_cast<const QoreIRDotEvalMethodDirectInstruction*>(operation);
+    // a call of index(), rindex() or substr() is not summarized as the pseudo-method, whose runtime functions raise in
+    // the pseudo-method's frame (qore#7711)
     if (!method_op->pseudo || method_op->has_ref_args
             || !method_op->qc || strcmp(method_op->qc->getName(), "<string>")
-            || !method_op->pseudo_base_known_assigned_string) {
+            || !method_op->pseudo_base_known_assigned_string || qore_ir_is_string_function_form(*method_op)) {
         return false;
     }
     result.base_param = get_param(0);
@@ -8665,7 +8776,9 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             }
             case QoreIROpcode::DotEvalMethodDirect: {
                 const auto* direct = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                // a call of substr() is not summarized as the pseudo-method (qore#7711)
                 if (!direct->pseudo || direct->intrinsic != QoreIRIntrinsic::StringSubstr
+                        || qore_ir_is_string_function_form(*direct)
                         || !direct->pseudo_base_known_assigned_string
                         || !direct->pseudo_arg0_known_assigned_int
                         || (inst->operands.size() != 2 && inst->operands.size() != 3)
@@ -12660,10 +12773,11 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
                 auto base = boxed_values.find(inst->operands[0].id);
                 const auto* op = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                // a call of index() or rindex() is not summarized as the pseudo-method (qore#7711)
                 if (base == boxed_values.end()
                         || base->second.boxed_kind != BoxedSourceParamKind::String
                         || !op->pseudo || op->has_ref_args || !op->qc
-                        || strcmp(op->qc->getName(), "<string>")) {
+                        || strcmp(op->qc->getName(), "<string>") || qore_ir_is_string_function_form(*op)) {
                     return false;
                 }
                 QoreIRIntrinsic intrinsic = op->intrinsic;
@@ -17849,6 +17963,210 @@ static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
     return true;
 }
 
+static_assert(offsetof(QoreAOTCallRefEntry, fn) == 0 && offsetof(QoreAOTCallRefEntry, cref_fn) == 8
+    && offsetof(QoreAOTCallRefEntry, sig_code) == 16 && offsetof(QoreAOTCallRefEntry, nparams) == 20
+    && offsetof(QoreAOTCallRefEntry, kinds) == 21 && sizeof(QoreAOTCallRefEntry) == 40,
+    "the layout of QoreAOTCallRefEntry is the one that emitAOTCallRefEntries() generates");
+
+//! Returns true if the batch callee gets a call-reference entry (qore#5578)
+/** A plain function (not a method or a closure) with a single variant, whose native fast entry is defined in this
+    module, reads nothing of its own AOT context (context-independent), takes its arguments in the declared kinds
+    without taking any over (the entry itself, not a copy that takes arguments over or a generic specialization), and
+    has no reference parameter: a call through a reference to it, whose caller knows nothing of the callee, can then
+    call the fast entry as a direct call of the function does, with the conservative assumptions of an unknown callee
+    for the effects (the fast entry's own contract has none for its callers to meet).
+*/
+static bool qore_aot_callref_entry_eligible(const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo& info) {
+    if (!info.approach_b_eligible || !info.single_variant_function || !info.context_independent_fast_entry
+            || info.cross_module || info.preloaded_fast_entry || info.generic_specialized_fast_entry
+            || info.implicit_self_method || info.guarded_method_entry || info.local_method_takes_args
+            || !info.capture_locals.empty() || info.fast_name.empty() || info.name.empty()
+            || info.num_params > QORE_AOT_CALLREF_MAX_PARAMS || info.param_kinds.size() != info.num_params
+            || dynamic_cast<const MethodVariantBase*>(variant) || dynamic_cast<const UserClosureVariant*>(variant)) {
+        return false;
+    }
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig || !uvb->isStaticallyFastCallEligible() || sig->numParams() != info.num_params || sig->hasVarargs()) {
+        return false;
+    }
+    for (unsigned i = 0; i < info.num_params; ++i) {
+        if (QoreTypeInfo::isReference(sig->getParamTypeInfo(i))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Emits the call-reference entries of the functions defined in \a module and the registration of their table
+/** For each batch callee that qore_aot_callref_entry_eligible() admits, whose standard and fast entries are both
+    defined in the module, emits an adapter with the call-reference ABI (QoreAOTCallRefFn: the raw arguments in an
+    array, the callee's AOT context and the exception sink), which calls the fast entry (never inlined into the adapter:
+    the fast entry checks the stack for its own frame), and a table of QoreAOTCallRefEntry records that a constructor
+    function of the image registers when it is loaded (qore_aot_register_callref_entries_v1()) and a destructor function
+    unregisters when it is unloaded (qore#5578).  Every image (executable, script object or module) registers its own
+    table, so the entries need no other registration path.
+
+    @return false if the compilation was cancelled
+*/
+static bool emitAOTCallRefEntries(llvm::LLVMContext& ctx, llvm::Module& module,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* batch_callees,
+        std::string& error) {
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION");
+    if (!batch_callees || batch_callees->empty() || disabled_env.get()) {
+        return true;
+    }
+    auto* i8_ty = llvm::Type::getInt8Ty(ctx);
+    auto* i32_ty = llvm::Type::getInt32Ty(ctx);
+    auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+    auto* double_ty = llvm::Type::getDoubleTy(ctx);
+    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+    auto* void_ty = llvm::Type::getVoidTy(ctx);
+    auto* kinds_ty = llvm::ArrayType::get(i8_ty, QORE_AOT_CALLREF_MAX_PARAMS);
+    auto* entry_ty = llvm::StructType::get(ctx, {ptr_ty, ptr_ty, i32_ty, i8_ty, kinds_ty});
+
+    // in the order of the fast entries' names, so that the image does not depend on the order of the map
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, const BatchCalleeInfo*>> infos;
+    size_t check_count = 0;
+    for (const auto& [variant, info] : *batch_callees) {
+        if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT call-reference entries")) {
+            error = "operation cancelled during AOT call-reference entry generation";
+            return false;
+        }
+        if (qore_aot_callref_entry_eligible(variant, info)) {
+            infos.emplace_back(variant, &info);
+        }
+    }
+    std::sort(infos.begin(), infos.end(), [](const auto& a, const auto& b) {
+        return a.second->fast_name < b.second->fast_name;
+    });
+
+    std::vector<llvm::Constant*> table_entries;
+    for (const auto& [variant, info] : infos) {
+        llvm::Function* fn = module.getFunction(info->name);
+        llvm::Function* fast_fn = module.getFunction(info->fast_name);
+        if (!fn || !fast_fn || fn->isDeclaration() || fast_fn->isDeclaration()) {
+            continue;
+        }
+        // the fast entry's ABI: the parameters in their kinds, then the context and the exception sink
+        llvm::FunctionType* fast_ty = fast_fn->getFunctionType();
+        if (fast_ty->getNumParams() != info->num_params + 2) {
+            continue;
+        }
+        auto native_type = [&](uint8_t kind) -> llvm::Type* {
+            switch (static_cast<BatchCalleeParamKind>(kind)) {
+                case BatchCalleeParamKind::NativeFloat:
+                    return double_ty;
+                case BatchCalleeParamKind::NativeBool:
+                    return llvm::Type::getInt1Ty(ctx);
+                default:
+                    return i64_ty;
+            }
+        };
+        bool abi_ok = fast_ty->getReturnType() == native_type(static_cast<uint8_t>(info->return_kind));
+        for (unsigned i = 0; abi_ok && i < info->num_params; ++i) {
+            abi_ok = fast_ty->getParamType(i) == native_type(static_cast<uint8_t>(info->param_kinds[i]));
+        }
+        if (!abi_ok) {
+            continue;
+        }
+
+        // the adapter: i64 (ptr raw_args, ptr callee_ctx, ptr xsink)
+        auto* adapter_ty = llvm::FunctionType::get(i64_ty, {ptr_ty, ptr_ty, ptr_ty}, false);
+        llvm::Function* adapter = llvm::Function::Create(adapter_ty, llvm::GlobalValue::InternalLinkage,
+            info->fast_name + "_cref", module);
+        // not nounwind: the fast entry can unwind with a QoreJITException, which the runtime's helper catches
+        adapter->setUWTableKind(llvm::UWTableKind::Default);
+        auto* bb = llvm::BasicBlock::Create(ctx, "entry", adapter);
+        llvm::IRBuilder<> b(bb);
+        auto arg_it = adapter->arg_begin();
+        llvm::Value* raw_args = &*arg_it++;
+        llvm::Value* callee_ctx = &*arg_it++;
+        llvm::Value* xsink = &*arg_it;
+        std::vector<llvm::Value*> call_args;
+        call_args.reserve(info->num_params + 2);
+        std::array<uint8_t, QORE_AOT_CALLREF_MAX_PARAMS> kinds{};
+        for (unsigned i = 0; i < info->num_params; ++i) {
+            kinds[i] = static_cast<uint8_t>(info->param_kinds[i]);
+            llvm::Value* raw = b.CreateLoad(i64_ty, b.CreateConstInBoundsGEP1_64(i64_ty, raw_args, i));
+            switch (info->param_kinds[i]) {
+                case BatchCalleeParamKind::NativeFloat:
+                    raw = b.CreateBitCast(raw, double_ty);
+                    break;
+                case BatchCalleeParamKind::NativeBool:
+                    raw = b.CreateICmpNE(raw, llvm::ConstantInt::get(i64_ty, 0));
+                    break;
+                default:
+                    break;
+            }
+            call_args.push_back(raw);
+        }
+        call_args.push_back(callee_ctx);
+        call_args.push_back(xsink);
+        llvm::CallInst* call = b.CreateCall(fast_fn, call_args);
+        call->setCallingConv(fast_fn->getCallingConv());
+        // the fast entry checks the stack for its frame: inlined here, its frame would be allocated before that
+        call->addFnAttr(llvm::Attribute::NoInline);
+        llvm::Value* rv = call;
+        switch (info->return_kind) {
+            case BatchCalleeReturnKind::NativeFloat:
+                rv = b.CreateBitCast(rv, i64_ty);
+                break;
+            case BatchCalleeReturnKind::NativeBool:
+                rv = b.CreateZExt(rv, i64_ty);
+                break;
+            default:
+                break;
+        }
+        b.CreateRet(rv);
+
+        const uint8_t ret_kind = static_cast<uint8_t>(info->return_kind);
+        std::vector<llvm::Constant*> kind_consts;
+        kind_consts.reserve(QORE_AOT_CALLREF_MAX_PARAMS);
+        for (unsigned i = 0; i < QORE_AOT_CALLREF_MAX_PARAMS; ++i) {
+            kind_consts.push_back(llvm::ConstantInt::get(i8_ty, kinds[i]));
+        }
+        table_entries.push_back(llvm::ConstantStruct::get(entry_ty, {fn, adapter,
+            llvm::ConstantInt::get(i32_ty, qore_aot_callref_sig_code(ret_kind, kinds.data(), info->num_params)),
+            llvm::ConstantInt::get(i8_ty, info->num_params), llvm::ConstantArray::get(kinds_ty, kind_consts)}));
+    }
+    if (table_entries.empty()) {
+        return true;
+    }
+    auto* table_ty = llvm::ArrayType::get(entry_ty, table_entries.size());
+    auto* table_gv = new llvm::GlobalVariable(module, table_ty, true, llvm::GlobalValue::PrivateLinkage,
+        llvm::ConstantArray::get(table_ty, table_entries), "qore_aot_callref_entries");
+    llvm::Constant* count = llvm::ConstantInt::get(i32_ty, table_entries.size());
+    auto* reg_ty = llvm::FunctionType::get(void_ty, {ptr_ty, i32_ty}, false);
+    // the runtime functions are referenced weakly and called only if present: the constructor runs when the image is
+    // loaded, before the image's AOT runtime identity is checked, so an image loaded by an older library that lacks
+    // them must still load as far as that check, which refuses it with its message (as for
+    // qore_rt_try_enter_native_method_v1())
+    auto emit_ctor = [&](const char* name, const char* runtime_fn) {
+        llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(void_ty, false),
+            llvm::GlobalValue::InternalLinkage, name, module);
+        f->setUWTableKind(llvm::UWTableKind::Default);
+        auto* reg_fn = llvm::cast<llvm::Function>(module.getOrInsertFunction(runtime_fn, reg_ty).getCallee());
+        reg_fn->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", f);
+        llvm::BasicBlock* call_bb = llvm::BasicBlock::Create(ctx, "call", f);
+        llvm::BasicBlock* ret_bb = llvm::BasicBlock::Create(ctx, "ret", f);
+        llvm::IRBuilder<> fb(entry);
+        fb.CreateCondBr(fb.CreateIsNotNull(reg_fn), call_bb, ret_bb);
+        fb.SetInsertPoint(call_bb);
+        fb.CreateCall(reg_ty, reg_fn, {table_gv, count});
+        fb.CreateBr(ret_bb);
+        fb.SetInsertPoint(ret_bb);
+        fb.CreateRetVoid();
+        return f;
+    };
+    llvm::appendToGlobalCtors(module, emit_ctor("qore_aot_callref_register", "qore_aot_register_callref_entries_v1"),
+        65535);
+    llvm::appendToGlobalDtors(module, emit_ctor("qore_aot_callref_unregister",
+        "qore_aot_unregister_callref_entries_v1"), 65535);
+    return true;
+}
+
 //! Declare batch fast-entry symbols collected from a shared parse in one per-file LLVM module.
 /** Definitions are emitted only for variants selected by the normal per-file body filter.  External
     linkage lets another object from the same batch call the fast entry directly; the standard entry
@@ -20055,6 +20373,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                    fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(false);
@@ -20063,7 +20382,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     fast_lowerer.setFastEntryMode(fast_name, &param_map,
                         &param_kind_map, &borrowed_params,
-                        return_kind, ir_func->specializeType(sig->getReturnTypeInfo()));
+                        return_kind, ir_func->specializeType(sig->getReturnTypeInfo()), sig->getParseLocation());
                     fast_lowered = fast_lowerer.lowerFunction(*ir_func, module,
                         fast_error);
                 }
@@ -20141,6 +20460,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         } else {
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, !preserve_debug_calls);
+            lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             lowerer.setDeferredExceptionChecking(false);
@@ -20256,7 +20576,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         }
     }
 
-    auto refine_interprocedural = [&](QoreIRFunction& func) {
+    // returns true if a rewrite changed the function (see aotLowerUnrewrittenDebugIR())
+    auto refine_interprocedural = [&](QoreIRFunction& func) -> bool {
         size_t exact_boxed_call_facts = 0;
         if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
             QoreIRExactBoxedReturnQuery query =
@@ -20348,7 +20669,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         if (++call_count % 100 == 0
                                 && qore_check_cancel(nullptr,
                                     "AOT aggregate-return fact refinement")) {
-                            return;
+                            // the compilation is cancelled; the function may have been rewritten already
+                            return true;
                         }
                         if (!inst_ptr
                                 || inst_ptr->opcode
@@ -22015,8 +22337,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             string_consumers += qore_ir_fuse_string_producer_consumers(
                 func, string_producer_query);
         }
-        if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
-                || aggregate_projections
+        const bool rewritten = exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
+                || aggregate_projections || borrowed_aggregate_projections
                 || object_scalar_projections
                 || boxed_return_calls
                 || changed
@@ -22028,8 +22350,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 || boxed_specializations
                 || collection_specializations
                 || native_specializations || exception_edges_elided
-                || post_rewrite_rounds)
-                && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
+                || post_rewrite_rounds;
+        if (rewritten && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
                 " fresh-list-size-calls=%zu"
@@ -22064,6 +22386,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 native_specializations,
                 exception_edges_elided);
         }
+        return rewritten;
     };
 
     // Track compiled variant keys to skip duplicates from iterator yielding
@@ -22224,17 +22547,35 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 AOTFunctionOutliner outline_probe;
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
-                if (!will_outline) {
-                    refine_interprocedural(*ir_func);
+                // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
+                // the serialized IR cannot express (#7733); also in code compiled without debugging: the serialized IR
+                // is not only the debugger's, a source-stripped build runs it at parse time
+                // (UserVariantBase::materializeLazyAOTFunctionIR()), and the lowering costs compile time only
+                std::unique_ptr<QoreIRFunction> debug_ir_func;
+                const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
+                if (rewritten || ir_func->has_debug_ir_call_forms) {
+                    std::string debug_error;
+                    debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, function_name.c_str(), pgm, func,
+                        const_reverse_map, debug_error);
+                    if (!debug_ir_func) {
+                        ++failed_count;
+                        setAOTCompileFatal(fatal_error, "function", variant_key, "debug IR lowering", debug_error);
+                        delete ir_func;
+                        return;
+                    }
                 }
 
                 // Build slot map for AOT pointer indirection
                 // (computeIROnlyLocals already called inside tryLowerFunction)
                 // NOTE: the slot map is built from the un-outlined function so
                 // slot id assignment is identical in metadata-only compiles
-                // (function-body outlining only moves instructions).
+                // (function-body outlining only moves instructions).  The slots
+                // of the debug IR follow those of the native code's IR.
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
+                if (debug_ir_func) {
+                    buildAOTSlotMap(*debug_ir_func, slots);
+                }
 
                 // Automatic function-body outlining for pathological
                 // functions (see design/aot-function-outlining.md).  The
@@ -22411,6 +22752,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                    lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // Deferring exception checks is not semantics-preserving for
@@ -22464,7 +22806,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     // helper failure fall back to un-outlined lowering.
                     if (fn_outliner.active()) {
                         std::string helper_error;
-                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
+                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
+                                aotDebuggerChecks(pgm), ctx,
                                 module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
                         }
@@ -22484,6 +22827,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        retry_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         retry_lowerer.setDeferredExceptionChecking(false);
@@ -22542,6 +22886,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                         QoreIRToLLVM fast_lowerer(ctx);
                         fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
@@ -22558,7 +22903,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 sig->getReturnTypeInfo());
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                 &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                fast_return_type);
+                                fast_return_type, sig->getParseLocation());
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
@@ -22597,7 +22942,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
-                    // Extract slot identities for source-stripped mode
+                    // Extract slot identities for source-stripped mode; a separate
+                    // debug IR first adds the locals of its handlers to the slot map
+                    if (debug_ir_func) {
+                        AOTSlotIdentities debug_slot_ids;
+                        extractAOTSlotIdentities(*debug_ir_func, slots, uvb, debug_slot_ids,
+                            const_reverse_map, pgm);
+                    }
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                         const_reverse_map, pgm);
                     // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
@@ -22607,6 +22958,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                    if (debug_ir_func) {
+                        cf.feature_flags |= scanIRFeatureFlags(*debug_ir_func);
+                        cf.native_ir.reset(ir_func);
+                        ir_func = debug_ir_func.release();
+                    }
                     // Keep the serialized debug IR source-visible.  The LLVM
                     // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
                     // to avoid dynamic-linker interposition; stack traces and
@@ -22741,16 +23097,33 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     AOTFunctionOutliner outline_probe;
                     bool will_outline = outline_probe.run(ir_func, false);
                     outline_probe.undo();
-                    if (!will_outline) {
-                        refine_interprocedural(*ir_func);
+                    // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
+                    // the serialized IR cannot express (#7733); also without debugging (see the functions above)
+                    std::unique_ptr<QoreIRFunction> debug_ir_func;
+                    const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
+                    if (rewritten || ir_func->has_debug_ir_call_forms) {
+                        std::string debug_error;
+                        debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, method_name.c_str(), pgm, nullptr,
+                            const_reverse_map, debug_error);
+                        if (!debug_ir_func) {
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "method", variant_key, "debug IR lowering",
+                                debug_error);
+                            delete ir_func;
+                            return;
+                        }
                     }
 
                     // Build slot map for AOT pointer indirection
                     // (computeIROnlyLocals already called inside tryLowerFunction)
                     // NOTE: built from the un-outlined method so slot id
-                    // assignment matches metadata-only compiles.
+                    // assignment matches metadata-only compiles.  The slots of
+                    // the debug IR follow those of the native code's IR.
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
+                    if (debug_ir_func) {
+                        buildAOTSlotMap(*debug_ir_func, slots);
+                    }
 
                     // Automatic function-body outlining for pathological
                     // methods (see design/aot-function-outlining.md); the
@@ -22934,6 +23307,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         // Lower to LLVM with AOT mode
                         QoreIRToLLVM lowerer(ctx);
                         lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
@@ -22967,7 +23341,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         // lowering of the restored original method.
                         if (fn_outliner.active()) {
                             std::string helper_error;
-                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
+                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
+                                    aotDebuggerChecks(pgm), ctx,
                                     module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
                             }
@@ -22985,6 +23360,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                            retry_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             retry_lowerer.setDeferredExceptionChecking(false);
@@ -23034,6 +23410,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                             QoreIRToLLVM fast_lowerer(ctx);
                             fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                            fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                             fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             fast_lowerer.setDeferredExceptionChecking(false);
@@ -23050,7 +23427,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     sig->getReturnTypeInfo());
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                     &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                    fast_return_type);
+                                    fast_return_type, sig->getParseLocation());
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(
                                     *fast_ir_func, module, fast_error)) {
@@ -23085,7 +23462,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
-                        // Extract slot identities for source-stripped mode
+                        // Extract slot identities for source-stripped mode; a separate
+                        // debug IR first adds the locals of its handlers to the slot map
+                        if (debug_ir_func) {
+                            AOTSlotIdentities debug_slot_ids;
+                            extractAOTSlotIdentities(*debug_ir_func, slots, uvb, debug_slot_ids,
+                                const_reverse_map, pgm);
+                        }
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                             const_reverse_map, pgm);
                         // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
@@ -23095,6 +23478,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.source_file = aotIRFunctionSourceFile(*ir_func);
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                        if (debug_ir_func) {
+                            cf.feature_flags |= scanIRFeatureFlags(*debug_ir_func);
+                            cf.native_ir.reset(ir_func);
+                            ir_func = debug_ir_func.release();
+                        }
                         // Keep the serialized debug IR source-visible.  The LLVM
                         // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
                         // to avoid dynamic-linker interposition; stack traces and
@@ -23248,6 +23636,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             }
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, false);
+            lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -25745,6 +26134,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
         // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
         ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+        // the IR of the top-level code is its debug IR too, so with debugging it keeps the calls of substr(), index()
+        // and rindex() as calls, whose exceptions have the frame of the builtin, which the pseudo-method instructions
+        // made of them do not serialize (qore#7733); without debugging the native code takes the pseudo-method forms,
+        // and the top-level code then has no debug IR (see below; qore#7761)
+        ir_func->lower_call_forms_for_debug_ir = ir_func->emit_debug_statements && aotCompileWithDebugging();
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -25816,6 +26210,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                llvm_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                 if (!executable_batch_callees.empty()) {
                     llvm_lowerer.setBatchCallees(&executable_batch_callees);
                 }
@@ -25864,6 +26259,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         if (lowering.compileAllHandlerIRs(handler_error) < 0) {
                             printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
                                 handler_error.c_str());
+                        } else if (ir_func->has_debug_ir_call_forms) {
+                            // code compiled without debugging made pseudo-method instructions of function calls,
+                            // which the debug IR cannot express: the top-level code runs its native code under a
+                            // debugger, as a function without debug IR does (qore#7761)
+                            assert(!ir_func->lower_call_forms_for_debug_ir);
+                            printd(1, "AOT: no debug IR for _toplevel: compiled without debugging, with call forms\n");
                         } else {
                             cf.debug_ir.reset(ir_func);
                             ir_func = nullptr;
@@ -25938,7 +26339,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
+        hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_HAS_TOPLEVEL);
         hdr.parse_options_lo = parse_options.getLo();
         hdr.label_offset = writer.addSourcePath(label);
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
@@ -26106,6 +26507,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Finalize shared debug info after all functions are lowered
+    // the call-reference entries of the functions defined here, which the image registers when it is loaded
+    // (qore#5578)
+    if (!emitAOTCallRefEntries(ctx, *module, &executable_batch_callees, error)) {
+        return false;
+    }
     di_builder.finalize();
 
     if (!auditAOTBatchFastEntryDefinitions(*module, executable_batch_callees, error)) {
@@ -26506,11 +26912,29 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
         // there; failed optional loads must remain optional. The raw scanner's
         // returned dependency list is therefore not used for qmod hard-dep
         // serialization.
-        if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
-            p += 11;
+        // %try-reexport-module is the same request with reexport: a module that it loads is reexported as well
+        // (#7796); the reexports that the scan finds are filtered in the same way (aotLoadedReexports())
+        bool try_reexport = false;
+        if (p + 20 <= end && strncmp(p, "%try-reexport-module", 20) == 0) {
+            try_reexport = true;
+        }
+        if (try_reexport || (p + 11 <= end && strncmp(p, "%try-module", 11) == 0)) {
+            p += try_reexport ? 20 : 11;
             // Skip whitespace after %try-module
             while (p < end && (*p == ' ' || *p == '\t')) {
                 ++p;
+            }
+            // skip the optional variable declaration that receives the load error: "(var_decl)"
+            if (p < end && *p == '(') {
+                while (p < end && *p != ')' && *p != '\n') {
+                    ++p;
+                }
+                if (p < end && *p == ')') {
+                    ++p;
+                }
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
             }
             // Now read the module name (stop at whitespace, newline, or version operators)
             const char* name_start = p;
@@ -26532,6 +26956,9 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
                 }
                 if (dep_name != "qore") {
                     deps.push_back(dep_name);
+                    if (try_reexport && reexport_deps) {
+                        reexport_deps->push_back(dep_name);
+                    }
                 }
             }
         }
@@ -28456,7 +28883,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
-    // the "module Name" declaration, and calling it twice triggers an assertion.
+    // the "module Name" declaration, and a second call is a duplicate module declaration (qore#7794).
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
@@ -28468,6 +28895,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink, QMRL_LOCK);
+
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
 
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
@@ -28650,7 +29081,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+        hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
         // Use the program's current parse options (after parsing), not the
         // initial mod_po.  The source may add options via %modern, %new-style,
         // %require-types, etc; without this, those added options are lost at
@@ -28683,7 +29114,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             error = "operation cancelled during AOT module dependency serialization";
             return false;
         }
-        serializeReexportModules(writer, reexport_mods);
+        serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
         // Pass module name to filter out items from reexported dependencies
         std::string ns_error;
@@ -28795,6 +29226,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     }
 
     // Finalize shared debug info after all functions are lowered
+    // the call-reference entries of the functions defined here, which the image registers when it is loaded
+    // (qore#5578)
+    if (!emitAOTCallRefEntries(ctx, *module, &module_batch_callees, error)) {
+        return false;
+    }
     di_builder.finalize();
 
     // Verify the module
@@ -28950,6 +29386,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
+
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
 
         // Parse main .qm file with parsePending()
         // the files of the module are parsed and committed as the module loader parses and commits a separated
@@ -29188,7 +29628,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             // Use the program's current parse options (after parsing), not the
             // initial mod_po — see comment in generateModuleBinary().
             const QoreParseOptions& final_po = qpgm->getParseOptions();
@@ -29218,7 +29658,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 error = "operation cancelled during AOT split module dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             // Pass module name to filter out items from reexported dependencies
             std::string ns_error;
@@ -29664,6 +30104,23 @@ static bool aotProgramHasLoadedDependency(const qore_program_private* pp, const 
         || pp->userFeatureList.find(dep) != pp->userFeatureList.end();
 }
 
+//! Returns the reexports that the directive scan found (extractAllDependencies()) that the Program loaded
+/** A reexport whose module the Program did not load (a failed %try-reexport-module request, a directive in a
+    conditional block that was not parsed) is not one: the module's namespace initialization would load it when the
+    module is applied to a Program, and get_module_hash() reports it (#7796)
+*/
+static std::vector<std::string> aotLoadedReexports(const qore_program_private* pp,
+        const std::vector<std::string>& reexports) {
+    std::vector<std::string> rv;
+    std::unordered_set<std::string> seen;
+    for (const std::string& dep : reexports) {
+        if (aotProgramHasLoadedDependency(pp, dep) && seen.insert(dep).second) {
+            rv.push_back(dep);
+        }
+    }
+    return rv;
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
         qore_program_private* pp, const char* cancel_context, const char* skip_feature,
         const std::vector<std::string>* explicit_deps) {
@@ -29852,7 +30309,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;
+        hdr.flags = aotHeaderFlags(0);
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -30014,6 +30471,11 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         return false;
     }
 
+    // the call-reference entries of the functions defined here, which the image registers when it is loaded
+    // (qore#5578)
+    if (!emitAOTCallRefEntries(ctx, *module, shared_batch_callees, error)) {
+        return false;
+    }
     di_builder.finalize();
 
     std::string verify_error;
@@ -30385,6 +30847,42 @@ static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preload
     }
     return false;
 }
+
+//! Checks the class injections of the preloaded siblings when a compile ends after their source-parse resolution
+//! and before their finalization, which checks them itself, has returned (qore#7664)
+/** The commit of the source attaches the base classes of its classes, which the classes of the siblings can inherit:
+    a class that then leads back to the class that it is injected in place of releases its reference, also when the
+    compile fails, or an exception is thrown, before the finalization has checked them; a class whose reference was
+    released already is skipped.  Declared after the preload, so that it runs while the deserializer exists.
+*/
+class AOTSiblingInjectionCheckGuard {
+public:
+    //! Arms the guard once the source-parse resolution has succeeded
+    void arm(QoreAOTBinaryMultiDeserializer* m) {
+        mdes = m;
+    }
+
+    //! Disarms the guard once the finalization, which checks the injections, has returned
+    void disarm() {
+        mdes = nullptr;
+    }
+
+    ~AOTSiblingInjectionCheckGuard() {
+        if (!mdes) {
+            return;
+        }
+        // the compile has failed already: its error is reported, and the result of the check is not
+        try {
+            std::string ignored;
+            mdes->checkSourceParseClassInjections(ignored);
+        } catch (...) {
+            // nothing can be reported from a destructor; the check itself only builds an error string
+        }
+    }
+
+private:
+    QoreAOTBinaryMultiDeserializer* mdes = nullptr;
+};
 
 struct QoreAOTSiblingPreload {
     //! The blob bytes the preloaded shells were built from.
@@ -31049,6 +31547,7 @@ bool QoreAOT::compileScriptFilesBatch(
     // Resolve the preloaded siblings far enough that one parseCommit() can
     // commit the combined source/sibling program, then finalize them after it --
     // the same two-phase handoff the single-source path performs.
+    AOTSiblingInjectionCheckGuard injection_check_guard;
     if (sibling_preload.mdes) {
         ExceptionSink pch_xsink;
         ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
@@ -31069,6 +31568,7 @@ bool QoreAOT::compileScriptFilesBatch(
             aot_compile_failed_in_preload = true;
             return false;
         }
+        injection_check_guard.arm(sibling_preload.mdes.get());
     }
     {
         AOTSourceParseGuard source_guard(sibling_parse);
@@ -31105,6 +31605,9 @@ bool QoreAOT::compileScriptFilesBatch(
             aot_compile_failed_in_preload = true;
             return false;
         }
+        // the finalization has checked the injections; until it returns, the guard checks them (a class whose
+        // reference was released is skipped)
+        injection_check_guard.disarm();
     }
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
@@ -31843,7 +32346,7 @@ bool QoreAOT::compileScriptAggregate(
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;
+        hdr.flags = aotHeaderFlags(0);
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -32392,6 +32895,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // deserializer-driven UserVariantBase construction can call
     // parse_get_parse_options() (same invariant the runtime module-init path
     // observes — see QoreAOTRuntime.cpp:6911).
+    AOTSiblingInjectionCheckGuard injection_check_guard;
     if (sibling_mdes) {
         ExceptionSink pch_xsink;
         ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
@@ -32411,6 +32915,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             aot_compile_failed_in_preload = true;
             return false;
         }
+        injection_check_guard.arm(sibling_mdes.get());
     }
 
     {
@@ -32451,6 +32956,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             aot_compile_failed_in_preload = true;
             return false;
         }
+        // the finalization has checked the injections; until it returns, the guard checks them (a class whose
+        // reference was released is skipped)
+        injection_check_guard.disarm();
     }
     if (qoreAotHandleWarnings(wsink, error, "script parsing")) {
         return false;
@@ -32567,7 +33075,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;  // not a module
+        hdr.flags = aotHeaderFlags(0);  // not a module
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -32750,6 +33258,12 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
+    // the call-reference entries of the functions defined here, which the image registers when it is loaded
+    // (qore#5578)
+    if (!emitAOTCallRefEntries(ctx, *module, standalone_batch_callees.empty() ? nullptr : &standalone_batch_callees,
+            error)) {
+        return false;
+    }
     di_builder.finalize();
 
     std::string verify_error;
@@ -32943,6 +33457,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
+
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
 
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
@@ -33188,7 +33706,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());
@@ -33215,7 +33733,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "operation cancelled during AOT module-fragment dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             // Pass compile_file=target_canon so the metadata blob lists
             // only this file's contributions.
@@ -33540,6 +34058,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
+
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
         // raised as errors (qore#7314, qore#7324)
@@ -33733,7 +34255,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());
@@ -33760,7 +34282,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT aggregated-module dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             std::string ns_error;
             if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str(),
@@ -34131,6 +34653,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        if (qoreAotModuleContextFailed(mod_ctx, xsink, error)) {
+            return false;
+        }
+
         // the files of the module are parsed and committed as the module loader parses and commits a separated
         // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
         // raised as errors (qore#7314, qore#7324)
@@ -34308,7 +34834,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());
@@ -34335,7 +34861,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT archive dependency serialization";
                 return false;
             }
-            serializeReexportModules(writer, reexport_mods);
+            serializeReexportModules(writer, aotLoadedReexports(pp, reexport_mods));
 
             std::string ns_error;
             if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str(),

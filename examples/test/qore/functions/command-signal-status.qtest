@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the exit status of processes that /bin/sh runs, and of /bin/sh itself, ended by signals
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CommandSignalStatusTest
+
+#! the exit status that backquote() and system() give a command that a signal ended (qore#7912)
+/** A shell reports a command that a signal ended with the exit status 128 + the number of the signal.  Some shells
+    (dash, bash) run the last command of a script in a child process and report it so themselves; others (busybox
+    \c sh, the \c /bin/sh of Alpine) run it in their own process, which the signal then ends, so that the code of the
+    shell is never reached.  backquote() and system() give 128 + the number of the signal in both cases, so that the
+    status of a command does not depend on the shell of the system.  The commands run the signalled process both
+    ways on every system: as a child of the shell (a command after it keeps the shell from running it in its own
+    process) and as the shell's own process (\c exec, and a shell that signals itself).
+*/
+class CommandSignalStatusTest inherits QUnit::Test {
+    constructor() : Test("CommandSignalStatusTest", "1.0") {
+        addTestCase("a signal ends a child of the shell", \childOfShell());
+        addTestCase("a signal ends the shell's own process", \shellProcess());
+        addTestCase("the output before the signal is kept", \outputBeforeSignal());
+        addTestCase("normal exits and failed commands", \normalExits());
+        set_return_value(main());
+    }
+
+    #! the shell runs the command in a child and reports the signal itself: 128 + the signal (also before qore#7912)
+    childOfShell() {
+        foreach hash<auto> s in (signals()) {
+            string cmd = sprintf("sh -c 'kill -%s $$'; exit $?", s.name);
+            assertEq(128 + s.num, bq(cmd), "backquote(), " + cmd);
+            assertEq(128 + s.num, sys(cmd), "system(), " + cmd);
+        }
+    }
+
+    #! the signal ends the process of /bin/sh itself: 128 + the signal, as a shell that forks would report it
+    shellProcess() {
+        foreach hash<auto> s in (signals()) {
+            # the shell's process becomes the command that the signal ends
+            string cmd = sprintf("exec sh -c 'kill -%s $$'", s.name);
+            assertEq(128 + s.num, bq(cmd), "backquote(), " + cmd);
+            assertEq(128 + s.num, sys(cmd), "system(), " + cmd);
+            # the shell signals itself
+            cmd = sprintf("kill -%s $$", s.name);
+            assertEq(128 + s.num, bq(cmd), "backquote(), " + cmd);
+            assertEq(128 + s.num, sys(cmd), "system(), " + cmd);
+        }
+    }
+
+    #! the output that the command wrote before the signal ended it is returned with the status
+    outputBeforeSignal() {
+        int rc;
+        string out = backquote("echo before; exec sh -c 'kill -TERM $$'", \rc);
+        assertEq("before\n", out);
+        assertEq(128 + SIGTERM, rc);
+        out = backquote("echo before; sh -c 'kill -TERM $$'; exit $?", \rc);
+        assertEq("before\n", out);
+        assertEq(128 + SIGTERM, rc);
+    }
+
+    #! an exit status of a normal exit, also one above 128, is the status; a command that cannot be run gives the
+    #! shell's status for it
+    normalExits() {
+        foreach int code in ((0, 1, 3, 127, 129, 134, 200, 255)) {
+            string cmd = sprintf("exit %d", code);
+            assertEq(code, bq(cmd), "backquote(), " + cmd);
+            assertEq(code, sys(cmd), "system(), " + cmd);
+            # the exit status of a child that exits normally, which the shell gives as its own
+            cmd = sprintf("exec sh -c 'exit %d'", code);
+            assertEq(code, bq(cmd), "backquote(), " + cmd);
+            assertEq(code, sys(cmd), "system(), " + cmd);
+        }
+        # a command that is not found: 127, as every POSIX shell gives it
+        string cmd = "/nonexistent-command-signal-status/cmd 2>/dev/null";
+        assertEq(127, bq(cmd), "backquote(), " + cmd);
+        assertEq(127, sys(cmd), "system(), " + cmd);
+        # a command that is not executable: 126
+        cmd = "/dev/null 2>/dev/null";
+        assertEq(126, bq(cmd), "backquote(), " + cmd);
+        assertEq(126, sys(cmd), "system(), " + cmd);
+    }
+
+    #! the signals that end a process by default; SIGABRT and SIGSEGV would dump core, which the commands disable
+    private static list<hash<auto>> signals() {
+        return (
+            {"name": "TERM", "num": SIGTERM},
+            {"name": "KILL", "num": SIGKILL},
+            {"name": "ABRT", "num": SIGABRT},
+            {"name": "HUP", "num": SIGHUP},
+        );
+    }
+
+    #! returns the exit status that backquote() gives the command, with no core dump; the command writes nothing
+    private int bq(string cmd) {
+        int rc;
+        string out = backquote("ulimit -c 0; " + cmd, \rc);
+        assertEq("", out, "no output: " + cmd);
+        return rc;
+    }
+
+    #! returns the exit status that system() gives the command, with no core dump
+    private int sys(string cmd) {
+        return system("ulimit -c 0; " + cmd);
+    }
+}

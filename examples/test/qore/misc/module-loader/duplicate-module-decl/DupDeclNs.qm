@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# a module with a second module declaration in the form of a namespace declaration (qore#7794)
+
+module DupDeclNs {
+    version = "1.0";
+    desc = "duplicate module declaration test module";
+    author = "Qore Technologies, s.r.o.";
+}
+
+%modern
+
+public namespace DupDeclNs {
+public int sub get() {
+    return 1;
+}
+}
+
+module namespace X {}

@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - temporary directories of Programs under the sandbox's file-system policy
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ProgramTempDirTest
+
+#! The temporary directory of a Program (qore#7656)
+/** Program::setTempDir() sets the directory that tmp_location() and the library's temporary files use for the code of
+    a Program, also code restricted from external information, which takes no directory from the environment.  The
+    worker (\c program-temp-dir/program-temp-dir.q) checks restricted, sandboxed and unrestricted code, a child Program
+    that inherits the directory, the refusal of restricted callers (also through a lent Program object), validation,
+    a directory removed after it was set and one outside the sandbox's policy (both fail closed); every mode, the IR
+    tier and qcc executables must print \c program-temp-dir.expected.
+*/
+class ProgramTempDirTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/program-temp-dir";
+        string worker = dir + "/program-temp-dir.q";
+    }
+
+    constructor() : QUnit::Test("ProgramTempDirTest", "1.0", \ARGV) {
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    #! returns the command prefix and the scratch directory argument of a run of the worker
+    private string args(TmpDir tmp) {
+        return " " + quote(tmp.path);
+    }
+
+    private string env() {
+        return "QORE_MODULE_DIR=" + quote(get_script_dir() + "/program-temp-dir/mods") + ":"
+            + quote(get_script_dir() + "/../../../../qlib") + ":${QORE_MODULE_DIR} ";
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/program-temp-dir.expected");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            TmpDir tmp("pgmtmpdir");
+            assertEq(expected(), ExecModeHarness::run(sprintf("%s%s -b --enable-debug --exec-mode=%s %s%s", env(),
+                quote(qore_bin), mode, quote(worker), args(tmp))), mode);
+        }
+    }
+
+    testIrTier() {
+        TmpDir tmp("pgmtmpdir");
+        assertEq(expected(), ExecModeHarness::run_ir_tier(sprintf("%s%s -b --enable-debug --exec-mode=tiered %s%s",
+            env(), quote(qore_bin), quote(worker), args(tmp))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string found = backquote("command -v qcc 2>/dev/null");
+            trim found;
+            if (!found) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = found;
+        }
+        TmpDir tmp("pgmtmpdir");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/worker-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s%s -O%s -o %s %s 2>&1", env(), quote(qcc_bin), opt, quote(exe),
+                quote(worker)),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the worker: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            TmpDir scratch("pgmtmpdir");
+            # the module loader's warnings are not output of the program (qore#7805)
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b%s", env(),
+                quote(exe), args(scratch)), NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, sprintf("-O%s", opt));
+            assertEq("", r.stderr, sprintf("-O%s: stderr", opt));
+        }
+    }
+}

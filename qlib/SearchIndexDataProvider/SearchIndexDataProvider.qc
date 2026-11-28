@@ -76,8 +76,8 @@ public class SearchIndexDataProviderBase inherits DataProvider::AbstractDataProv
     #! Accepts a LoggerInterface object for logging or clears it
     /** @param logger logger to use, or @ref NOTHING to clear the logger */
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 }
 

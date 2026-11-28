@@ -267,6 +267,7 @@ StaticSystemNamespace* staticSystemNamespace;
 
 // the structured information of runtime errors that match a language trap; see QoreRuntimeDiagnostic.h
 const TypedHashDecl* hashdeclRuntimeDiagnosticInfo = nullptr;
+const TypedHashDecl* hashdeclImmediateCallerInfo = nullptr;
 const TypedHashDecl* hashdeclSandboxTimeZonePathInfo = nullptr;
 
 const TypedHashDecl* hashdeclStatInfo,
@@ -2274,6 +2275,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclFilesystemSecurityConfigInfo = init_hashdecl_FilesystemSecurityConfigInfo(qns);
     hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
+    hashdeclImmediateCallerInfo = init_hashdecl_ImmediateCallerInfo(qns);
     hashdeclSandboxTimeZonePathInfo = init_hashdecl_SandboxTimeZonePathInfo(qns);
 
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);

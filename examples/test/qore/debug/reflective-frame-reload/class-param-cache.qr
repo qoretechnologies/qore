@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+
+class CacheBase {
+    int next(int value) { return value + 1; }
+}
+class CacheDerived inherits CacheBase {
+    int next(int value) { return value + 10; }
+}
+class CacheReplacer inherits CacheBase {
+    int next(int value) {
+        set_local_var_value(1, "receiver", new CacheDerived());
+        return value + 1;
+    }
+}
+class CacheBox<T> {
+    public { T value; }
+    constructor(T value) { self.value = value; }
+}
+our CacheBase reference_target = new CacheDerived();
+
+sub cacheInstallReference(CacheBase argument) {
+    set_local_var_value(1, "receiver", \reference_target);
+}
+sub cacheMoveReference(CacheBase value) { reference_target = value; }
+sub cacheInstallInvalid(CacheBase argument) { set_local_var_value(1, "receiver", 42); }
+sub cacheReplace(CacheBase replacement) { set_local_var_value(1, "receiver", replacement); }
+sub cacheReplaceBox(CacheBox<int> replacement) { set_local_var_value(1, "receiver", replacement); }
+sub cacheDeleteObject(CacheBase object) { delete object; }
+
+class CacheMutator {
+    private { CacheBase replacement; }
+    constructor(CacheBase replacement) { self.replacement = replacement; }
+    destructor() { set_local_var_value(1, "receiver", replacement); }
+}
+
+int sub cacheStable(CacheBase receiver) {
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) { sum += receiver.next(0); }
+    return sum;
+}
+CacheBase sub cachePassthrough(CacheBase receiver) { return receiver; }
+
+int sub cacheReference(CacheBase receiver) {
+    int sum = receiver.next(0);
+    # A reflective write is assigned with the type of the parameter: a reference is refused and the cached
+    # receiver stays valid.
+    try { cacheInstallReference(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+        sum += 1000;
+    }
+    sum += receiver.next(0);
+    cacheReplace(new CacheDerived());
+    sum += receiver.next(0);
+    # No reference was installed: a change of the former referent does not change the receiver.
+    cacheMoveReference(new CacheBase());
+    sum += receiver.next(0);
+    return sum;
+}
+
+string sub cacheInvalid(CacheBase receiver) {
+    int first = receiver.next(0);
+    try {
+        cacheInstallInvalid(receiver);
+        return "unexpected";
+    } catch (hash<auto> ex) {
+        return sprintf("%d:%s:%d", first, ex.err, receiver.next(0));
+    }
+}
+
+int sub cacheFailedWrite(CacheBase receiver) {
+    int first = receiver.next(0);
+    try { set_local_var_value(0, "missing", new CacheDerived()); }
+    catch (hash<auto> ex) {
+        if (ex.err != "UNKNOWN-VARIABLE") { rethrow; }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub cacheFailedAliasWrite(CacheBase receiver) {
+    int first = receiver.next(0);
+    cacheReplace(new CacheDerived());
+    # Refused writes after a successful one leave the replacement in place.
+    try { cacheInstallReference(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+    }
+    try { cacheInstallInvalid(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+string sub cacheDeleted(CacheBase receiver) {
+    int first = receiver.next(0);
+    cacheDeleteObject(receiver);
+    try { return sprintf("unexpected-%d", receiver.next(0)); }
+    catch (hash<auto> ex) { return sprintf("%d:%s", first, ex.err); }
+}
+
+int sub cacheDestructor(CacheBase receiver, CacheBase replacement) {
+    int first = receiver.next(0);
+    CacheMutator token(replacement);
+    delete token;
+    return first * 100 + receiver.next(0);
+}
+
+int sub cacheRecursive(CacheBase receiver, int depth) {
+    int first = receiver.next(0);
+    if (depth) {
+        first += cacheRecursive(new CacheBase(), depth - 1);
+    } else {
+        cacheReplace(new CacheDerived());
+    }
+    return first + receiver.next(0);
+}
+
+int sub cacheWritten(CacheBase receiver) {
+    receiver = new CacheDerived();
+    return receiver.next(0);
+}
+int sub cacheCaptured(CacheBase receiver) {
+    code<int()> read = int sub () { return receiver.next(0); };
+    receiver = new CacheDerived();
+    return read();
+}
+int sub cacheByReference(reference<CacheBase> receiver) { return receiver.next(0); }
+int sub cacheWeak(CacheBase receiver, CacheBase owner) {
+    receiver := owner;
+    return receiver.next(0);
+}
+int sub cacheOptional(*CacheBase receiver) {
+    int first = receiver.next(0);
+    # Optional parameters keep ordinary reloads after reflective writes.
+    cacheReplace(new CacheDerived());
+    return first * 100 + receiver.next(0);
+}
+int sub cacheGeneric(CacheBox<int> receiver) {
+    int first = int(receiver.value);
+    cacheReplaceBox(new CacheBox<int>(2));
+    return first * 100 + int(receiver.value);
+}
+
+CacheBase base();
+CacheDerived derived();
+printf("%d:%d:%s:%d:%d:%d\n", cacheStable(base), cacheReference(base),
+    cacheInvalid(base), cacheFailedWrite(base), cacheDestructor(base, derived), cacheRecursive(base, 2));
+printf("%d:%d:%d:%d\n", cacheWritten(base), cacheCaptured(base), cacheByReference(\base),
+    cacheWeak(base, derived));
+*CacheBase weak := derived;
+printf("%d\n", cacheStable(weak));
+printf("%d\n", cacheStable(new CacheReplacer()));
+printf("%d\n", cachePassthrough(base).next(0));
+printf("%d:%d:%d\n", cacheOptional(base), cacheGeneric(new CacheBox<int>(1)), cacheFailedAliasWrite(base));
+printf("%s\n", cacheDeleted(new CacheBase()));
+printf("class-param-cache: ok\n");

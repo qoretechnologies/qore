@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class FastCallReturnCheckTest
+
+#! The return value of a function that compiled code calls through the runtime's fast call is checked in its frame
+/** The runtime's fast call of a user function (qore_rt_call_fast(), and the call through a function reference that
+    shares its code) checks the return value against the declared type after the body has returned, as the generic
+    call path does (UserVariantBase::evalTiered()); the check raised its exception once the function had left the
+    call stack, so its call stack lacked the function.  The function is now kept on the stack through the check, as a
+    method is (#7370).
+
+    FastCallReturnCheck.q calls a module's function, which compiled code calls through the runtime's fast call, and a
+    function of the script, whose return values fail their declared type; the exceptions and their call stacks must be
+    those of the AST interpreter (FastCallReturnCheck.expected) in every execution mode and on the IR tier.
+*/
+class FastCallReturnCheckTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/FastCallReturnCheck.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/FastCallReturnCheck.expected");
+    }
+
+    constructor() : QUnit::Test("fast call return check", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

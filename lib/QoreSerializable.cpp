@@ -44,6 +44,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <string>
 #include <set>
@@ -261,6 +262,19 @@ bool qore_serialization_calling_code_trusted() {
     return !qore_caller_is_restricted();
 }
 
+bool qore_serializable_receiver_function(const QoreFunction* func) {
+    // by the class ID and the name, not by the identity of the function: nothing guarantees that the copies of a class
+    // in other Programs (the classes that a Program declares or imports) share the builtin method functions of the
+    // root namespace's class; a sandbox cannot declare a class with the ID of Serializable or add a method to it, so
+    // the match cannot be spoofed, and a call that does not match keeps its frame, which counts (fails closed)
+    const QoreClass* cls = func ? func->getClass() : nullptr;
+    if (!cls || cls->getID() != CID_SERIALIZABLE || static_cast<const MethodFunctionBase*>(func)->isStatic()) {
+        return false;
+    }
+    const char* name = func->getName();
+    return !strcmp(name, "serialize") || !strcmp(name, "serializeToData");
+}
+
 bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool internal) {
     if (unrestricted) {
         return false;
@@ -280,8 +294,16 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
         return false;
     }
     // any other code: withheld if restricted code is in the chain of callers (qore#7737)
+    return chainSandboxed();
+}
+
+void QoreSerializationCaller::decideReceiverCaller() {
+    receiver_caller_trusted = receiver && !qore_receiver_caller_is_sandboxed(receiver);
+}
+
+bool QoreSerializationCaller::chainSandboxed() {
     if (chain_sandboxed < 0) {
-        chain_sandboxed = qore_caller_is_restricted() ? 1 : 0;
+        chain_sandboxed = qore_receiver_caller_is_restricted(receiver) ? 1 : 0;
     }
     return chain_sandboxed;
 }
@@ -563,7 +585,32 @@ QoreHashNode* QoreSerializable::serializeToData(const QoreValue val, int64 flags
 
 QoreHashNode* QoreSerializable::serializeToDataTrusted(const QoreValue val, int64 flags, ExceptionSink* xsink) {
     QoreInternalSerializationContext context(xsink, flags, true);
+    // the owner rule of the non-public members of objects with the provenance of a sandbox (qore#7033) is lifted only
+    // for calling code whose own Program no sandbox with tenant isolation governs, such as trusted code that serves a
+    // tenant; not for a governed tenant, which may use the trusted forms (or for a call reference that it invokes,
+    // whose calling Program is its own); decided once, at the start, from the Program of the calling code that the
+    // trust check resolves; fails closed (qore#7146)
+    {
+        QoreProgram* calling_pgm = qore_builtin_caller_program();
+        if (!calling_pgm) {
+            calling_pgm = getProgram();
+        }
+        context.caller.setOwnerRuleLifted(calling_pgm && !qore_program_tenant_isolated_state(calling_pgm));
+    }
     return serializeToDataIntern(val, context, xsink);
+}
+
+QoreHashNode* QoreSerializable::serializeReceiverToData(const QoreObject& self, int64 flags, ExceptionSink* xsink) {
+    QoreInternalSerializationContext context(xsink, flags);
+    context.caller.setReceiver(&self);
+    // the exemption of the receiver's provenance frame is decided once, at the start of the call; the code that the
+    // call runs afterwards (the serialization hooks of the object's classes, the methods of an output stream that the
+    // call writes to) sees the frame unmarked for the rest of the call, so that it counts for that code, as for the
+    // static form (qore#7146)
+    context.caller.chainSandboxed();
+    context.caller.decideReceiverCaller();
+    qore_clear_serializing_receiver_frame(&self);
+    return serializeToDataIntern(&self, context, xsink);
 }
 
 void QoreSerializable::serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,
@@ -632,7 +679,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {
-            if (opriv->checkSharedSerialize(xsink)) {
+            if (opriv->checkSharedSerialize(xsink, context.caller.chainSandboxed())) {
                 return context.imap.end();
             }
         }
@@ -652,6 +699,14 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             return i0;
         }
     }
+
+    // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
+    // created the object (qore#7033); a trusted API gives all state to calling code that the owner rules do not apply
+    // to, as its output is never given to sandboxed code (Program::serialize(), Serializable::serializeTrusted(),
+    // qore#7146); the code that called a builtin method that serializes its receiver is judged without the receiver's
+    // provenance frame, as the caller of the static form is (qore#7146)
+    bool non_public = context.caller.ownerRuleLifted() || context.caller.receiverCallerTrusted()
+        || qore_object_private::get(self)->callerReadsNonPublicMembers();
 
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);
@@ -729,9 +784,12 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             bool protect = current_priv->sandboxSerializationProtected();
 
             // see if the local class has a serializeMembers() method defined; the method of a protected class is not
-            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146)
-            const QoreMethod* serializeMembers = protect && context.caller.restricts(*current_priv, true) ? nullptr
-                : current_cls.findLocalMethod("serializeMembers");
+            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146), nor
+            // for code that may not read the non-public members of the object as a whole (qore#7033): the automatic
+            // members are serialized then, with the rule of each
+            const QoreMethod* serializeMembers = !non_public
+                || (protect && context.caller.restricts(*current_priv, true))
+                ? nullptr : current_cls.findLocalMethod("serializeMembers");
 
             // iterate all nornal members in the class
             QoreClassMemberIterator mi(ci.get());
@@ -757,6 +815,14 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
                 if (protect && m.getAccess() != Public
                     && context.caller.restricts(*current_priv, m.getAccess() == Internal)) {
                     raiseWithheldError(current_cls, "member", mname, xsink);
+                    return context.imap.end();
+                }
+                // a non-public member of an object whose non-public members the calling code may not read as a
+                // whole: the code is sandboxed and its sandbox did not create the object (qore#7033)
+                if (!non_public && m.getAccess() != Public) {
+                    xsink->raiseException("SERIALIZATION-ERROR", "cannot serialize non-public member '%s::%s' of an "
+                        "object of class '%s' that the sandbox of the calling code did not create",
+                        current_cls.getName(), mname, cls.getName());
                     return context.imap.end();
                 }
 
@@ -1939,7 +2005,7 @@ void QoreSerializable::serialize(const QoreValue val, OutputStream& stream, int6
 
 
 void QoreSerializable::serialize(const QoreObject& self, OutputStream& stream, int64 flags, ExceptionSink* xsink) {
-    ReferenceHolder<QoreHashNode> h(serializeToData(&self, flags, xsink), xsink);
+    ReferenceHolder<QoreHashNode> h(serializeReceiverToData(self, flags, xsink), xsink);
     if (*xsink) {
         return;
     }

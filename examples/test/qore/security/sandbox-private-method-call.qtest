@@ -1,0 +1,393 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its sandbox cases run in Programs of the test's own process
+# test-platform: macos - method calls of JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The code of a class that sandboxed code declared cannot call a non-public method of an object that its sandbox did
+# not create (issue #7102): a subclass reaches the private methods of its base classes on every object of the
+# hierarchy, so without the rule the subclass of a tenant could read or change the state of an object of a class that
+# it shares with another tenant (the classes of a tenant whose code creates the Programs of other tenants) through a
+# method that the class does not offer to every caller.  Every route (a call from an instance method, from a static
+# method, through a call reference and a closure) is refused with SANDBOX-OBJECT-ACCESS-ERROR in every execution mode
+# of the tenant's code and with a qcc-compiled host; calls of self, of the tenant's own objects, of public methods,
+# code-safety sandboxes and trusted code are not affected.  The private methods of a class that trusted code declared,
+# such as the private accessor of the logger of a LoggerWrapper or a private method of a builtin class, are refused to
+# a tenant's subclass when it is parsed (issue #6843).
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxPrivateMethodCallTest
+
+#! the code of the library tenant: the class whose private method the tenants' subclasses call, declared by sandboxed
+#! code, and the child Programs that share it (each with a sandbox of its own, also governed by the library tenant's
+#! sandbox)
+const LibSource = "%modern
+public class Target {
+    private {
+        string s = \"secret\";
+    }
+
+    string pub() {
+        return \"public\";
+    }
+
+    private string priv() {
+        return s;
+    }
+}
+
+#! creates a child Program that shares the classes of this Program and that a sandbox of its own governs
+Program sub child(string src, Qore::ExecMode mode, int level) {
+    Program b(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    b.setExecMode(mode);
+    SandboxManager sm();
+    if (level != QSEL_TENANT_ISOLATION) {
+        sm.setEnforcementLevel(level);
+    }
+    b.setSandboxManager(sm);
+    b.parse(src, \"child\");
+    return b;
+}
+";
+
+#! tenant subclasses of classes that trusted code declared, which call their private methods: refused when they are
+#! parsed (qore#6843)
+const TrustedClassSources = {
+    "LoggerWrapper": "%modern
+%requires Logger
+class LSub inherits Logger::LoggerWrapper {
+    static *Logger::LoggerInterface getLoggerOf(Logger::LoggerWrapper w) {
+        return w.getLogger();
+    }
+}
+",
+    "LoggerAppenderQueue": "%modern
+%requires Logger
+class QSub inherits Logger::LoggerAppenderQueue {
+    static auto getEventOf(Logger::LoggerAppenderQueue q) {
+        return q.getEvent(0);
+    }
+}
+",
+};
+
+#! the code of the tenants (and of a trusted Program, where it is not restricted), with the name of its subclass of
+#! Target as SUBCLASS
+const FormsSource = "%modern
+%requires Logger
+%requires reflection
+
+#! the call forms
+const Forms = (
+    \"instance\", \"static\", \"call-ref\", \"closure\", \"call-object-method\", \"public\",
+);
+
+class SUBCLASS inherits Target {
+    #! calls the private method of the object from an instance method
+    string viaInstance(Target w) {
+        return w.priv();
+    }
+
+    #! calls the private method of the object with the given form; returns the result or the exception code
+    static string run(string form, Target w) {
+        try {
+            switch (form) {
+                case \"instance\": return (new SUBCLASS()).viaInstance(w);
+                case \"static\": return w.priv();
+                case \"call-ref\": { code c = \\w.priv(); return c(); }
+                case \"closure\": { code c = string sub () { return w.priv(); }; return c(); }
+                case \"call-object-method\": return call_object_method(w, \"priv\");
+                case \"public\": return w.pub();
+                default: throw \"UNKNOWN-FORM\", form;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! calls the private method of self
+    string callSelf() {
+        try {
+            code c = \\priv();
+            return sprintf(\"%s %s %s\", priv(), self.priv(), c());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! calls the private method of the object with every form and returns the results
+hash<string, string> sub run_all(Target w, int count = 2) {
+    hash<string, string> rv;
+    foreach string form in (Forms) {
+        hash<string, bool> r;
+        for (int i = 0; i < count; ++i) {
+            r{SUBCLASS::run(form, w)} = True;
+        }
+        rv{form} = (keys r).join(\"|\");
+    }
+    return rv;
+}
+
+Target sub make_target() {
+    return new Target();
+}
+
+SUBCLASS sub make_sub() {
+    return new SUBCLASS();
+}
+
+string sub call_self(SUBCLASS t) {
+    return t.callSelf();
+}
+
+hash<string, string> sub run_all_background(Target w) {
+    Queue q();
+    background q.push(run_all(w));
+    return q.get();
+}
+";
+
+#! the host compiled with qcc: it runs the library tenant and a child tenant, whose code it reads from the files given
+#! as its arguments
+const AotHostSource = "%modern
+public class HostTarget {
+    private {
+        string s = \"secret\";
+    }
+
+    private string priv() {
+        return s;
+    }
+}
+
+class HostSub inherits HostTarget {
+    static string call(HostTarget w) {
+        try {
+            return w.priv();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+Program a(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+a.setSandboxManager(new SandboxManager());
+a.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"lib\");
+Program b = a.callFunction(\"child\", ReadOnlyFile::readTextFile(ARGV[1]), EM_AST, QSEL_TENANT_ISOLATION);
+hash<string, string> r = b.callFunction(\"run_all\", a.callFunction(\"make_target\"));
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-lib.%s=%s\\n\", i.key, i.value);
+}
+r = b.callFunction(\"run_all\", b.callFunction(\"make_target\"));
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-own.%s=%s\\n\", i.key, i.value);
+}
+printf(\"host-on-host=%s\\n\", HostSub::call(new HostTarget()));
+";
+
+class SandboxPrivateMethodCallTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the exception of a refused call
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the results of every form on an object that the caller owns
+        const Owned = {
+            "instance": "secret",
+            "static": "secret",
+            "call-ref": "secret",
+            "closure": "secret",
+            # a builtin function has no class context: a private method cannot be called with it from anywhere
+            "call-object-method": "METHOD-IS-PRIVATE",
+            "public": "public",
+        };
+
+        #! the results of every form on an object that the caller's sandbox did not create
+        const Refused = {
+            "instance": Err,
+            "static": Err,
+            "call-ref": Err,
+            "closure": Err,
+            "call-object-method": "METHOD-IS-PRIVATE",
+            "public": "public",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed private method call", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant calls in " + mode, getTenantTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("trusted classes", \trustedClassTest());
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    #! returns the code of a tenant with the given name of its subclass
+    private static string forms(string cls) {
+        return replace(FormsSource, "SUBCLASS", cls);
+    }
+
+    #! creates the library tenant, whose code declares the class and creates the child tenants
+    private static Program lib(string mode, bool sandboxed = True, int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        if (sandboxed) {
+            SandboxManager sm();
+            if (level != QSEL_TENANT_ISOLATION) {
+                sm.setEnforcementLevel(level);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(LibSource + forms("TSub"), "lib");
+        return p;
+    }
+
+    #! creates a child tenant of the library tenant, which shares its class
+    private static Program child(Program lib, string mode, string cls, int level = QSEL_TENANT_ISOLATION) {
+        return lib.callFunction("child", forms(cls), ExecModes{mode}, level);
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a = lib(mode);
+        Program b = child(a, mode, "BSub");
+        Program c = child(a, mode, "CSub");
+
+        object a_obj = a.callFunction("make_target");
+        assertEq(Refused, b.callFunction("run_all", a_obj, count), mode + ": B on A's object");
+        assertEq(Refused, b.callFunction("run_all", c.callFunction("make_target"), count), mode + ": B on C's object");
+        assertEq(Refused, b.callFunction("run_all_background", a_obj), mode + ": B's thread");
+
+        # the tenant's own objects and self
+        assertEq(Owned, b.callFunction("run_all", b.callFunction("make_target"), count),
+            mode + ": B on its own object");
+        assertEq(Owned, b.callFunction("run_all", b.callFunction("make_sub"), count),
+            mode + ": B on its own subclass object");
+        assertEq("secret secret secret", b.callFunction("call_self", b.callFunction("make_sub")), mode + ": B on self");
+        assertEq(Owned, a.callFunction("run_all", a_obj, count), mode + ": A on its own object");
+        # the sandbox of the library tenant governs the code of the child tenants too: it owns what they create
+        assertEq(Owned, a.callFunction("run_all", c.callFunction("make_target"), count), mode + ": A on C's object");
+
+        # code that only sandboxes at the enforcement level of code safety govern is not subject to the owner rules
+        Program safe_lib = lib(mode, True, QSEL_CODE_SAFETY);
+        Program safe = child(safe_lib, mode, "SSub", QSEL_CODE_SAFETY);
+        assertEq(Owned, safe.callFunction("run_all", safe_lib.callFunction("make_target"), count),
+            mode + ": code safety on the library's object");
+    }
+
+    trustedTest() {
+        # trusted library code calls the private methods of its own objects; they are refused to the subclass of a
+        # tenant when it is parsed (qore#6843)
+        Program t = lib("ast", False);
+        assertEq(Owned, t.callFunction("run_all", t.callFunction("make_target")), "trusted code on its own object");
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \child(), (t, "ast", "BSub"));
+    }
+
+    #! a tenant's subclass of a class that trusted code declared cannot call its private methods (qore#6843): the
+    #! private accessor of the logger of a LoggerWrapper and a private method of a builtin class
+    trustedClassTest() {
+        foreach hash<auto> i in (TrustedClassSources.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.setSandboxManager(new SandboxManager());
+            assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \p.parse(), (i.value, "tenant"),
+                i.key);
+        }
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-private-method-call-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string lib_src = tmp.path + DirSep + "lib.q";
+        write(lib_src, LibSource + forms("TSub"));
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, forms("BSub"));
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s", libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe,
+            lib_src + " " + tenant_src), NOTHING, "QORE_JIT_TIMING=1");
+        int status = r.rc;
+        out = r.out;
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected;
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            expected{"tenant-on-lib." + i.key} = i.value;
+        }
+        foreach hash<auto> i in (Owned.pairIterator()) {
+            expected{"tenant-on-own." + i.key} = i.value;
+        }
+        expected."host-on-host" = "secret";
+        assertEq(expected, results, "compiled host output:\n" + out);
+        assertEq(0, status);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

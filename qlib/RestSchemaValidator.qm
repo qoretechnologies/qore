@@ -442,6 +442,39 @@ public namespace RestSchemaValidator {
             }
         }
 
+        #! Hands a schema that a loader created for the code of a tenant that called it to that code, which then owns it
+        /** An object that library code creates while it serves sandboxed code is owned by no sandbox (see
+            @ref sandbox_object_ownership), so the tenant could not delete the schema that it loaded or give it a
+            logger.  The schema is handed over with
+            @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()" only if the
+            loader's immediate caller is the restricted code of a tenant at the enforcement level of tenant isolation:
+            not if it is library code, which may keep the schema for other callers, nor trusted code, whose schemas
+            are shared.  Only the schema object is handed over, not the objects that it holds.  Fails closed: if the
+            schema cannot be handed over, it stays owned by no sandbox.
+
+            @param schema the schema that the loader created in this call
+            @param caller the immediate caller of the loader, as
+            @ref Qore::SandboxManager::getImmediateCaller() "SandboxManager::getImmediateCaller()" returned it in the
+            loader's own code
+
+            @since RestSchemaValidator 2.5
+        */
+        static transferToCaller(object schema, *hash<ImmediateCallerInfo> caller) {
+            if (!caller || caller.library || !caller.restricted || SandboxManager::createsSharedObjects()
+                || !SandboxManager::isTenantIsolated()) {
+                return;
+            }
+            try {
+                SandboxManager::transferObjectToCaller(schema);
+            } catch (hash<ExceptionInfo> ex) {
+                # the caller cannot own objects (sandboxed code that no sandbox manager governs): the schema stays
+                # owned by no sandbox
+                if (ex.err != "SANDBOX-ACCESS-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+
         #! Initialize
         /**
             @param oh deserialized hash from the source schema description
@@ -1959,9 +1992,11 @@ public namespace RestSchemaValidator {
         */
         replaceType(AbstractDataProviderType t) {
             # a schema that may be shared by every Program cannot be changed by sandboxed code (qore#6843)
-            if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
-                SandboxManager::checkProcessWideRegistration("replace a data type of a REST schema that is shared by "
-                    "every Program of the process");
+            # the classification that makes the schema shared (qore#7737): code that creates shared objects changes
+            # them; restricted code and code acting for it do not (fails closed) (qore#7879)
+            if (shared_object && !SandboxManager::createsSharedObjects()) {
+                throw "SANDBOX-REGISTRATION-ERROR", "code that is restricted or acts for restricted code cannot "
+                    "replace a data type of a REST schema that is shared by every Program of the process";
             }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             if (schema && !schema.isTypeBuildActive()) {

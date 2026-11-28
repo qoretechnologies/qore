@@ -1093,16 +1093,38 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
     return rv;
 }
 
+QoreStringNode* qore_get_caller_temp_dir() {
+    // the borrower's Program for a host Program called for code restricted from external information (qore#7678)
+    QoreProgram* pgm = qore_get_information_calling_program();
+    return pgm ? qore_program_private::get(*pgm)->getTempDir() : nullptr;
+}
+
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
     // a Program created with no Program running is a host Program, whose code is not restricted for time zones
     // (QoreTimeZoneManager::callerRestricted())
     tz_host = !qore_thread_current_program_if_any();
+    // the Program takes the temporary directory of the Program whose own code creates it, so that code given a
+    // directory cannot leave it by creating a Program (qore#7656); a Program that module code creates takes none: the
+    // module keeps it for all of its callers, so the directory of the caller that happened to create it would be used
+    // for the others' files; neither does a module's own Program; before the sandbox below, as there is nothing to undo
+    // if the copy fails
+    if (!n_parse_options.hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        QoreProgram* creator = qore_get_calling_program();
+        if (creator && creator == qore_thread_current_program_if_any()) {
+            qore_program_private* cp = qore_program_private::get(*creator);
+            std::lock_guard<std::mutex> lg(cp->temp_dir_lock);
+            if (cp->has_temp_dir) {
+                temp_dir = cp->temp_dir;
+                has_temp_dir = true;
+            }
+        }
+    }
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
         // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
         // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
         // registered, so that nothing has to be undone if the lookup fails (std::bad_alloc: no Program is created)
@@ -1169,7 +1191,7 @@ void qore_program_private::markSandboxedParse() {
     // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
     // is parsed is attached when the code is committed (see getParseCreatorSandbox())
     if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
     }
 }
 
@@ -2488,6 +2510,8 @@ void qore_program_private_base::newProgram() {
     dmap["QORE_HAS_PROGRAM_DESERIALIZE"] = true;
     // Program::serialize() and Program::serializeToData() exist (qore#7146)
     dmap["QORE_HAS_PROGRAM_SERIALIZE"] = true;
+    // Serializable::serializeTrusted(), serializeTrustedToData() and deserializeTrusted() exist (qore#7146)
+    dmap["QORE_HAS_SERIALIZE_TRUSTED"] = true;
 
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
@@ -2496,6 +2520,11 @@ void qore_program_private_base::newProgram() {
     for (auto& i : dmap) {
         builtin_defines.insert(i.first);
     }
+
+    // the sandbox features that Qore code can test for, named as their C++ feature macros
+    dmap["QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL"] = true;
+    dmap["QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK"] = true;
+    dmap["QORE_HAVE_SANDBOX_OBJECT_TRANSFER"] = true;
 
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
     assert(ns);

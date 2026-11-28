@@ -375,7 +375,7 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
         {
             string exe = join_paths(dir.path, sprintf("handler-flow-O%d", opt));
             int rc;
-            string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
+            string out = backquote(sprintf("%s %s -O%d -g -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
             # the compile aborted on an assertion (qore#6905)
             assertEq(0, rc, sprintf("qcc -O%d: exit status (output: %s)", opt, out.substr(-2000)));
             if (!is_file(exe)) {

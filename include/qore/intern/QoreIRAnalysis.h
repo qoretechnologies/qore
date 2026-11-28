@@ -797,4 +797,32 @@ DLLLOCAL bool qore_ir_return_value_needs_conversion(const QoreTypeInfo* return_t
 */
 DLLLOCAL bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type);
 
+//! Returns true if a value of the type can be or hold an object (whose release runs its destructor)
+/** A type that needs no scan holds no object; the elements of a list and the values of a hash of a declared element
+    type are of that type.
+    @param ti the type; nullptr means any type
+    @param depth the nesting depth of the check (types nested more deeply count as possibly holding an object)
+*/
+DLLLOCAL bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+//! Returns true if assigning a variable of the type can release a value that can be or hold an object
+/** As qore_ir_type_may_hold_object(), except that for a reference, the type that it refers to decides: a write through
+    a reference replaces the value of the variable that it refers to, while releasing the reference itself releases
+    no object.
+    @param ti the declared type of the variable; nullptr means any type
+*/
+DLLLOCAL bool qore_ir_lvalue_type_may_hold_object(const QoreTypeInfo* ti);
+
+//! Returns true if an instruction can release a value that may hold an object when it changes an lvalue
+/** An assignment, a compound assignment, a removal, an element store, a scope exit of a local, or another update of a
+    variable releases the value it replaces or removes, and the destructor of an object released runs user code, which
+    can replace a local of the frame by name (set_local_var_value()).  The declared type of the variable decides (a
+    reference: the type that it refers to); a member, whose type the instruction does not carry, or a variable of
+    unknown type, may hold an object.
+
+    In a frame whose locals reflection can replace (QoreIRFunction::reflective_frame), the execution tiers reload the
+    frame's locals from the runtime stack after such an instruction, as after a call (qore#7646).
+*/
+DLLLOCAL bool qore_ir_instruction_may_release_object(const QoreIRInstruction* inst);
+
 #endif

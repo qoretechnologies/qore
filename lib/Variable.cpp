@@ -3565,8 +3565,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         clearPathContainers();
         clearPtr();
 
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
+        // a member of self (see qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -3702,8 +3703,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         clearPtr();
 
         const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
+        // a member of self, also of a reference's: the object and class of the code that created it (see
+        // qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -4024,8 +4027,9 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             clearPathContainers();
             clearPtr();
-            // getLValue() sets the object context: the object is on the path once (qore#7348)
-            if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
+            // a member of self (see qore_object_private::getSelfLValue())
+            // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+            if (qore_object_private::getSelfLValue(*obj, root.name.c_str(), *this,
                     runtime_get_class(), for_remove, vl.xsink)) {
                 // object already cleared above
                 return -1;
@@ -4707,6 +4711,54 @@ QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_typ
         weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type, weak ? "weak" : "opaque", value_type);
 }
 
+QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_type, const char* target_type,
+        QoreWeakWrapKind kind) {
+    const char* op_desc = weak ? "weak" : "opaque";
+    const char* op = weak ? ":=" : "@=";
+    switch (kind) {
+        case QoreWeakWrapKind::NoValue:
+            return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of "
+                "type '%s' in an lvalue of type '%s': the lvalue's type converts no value to a new empty list, so the "
+                "%s reference would designate that list, a temporary, instead of the value assigned; declare the lvalue "
+                "with a type that keeps no value as it is, such as 'auto' or '*softlist', or assign a list, such as a "
+                "'list<auto>'", op_desc, op, value_type, target_type, op_desc);
+        case QoreWeakWrapKind::Either:
+            return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of "
+                "type '%s' in an lvalue of type '%s': the lvalue's type wraps a value in a new list, and converts no "
+                "value to a new empty list, so the %s reference would designate that list, a temporary, instead of the "
+                "value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto' or the "
+                "value's own type '%s', or assign a list that holds the value, such as a 'list<auto>'", op_desc, op,
+                value_type, target_type, op_desc, value_type);
+        default:
+            break;
+    }
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type wraps the value in a new list, so the %s reference would "
+        "designate that list, a temporary, instead of the value assigned; declare the lvalue with a type that keeps "
+        "the value as it is, such as 'auto' or the value's own type '%s', or assign a list that holds the value, such "
+        "as a 'list<auto>'", op_desc, op, value_type, target_type, op_desc, value_type);
+}
+
+QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type) {
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type builds a new list from the iterator, so the %s reference would "
+        "designate that list, a temporary, instead of the value assigned; assign a list instead, or declare the lvalue "
+        "with type 'auto' to keep the iterator", weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type,
+        weak ? "weak" : "opaque");
+}
+
+bool qore_weak_value_may_wrap(qore_type_t value_type) {
+    switch (value_type) {
+        case NT_LIST:
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+        case NT_REFERENCE:
+            return false;
+        default:
+            return true;
+    }
+}
+
 bool qore_lvalue_vivifies_untyped_list(const QoreTypeInfo* ti) {
     return !ti || ti == anyTypeInfo || ti == listTypeInfo || ti == listOrNothingTypeInfo || ti == softListTypeInfo
         || ti == softListOrNothingTypeInfo;
@@ -4949,11 +5001,9 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (QoreTypeInfo::mayBindReferenceCached(typeInfo)) [[unlikely]] {
             int rc;
             if constexpr (Lexical) {
-                rc = checkTypesMayBind<Lexical, Native>(n, desc, policy, weak_source,
-                    mode == AssignmentMode::Weak);
+                rc = checkTypesMayBind<Lexical, Native>(n, desc, policy, weak_source, mode);
             } else {
-                rc = checkTypesMayBind<Lexical, Native>(n, desc, LexicalSemanticPolicy(), weak_source,
-                    mode == AssignmentMode::Weak);
+                rc = checkTypesMayBind<Lexical, Native>(n, desc, LexicalSemanticPolicy(), weak_source, mode);
             }
             if (rc) {
                 // the reference of a weakly assigned container is released after the locks, as the value is
@@ -4965,9 +5015,15 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
                 return -1;
             }
         } else {
-            // check type for assignment
+            // check type for assignment; the conversion of a weak or opaque assignment refuses to wrap the value in a
+            // new list (qore#7619)
             if constexpr (Native) {
                 QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+            } else if constexpr (WeakOrOpaque && Lexical) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, policy, mode == AssignmentMode::Weak,
+                    this);
+            } else if constexpr (WeakOrOpaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, mode == AssignmentMode::Weak, this);
             } else if constexpr (Lexical) {
                 QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
             } else {
@@ -5087,14 +5143,25 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
 
 template <bool Lexical, bool Native>
 QORE_INTERN_NOINLINE QORE_INTERN_COLD int LValueHelper::checkTypesMayBind(QoreValue& n, const char* desc,
-        LexicalSemanticPolicy policy, const QoreValue& weak_source, bool weak) {
+        LexicalSemanticPolicy policy, const QoreValue& weak_source, AssignmentMode mode) {
+    const bool weak = mode == AssignmentMode::Weak;
+    // the conversion of a weak or opaque assignment refuses to wrap the value in a new list (qore#7619)
+    const bool weak_or_opaque = weak || mode == AssignmentMode::Opaque;
     auto check = [&]() {
         if constexpr (Native) {
             QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
         } else if constexpr (Lexical) {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+            if (weak_or_opaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, policy, weak, this);
+            } else {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+            }
         } else {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+            if (weak_or_opaque) {
+                QoreTypeInfo::acceptAssignmentWeak(typeInfo, desc, n, vl.xsink, weak, this);
+            } else {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+            }
         }
     };
 
@@ -6133,13 +6200,25 @@ QoreValue LValueHelper::remove(bool& static_assignment) {
 }
 
 LValueRemoveHelper::LValueRemoveHelper(const QoreValue& exp, ExceptionSink* n_xsink, bool fd) : xsink(n_xsink), for_del(fd) {
-    doRemove(exp);
+    try {
+        doRemove(exp);
+    } catch (...) {
+        // the destructor does not run when the constructor is left with an exception (qore#7763)
+        releaseRemoved();
+        throw;
+    }
 }
 
 LValueRemoveHelper::LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* n_xsink, bool fd) : xsink(n_xsink), for_del(fd) {
     RuntimeReferenceHelper rrh(ref, xsink);
-    if (rrh)
-        doRemove(lvalue_ref::get(&ref)->vexp);
+    if (rrh) {
+        try {
+            doRemove(lvalue_ref::get(&ref)->vexp);
+        } catch (...) {
+            releaseRemoved();
+            throw;
+        }
+    }
 }
 
 namespace {
@@ -6282,11 +6361,9 @@ void LValueRemoveHelper::deleteLValue() {
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
                     continue;
                 }
-                // sandboxed code cannot delete a shared object (qore#6843)
-                if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-                    continue;
-                }
-                o->doDelete(xsink);
+                // refused for a shared object (qore#6843), then for one that the code's sandbox does not own
+                // (qore#6842), in qore_operator_delete_object()
+                qore_operator_delete_object(o, xsink);
             }
         }
 
@@ -6300,12 +6377,9 @@ void LValueRemoveHelper::deleteLValue() {
         xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
         return;
     }
-    // sandboxed code cannot delete a shared object (qore#6843)
-    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
-        return;
-    }
-
-    o->doDelete(xsink);
+    // refused for a shared object (qore#6843), then for one that the code's sandbox does not own (qore#6842), in
+    // qore_operator_delete_object()
+    qore_operator_delete_object(o, xsink);
 }
 
 void LValueRemoveHelper::doRemove(QoreValue lvalue) {
@@ -6424,14 +6498,18 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
                     return;
 
                 // issue #4122: do not write output for nonexistent keys
-                bool exists;
-                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
-                if (!exists) {
+                if (!hp->findMember(mem.c_str())) {
                     continue;
                 }
 
+                // the member of the result is created before the value leaves the hash: memory that cannot be
+                // allocated for it leaves the value in the hash (qore#7763)
+                hash_assignment_priv ha(*rvh, mem.c_str());
+                bool exists;
+                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
+                assert(exists);
                 // note that no exception can occur here
-                rvh->setKeyValue(mem.c_str(), n, xsink);
+                ha.assignNative(n, xsink);
                 assert(!*xsink);
             }
             // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed

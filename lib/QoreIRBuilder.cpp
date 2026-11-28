@@ -1848,6 +1848,17 @@ QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgra
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createHandlerAbandonReturn(int rc, const QoreProgramLocation* loc) {
+    // the request that the run decides, as an integer constant (RC_BREAK or RC_CONTINUE), if any
+    QoreIRValue request = rc ? createConstInt(rc, loc)->result : QoreIRValue();
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerAbandonReturn);
+    if (request.isValid()) {
+        inst->operands.push_back(request);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createSetCodeParseOptions(const QoreParseOptions& po,
         const QoreProgramLocation* loc) {
     // four 32-bit words, each an integer that every tier holds inline (an int of 64 bits can be a node)
@@ -2259,11 +2270,52 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
 
 // documented in QoreIR.h
 const QoreIRBasicBlock* QoreIRDebugFlowTargets::qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry) {
-    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets())
-    if (entry->instructions.size() != 1 || entry->instructions.front()->opcode != QoreIROpcode::Br) {
+    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets()); the entry of a ScopeExit
+    // whose handlers can hand a value over starts with the release of the value handed over, which every request
+    // makes (QoreIRLowering::setHandOverScopeExitFlowTargets(), qore#7753)
+    const size_t n = entry->instructions.size();
+    if (!n || entry->instructions.back()->opcode != QoreIROpcode::Br) {
         return entry;
     }
-    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.front().get())->target;
+    for (size_t i = 0; i + 1 < n; ++i) {
+        if (entry->instructions[i]->opcode != QoreIROpcode::ReleaseHandedOverReturn) {
+            return entry;
+        }
+    }
+    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.back().get())->target;
+}
+
+// documented in QoreIR.h
+bool QoreIRDebugFlowTargets::qore_ir_debug_flow_same_branch(const QoreIRBasicBlock* a, const QoreIRBasicBlock* b) {
+    if (a->instructions.size() != 1 || b->instructions.size() != 1
+            || a->instructions.front()->opcode != QoreIROpcode::BrIf
+            || b->instructions.front()->opcode != QoreIROpcode::BrIf) {
+        return false;
+    }
+    const auto* x = static_cast<const QoreIRBranchIfInstruction*>(a->instructions.front().get());
+    const auto* y = static_cast<const QoreIRBranchIfInstruction*>(b->instructions.front().get());
+    return x->condition.id == y->condition.id && x->true_target == y->true_target
+        && x->false_target == y->false_target;
+}
+
+// documented in QoreIR.h
+bool QoreIRDebugFlowTargets::qore_ir_debug_flow_path_leaves(const QoreIRBasicBlock* path) {
+    // the instruction is in the blocks of the code of the request (QoreIRBasicBlock::debug_flow), which the code
+    // reaches through single branches from the path: the code of the handler's end follows the cleanups of the blocks
+    // of the handler's body (QoreIRLowering::getInlineHandlerFlowEndAt()); the walk is bounded
+    for (int i = 0; path && path->debug_flow && i < 16; ++i) {
+        for (const auto& inst : path->instructions) {
+            if (inst->opcode == QoreIROpcode::HandlerAbandonReturn && !inst->operands.empty()) {
+                return true;
+            }
+        }
+        const QoreIRInstruction* last = path->instructions.empty() ? nullptr : path->instructions.back().get();
+        if (!last || last->opcode != QoreIROpcode::Br) {
+            break;
+        }
+        path = static_cast<const QoreIRBranchInstruction*>(last)->target;
+    }
+    return false;
 }
 
 //! the request that the handler running in the thread ended with (#6201)

@@ -193,6 +193,15 @@ public final class HttpClientCreatorProof {
         client of another target that is created in the meantime (to fetch a token, for example) does not take it; else
         a proof for the calling code, bound to the client's URL (tryGet())
 
+        A grant is taken only by trusted code that the code that granted it called itself: the immediate caller of this
+        method (the code that creates the client, see @ref Qore::SandboxManager::getImmediateCaller()
+        "SandboxManager::getImmediateCaller()") and every frame below it down to the frame of the code that granted the
+        proof must be trusted code (library module code, or code of a %Program without a restriction or a sandbox), and
+        no closure or call reference that restricted code created may have been called on the way.  Restricted code
+        that runs while the granting code runs (a callback, a logger appender or an event listener that restricted code
+        supplied), and any client that such code creates, also through library code, therefore does not take the grant,
+        which stays for the client of the granting code (qore#7302)
+
         @param url the URL of the client
         @param opts the options that a proof for the calling code is bound to (see get())
 
@@ -205,14 +214,17 @@ public final class HttpClientCreatorProof {
         if (url.val()) {
             # the origin of the client's URL (a URL has one origin at most)
             *string want = HttpClientCreatorProof::getOrigins(url).firstKey();
-            if (want) {
+            # the outermost frame of the unbroken run of trusted code that creates the client: a grant is taken only if
+            # the run reaches the frame of the code that granted it (qore#7302)
+            *int trusted_frame = want ? SandboxManager::getImmediateCaller().trusted_frame : NOTHING;
+            if (exists trusted_frame) {
                 HttpClientCreatorProofRegistry r = registry;
                 AutoLock al(r.lock);
                 string tid = string(gettid());
                 if (*list<hash<auto>> l = r.grants{tid}) {
                     for (int i = l.size() - 1; i >= 0; --i) {
                         HttpClientCreatorProof granted = l[i].proof;
-                        if (granted.origins{want}) {
+                        if (granted.origins{want} && l[i].frame >= trusted_frame) {
                             splice l, i, 1;
                             if (l) {
                                 r.grants{tid} = l;
@@ -316,12 +328,21 @@ public final class HttpClientCreatorProof {
     }
 
     #! Grants this proof to the next client created in this thread, while the returned object exists
-    /** @return an object that removes the grant when it goes out of scope, if it was not taken
+    /** The grant is taken only by a client that trusted code that the calling code called itself creates (see
+        forClient()); it is recorded with the frame of the calling code (see
+        @ref Qore::SandboxManager::getImmediateCaller() "SandboxManager::getImmediateCaller()").  Restricted calling
+        code, and calling code whose caller is unknown, grants nothing: its grant is never taken (qore#7302)
+
+        @return an object that removes the grant when it goes out of scope, if it was not taken
     */
     HttpClientCreatorProofGrant grantNext() {
         HttpClientCreatorProofGrant grant(self);
+        *hash<ImmediateCallerInfo> caller = SandboxManager::getImmediateCaller();
+        if (!caller || caller.restricted) {
+            return grant;
+        }
         AutoLock al(reg.lock);
-        hash<auto> entry = {"id": grant.uniqueHash(), "proof": self};
+        hash<auto> entry = {"id": grant.uniqueHash(), "proof": self, "frame": caller.frame};
         reg.grants{string(gettid())} += (entry,);
         return grant;
     }
@@ -497,7 +518,9 @@ public final class HttpClientCreatorProof {
     client in @ref ConnectionProvider::AbstractConnection::get() "get()" or
     @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()", also for restricted code that was lent the
     connection: the first client of its target created in this thread takes it (see
-    @ref HttpClientIo::HttpClientCreatorProof::forClient() "HttpClientCreatorProof::forClient()").  The proof is never
+    @ref HttpClientIo::HttpClientCreatorProof::forClient() "HttpClientCreatorProof::forClient()"), if trusted code that
+    the connection's code called itself creates it, never restricted code that runs meanwhile (a callback that
+    restricted code supplied) or a client that such code creates (qore#7302).  The proof is never
     handed to the code of the connection's class, so code that derives a class from it cannot read it, and it is bound
     to the connection's URL when it was created, so changing the connection's URL or options does not move it.
 

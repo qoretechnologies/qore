@@ -821,7 +821,7 @@ sub runBodyClosure() {
         }
         foreach string opt in ("-O0", "-O3") {
             string exe = tmp.path + DirSep + "exception-location" + opt.lwr();
-            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            string out = backquote(sprintf("%s %s %s -g -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
             if (!is_file(exe)) {
                 wrong{"qcc " + opt} = ("compilation failed: " + out,);
                 continue;
@@ -856,7 +856,7 @@ sub runBodyClosure() {
                 # in reverse order and must switch from the inner statement to the caller for the root local.
                 bool cleanup_table = source == "--include-source";
                 string compiler_env = cleanup_table ? "QORE_JIT_CLEANUP_PHI_BUDGET=1 QORE_IR_OPT_STATS=1" : "";
-                string compile = backquote(sprintf("%s %s %s %s %s -o %s %s 2>&1", env, compiler_env, qcc_bin, opt,
+                string compile = backquote(sprintf("%s %s %s %s %s -g -o %s %s 2>&1", env, compiler_env, qcc_bin, opt,
                     source, exe, path));
                 assertTrue(is_file(exe), opt + " " + source + " compile " + compile);
                 if (cleanup_table) {
@@ -924,7 +924,7 @@ for (int fail = -1; fail < 24; ++fail) {
         foreach string opt in ("-O0", "-O3") {
             string exe = tmp.path + DirSep + "body" + opt;
             string compile = backquote(sprintf("%s QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=20 "
-                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s %s -o %s %s 2>&1",
+                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s %s -g -o %s %s 2>&1",
                 env, qcc_bin, opt, exe, path));
             assertRegex("AOT-OUTLINE-FN: 'body' outlined [1-9]", compile, opt + " extracted a helper");
             assertEq(expected, ExecModeHarness::run_any(sprintf("%s %s -b", env, exe)), opt);
@@ -946,7 +946,7 @@ for (int fail = -1; fail < 24; ++fail) {
         hash<string, list<string>> wrong();
         foreach string opt in ("-O0", "-O3") {
             string exe = tmp.path + DirSep + "exception-location" + opt.lwr();
-            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            string out = backquote(sprintf("%s %s %s -g -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
             if (!is_file(exe)) {
                 wrong{"qcc " + opt} = ("compilation failed: " + out,);
                 continue;
@@ -997,7 +997,7 @@ for (int fail = -1; fail < 24; ++fail) {
         list<string> exes = ();
         foreach string opt in ("-O0", "-O3") {
             string exe = tmp.path + DirSep + "aot-ir-location" + opt.lwr();
-            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            string out = backquote(sprintf("%s %s %s -g -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
             if (!is_file(exe)) {
                 wrong{"qcc " + opt} = ("compilation failed: " + out,);
                 continue;

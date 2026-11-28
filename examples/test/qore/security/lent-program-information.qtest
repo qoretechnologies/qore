@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - temporary directories of Programs and the environment for restricted callers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class LentProgramInformationTest
+
+#! A host Program lent to restricted code answers the requests of information of the host as the borrower would (qore#7678)
+/** Code restricted from external information that calls into a host Program lent to it (Program::callFunction(),
+    callFunctionArgs(), callStaticMethod(), callStaticMethodArgs(), run(), the function and method references of
+    Program::getCallReference() and the expressions of Program::getExpression(), also through a reference to these
+    methods and in a nested lent call) got the host's answers from the requests of information of the host made by the
+    Program's code.  They are now answered as for the borrower: the functions of the external-information domain
+    (gethostname(), getenv(), getcwd()) are refused, tmp_location() does not give the host Program's directory, and
+    SandboxManager::callerMayReadExternalInfo() is False.  Every other check (here a file read that the borrower may not
+    make itself), an exception in the lent call, and the host's own calls (also of a reference that the borrower
+    obtained) are as before.  The worker (\c lent-program-information/lent-program-information.q) prints each answer;
+    every mode, the IR tier and qcc executables must print \c lent-program-information.expected.
+*/
+class LentProgramInformationTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/lent-program-information";
+        string worker = dir + "/lent-program-information.q";
+    }
+
+    constructor() : QUnit::Test("LentProgramInformationTest", "1.0", \ARGV) {
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    #! returns the command prefix and the scratch directory argument of a run of the worker
+    private string args(TmpDir tmp) {
+        return " " + quote(tmp.path);
+    }
+
+    private string env() {
+        return "QORE_MODULE_DIR=" + quote(get_script_dir() + "/../../../../qlib") + ":${QORE_MODULE_DIR} ";
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/lent-program-information.expected");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            TmpDir tmp("lentpgminfo");
+            assertEq(expected(), ExecModeHarness::run(sprintf("%s%s -b --enable-debug --exec-mode=%s %s%s %s", env(),
+                quote(qore_bin), mode, quote(worker), args(tmp), mode)), mode);
+        }
+    }
+
+    testIrTier() {
+        TmpDir tmp("lentpgminfo");
+        assertEq(expected(), ExecModeHarness::run_ir_tier(sprintf("%s%s -b --enable-debug --exec-mode=tiered %s%s ir",
+            env(), quote(qore_bin), quote(worker), args(tmp))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string found = backquote("command -v qcc 2>/dev/null");
+            trim found;
+            if (!found) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = found;
+        }
+        TmpDir tmp("lentpgminfo");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/worker-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s%s -O%s -o %s %s 2>&1", env(), quote(qcc_bin), opt, quote(exe),
+                quote(worker)),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the worker: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            TmpDir scratch("lentpgminfo");
+            # the module loader's warnings are not output of the program (qore#7805)
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b%s jit", env(),
+                quote(exe), args(scratch)), NOTHING, "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, sprintf("-O%s", opt));
+            assertEq("", r.stderr, sprintf("-O%s: stderr", opt));
+        }
+    }
+}

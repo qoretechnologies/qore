@@ -24,10 +24,11 @@ hash<auto> sub mkhash(int v) {
     return {"a": v};
 }
 
-#! returns a softlist local whose converted list was released
+#! returns a softlist local that holds a weak reference to a released list (a value that is not a list cannot be
+#! assigned weakly to it, as it would be wrapped in a new list: qore#7619)
 auto sub ret_softlist() {
     softlist<auto> m;
-    m := 8;
+    m := list(8);
     return m;
 }
 

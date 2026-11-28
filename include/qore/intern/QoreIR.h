@@ -1180,8 +1180,28 @@ enum class QoreIROpcode : uint16_t {
         qore_rt_read_reference_local().
     */
     ReadReferenceThrough = 446,
+    /** Releases what the run of a handler compiled as a function of its own has handed over to the function that it
+        runs for (QoreIROpcode::HandlerReturn) when a debugger's break or continue request abandons the return of the
+        block that it leaves, in the debug IR of AOT code (qore#7625)
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (447, 448, ...)
+        No result.  Emitted only on the paths of a debugger's requests (QoreIRBasicBlock::debug_flow) in the body of a
+        handler (QoreIRFunction::handler_body) of a function with them (QoreIRFunction::hasDebugFlowPaths()), where the
+        block that the request leaves decides it, when its handlers have run, as the AST interpreter's block releases
+        the return at once (StatementBlock::requestTakenInFunction()): the end of the request of the last handler
+        lowered inline at the exit of the block in the cleanups of a return statement, and the path of a ScopeExit
+        past the inline cap in those cleanups.  With no operands, the function takes the request (a loop or a switch
+        statement of the body): the return is abandoned.  With one operand, the request (RC_BREAK or RC_CONTINUE, an
+        integer constant), it leaves the function: the run of the handler decides (QoreHandlerRunContext::takes_request),
+        and the instruction gives the request to the frame that runs the handler (qore_ir_set_handler_flow()), as the
+        path, which ends the handler with the scope's return path, is not the path of a return request.
+        If the run has handed values over and the request abandons them, the run releases what they left in the
+        function that takes them and rolls its count back (qore_handler_abandon_return()).  The release can raise an
+        exception (a destructor), which the IR interpreter takes to the instruction's exception target.  Native code
+        has no paths: the instruction does not occur there.
+    */
+    HandlerAbandonReturn = 447,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (448, 449, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1190,8 +1210,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReadReferenceThrough);
-static_assert(QORE_IR_MAX_OPCODE == 446, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::HandlerAbandonReturn);
+static_assert(QORE_IR_MAX_OPCODE == 447, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1890,12 +1910,22 @@ struct QoreIRDebugFlowTargets {
             return false;
         }
         return target == return_target || qore_ir_debug_flow_entry_path(target) == qore_ir_debug_flow_entry_path(
-            return_target);
+            return_target) || qore_ir_debug_flow_same_branch(target, return_target)
+            || qore_ir_debug_flow_path_leaves(qore_ir_debug_flow_entry_path(target));
     }
 
 private:
     //! returns the block that the entry block of a request branches to
     DLLLOCAL static const QoreIRBasicBlock* qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry);
+    //! returns true if the code of a request, from \a path, leaves the function although it is not the path of a
+    //! return request: the path of a break or a continue that leaves a handler compiled as a function of its own,
+    //! whose code releases what the handler run handed over if the run takes the request (QoreIROpcode::
+    //! HandlerAbandonReturn with the request as its operand, qore#7625)
+    DLLLOCAL static bool qore_ir_debug_flow_path_leaves(const QoreIRBasicBlock* path);
+    //! returns true if the entry blocks \a a and \a b are each one conditional branch on the same value to the same
+    //! blocks: the entries of a ScopeExit past the inline cap whose handlers can hand a value over, for requests that
+    //! go on alike (QoreIRLowering::setReplacingScopeExitFlowTargets(), qore#7625)
+    DLLLOCAL static bool qore_ir_debug_flow_same_branch(const QoreIRBasicBlock* a, const QoreIRBasicBlock* b);
 };
 
 //! Records a debugger's request \a rc at a step event of a handler that ends the handler (RC_RETURN, RC_BREAK or
@@ -2804,6 +2834,18 @@ public:
     // LValuePathBinaryMut: operands[0] = RHS value; dynamic key/index operands follow
     // LValuePathTernary:   operands[0..2] = offset, length, replacement; dynamic key/index follow
 };
+
+//! Returns true if an lvalue path operation is += or -= on an element of a local variable (qore#5578)
+/** <tt>local[index] += value</tt> or <tt>local[index] -= value</tt>: the shape that native code makes with
+    qore_rt_lv_path_int_list_compound() when the local is declared \c list<int> (see design/qore-ir-spec.md, "In-place
+    integer list element compound assignment").
+*/
+DLLLOCAL inline bool qore_ir_is_int_list_compound_shape(const QoreIRLValuePathInstruction& inst) {
+    return inst.opcode == QoreIROpcode::LValuePathCompound
+        && (inst.compound_op == LVCompoundOp::AddAssign || inst.compound_op == LVCompoundOp::SubAssign)
+        && inst.path.size() == 2 && inst.path[0].kind == LVPathStepKind::LocalVar
+        && inst.path[1].kind == LVPathStepKind::ListIndex;
+}
 
 //! Shared LValuePathUnary slice-terminal-step executors, called from both
 //! the IR interpreter (QoreIRInterpreter.cpp) and the JIT runtime helper
@@ -5021,6 +5063,17 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! True if the lowering keeps the calls of the functions that it otherwise makes pseudo-method instructions of
+    //! (substr(), index(), rindex() and the one-argument string functions; qore#7733)
+    /** Set for the separately lowered debug IR of AOT code (see aotLowerUnrewrittenDebugIR() in QoreAOT.cpp): such an
+        instruction holds the function call as its expression, which the serialized IR does not keep, so the IR
+        interpreter would run the pseudo-method and its exceptions would have the pseudo-method's frame.
+    */
+    bool lower_call_forms_for_debug_ir = false;
+    //! True if the lowering made a pseudo-method instruction of a function call (see lower_call_forms_for_debug_ir)
+    /** The AOT compiler then lowers the function's debug IR separately (qore#7733).
+    */
+    bool has_debug_ir_call_forms = false;
     //! Returns true if the step events of the function get the paths of a debugger's flow requests (#6201)
     /** Only the debug IR of AOT code has them (QoreIRDebugFlowTargets): new calls of it run that IR in the IR
         interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()).  Code lowered from the
@@ -5270,6 +5323,15 @@ public:
         call site is compiled or first made, so that no call pays for it.
     */
     bool needs_call_frame = false;
+
+    //! true if the code of the function runs in a Program that allows the debugger, so that the code that it calls
+    //! (a callee, or a destructor that a release runs) can replace its locals and parameters by name with
+    //! set_local_var_value()
+    /** The execution tiers then read the variables again after such code, as they read them again after a debugger's
+        step event: the JIT creates the reload epoch of the function at its entry, and the IR interpreter and the JIT
+        reload the locals after a release that can run a destructor (qore#7646)
+    */
+    bool reflective_frame = false;
 
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code — never referenced by Invoke expression subtrees,
@@ -5901,6 +5963,44 @@ inline QoreIRCodeBlocks qore_ir_code_blocks(const QoreIRFunction& func) {
 //! Check if an opcode is a block terminator (transfers control flow)
 inline bool isTerminator(QoreIROpcode op) {
     return getOpcodeIsTerminator(static_cast<int>(op));
+}
+
+//! true if a pseudo-method call instruction is the call of a function that the lowering made as the call of a <string>
+//! pseudo-method (substr(), index() or rindex() of a string, see QoreIRLowering): its expression is the function call
+/** An exception of the call has the frame of the function, not of the pseudo-method (qore#7711): the code generator and
+    the IR interpreter make its fast path with the function's ordinary call for an exception, and no summary or fusion
+    whose runtime function makes the pseudo-method's takes it.  An instruction read from serialized IR has no
+    expression (qore#7733).
+*/
+template <typename Instruction>
+inline bool qore_ir_is_string_function_form(const Instruction& inst) {
+    // the functions that the lowering makes as calls of other pseudo-methods, such as strlen(), raise nothing
+    if (!inst.pseudo || !inst.fallback_method_name || !inst.expr.hasNode()
+            || (inst.intrinsic != QoreIRIntrinsic::StringFind && inst.intrinsic != QoreIRIntrinsic::StringRFind
+                && inst.intrinsic != QoreIRIntrinsic::StringSubstr)) {
+        return false;
+    }
+    qore_type_t t = inst.expr.getInternalNode()->getType();
+    return t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL;
+}
+
+//! returns true if \a inst, list.string.join or list.string.join.identity-map, is a call of join() rather than of
+//! <list>::join(), so that an exception has the frame of the function (qore#7731)
+/** The form is known from the expression of the instruction, which an IR function serialized for debugging does not
+    keep (qore#7733).
+*/
+inline bool qore_ir_is_list_join_function_form(const QoreIRInstruction* inst) {
+    const QoreValue* expr = nullptr;
+    if (auto* e = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
+        expr = &e->expr;
+    } else if (auto* i = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
+        expr = &i->expr;
+    }
+    if (!expr || !expr->hasNode()) {
+        return false;
+    }
+    qore_type_t t = expr->getInternalNode()->getType();
+    return t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL;
 }
 
 #endif

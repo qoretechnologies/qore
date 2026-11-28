@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# calls of the provider's functions from the consumer module, which a compiled consumer makes through the runtime's
+# direct AOT call when the cross-module fast calls are disabled; prints each exception, its location and its call stack
+
+%requires FcrConsumer
+
+string sub errs(hash<ExceptionInfo> ex) {
+    list<string> l = ();
+    *hash<ExceptionInfo> e = ex;
+    while (e) {
+        push l, e.err;
+        e = e.next;
+    }
+    return l.join(",");
+}
+
+string sub stack_of(hash<ExceptionInfo> ex) {
+    return (map sprintf("%s:%d", $1.function, $1.line), ex.callstack, $1.type == "user").join(" <- ");
+}
+
+int t = 0;
+for (int i = 0; i < 300; ++i) {
+    t += fcr_call_checked("ok") + fcr_call_given("ok", False) + fcr_call_value("ok", False)
+        + fcr_call_value_str("ok");
+}
+printf("warm-up %d\n", t);
+foreach string name in (("checked", "given", "value", "value given")) {
+    try {
+        switch (name) {
+            case "checked": fcr_call_checked("bad"); break;
+            case "given": fcr_call_given("bad", True); break;
+            case "value": fcr_call_value_str("bad"); break;
+            case "value given": fcr_call_value("bad", True); break;
+        }
+        printf("%s: no exception\n", name);
+    } catch (hash<ExceptionInfo> ex) {
+        # the location of the exception is that of the return statement in the provider (qore#7762)
+        printf("%s: %s: %s; at: %s:%d; stack: %s; exceptions: %s\n", name, ex.err, ex.desc, basename(ex.file),
+            ex.line, stack_of(ex), errs(ex));
+    }
+}

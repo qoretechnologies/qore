@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its trusted and sandboxed code runs in Programs of the test's own process, of each mode
+# test-platform: macos - serialization by JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# An object that the code of a class declared by trusted code creates while it serves a sandboxed caller is governed
+# by the caller's sandbox but owned by no sandbox (issue #7921): it is an object of trusted code, so the code of its
+# own class reads it as a whole (serializes, formats and copies it, its member names and count, a merge of it) as an
+# object that trusted code created before the call.  The owner rule still applies to the objects that a sandbox owns
+# (that its code created, or that trusted code handed over to it), which the code of a trusted class reads as a whole
+# only for that sandbox, and sandboxed code gets no non-public state of an object of trusted code, nor deletes it.
+# In debug builds, an object that a sandbox should own but whose owner could not be recorded (an allocation failure,
+# injected with dbg_sandbox_fail_next_owned_creations()) matches no sandboxed caller: it is refused to every tenant and
+# to trusted code that serves one, its copies and the objects created in its methods as well (fails closed).
+# The trusted code (sandbox-trusted-created-objects/host.q) runs in a trusted Program of each execution mode, with
+# tenants of the same mode, and in a host compiled with qcc.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxTrustedCreatedObjectsTest
+
+#! the driver of the host compiled with qcc: prints the result of each case
+const AotDriverSource = "
+foreach hash<auto> i in (probe_run_cases().pairIterator()) {
+    if (i.value.typeCode() == NT_HASH) {
+        foreach hash<auto> j in (i.value.pairIterator()) {
+            printf(\"%s.%s=%s\\n\", i.key, j.key, j.value);
+        }
+    } else {
+        printf(\"%s=%s\\n\", i.key, i.value);
+    }
+}
+";
+
+class SandboxTrustedCreatedObjectsTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the trusted code and of the tenants
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the result of each case
+        const Expected = {
+            # objects of trusted code: its own class reads them as a whole
+            "created before sandbox": "PASS",
+            "created for sandbox call": "PASS",
+            "created for sandbox call to data": "PASS",
+            "copy of object created for sandbox call": "PASS",
+            "read self": {
+                "format": "private",
+                "keys": "private",
+                "size": "private",
+                "merge": "private",
+            },
+            "use other": "ORDER/ORDER",
+            "kept serialized for A": "PASS",
+            "kept serialized for B": "PASS",
+            # sandboxed code gets no non-public state of an object of trusted code, nor deletes it
+            "kept serialized by A's code": "SERIALIZATION-ERROR",
+            "kept deleted by A's code": "SANDBOX-OBJECT-ACCESS-ERROR",
+            # an object that a sandbox owns is read as a whole only for that sandbox
+            "A's object serialized for A": "PASS",
+            "A's object serialized for B": "SERIALIZATION-ERROR",
+            "A's object deleted by B's code": "SANDBOX-OBJECT-ACCESS-ERROR",
+            "transferred serialized for A": "PASS",
+            "transferred serialized for B": "SERIALIZATION-ERROR",
+            # an object that trusted class code creates in a method of an object that a sandbox owns is that sandbox's
+            "child serialized for A": "PASS",
+            "child serialized for B": "SERIALIZATION-ERROR",
+        };
+
+        #! the result of each case of an object whose owner could not be recorded (debug builds only): it matches no
+        #! sandboxed caller, so the object is refused to every tenant and to trusted code that serves one
+        const UnrecordedOwnerExpected = {
+            "unrecorded owner serialized for A": "SERIALIZATION-ERROR",
+            "unrecorded owner serialized for B": "SERIALIZATION-ERROR",
+            "unrecorded owner copy for A": "SERIALIZATION-ERROR",
+            "unrecorded owner serialized by trusted code": "PASS",
+            "unrecorded owner serialized by its method for the host": "SERIALIZATION-ERROR",
+            "unrecorded owner deleted by A's code": "SANDBOX-OBJECT-ACCESS-ERROR",
+            "unrecorded owner transferred to A": "SANDBOX-ACCESS-ERROR",
+            "unrecorded owner child serialized for A": "SERIALIZATION-ERROR",
+            "unrecorded owner child serialized by trusted code": "PASS",
+        };
+    }
+
+    private {
+        #! the expected results of this build
+        hash<auto> expected = Expected;
+        string host_src;
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("objects that trusted code creates for a sandbox call", "1.0", \ARGV) {
+%ifdef QoreDebug
+        expected += UnrecordedOwnerExpected;
+%endif
+        host_src = ReadOnlyFile::readTextFile(get_script_dir() + "sandbox-trusted-created-objects" + DirSep
+            + "host.q");
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("trusted code in " + mode, getModeTest(mode));
+        }
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code getModeTest(string mode) {
+        return sub () { modeTest(mode); };
+    }
+
+    modeTest(string mode) {
+        # the trusted code: a Program that no sandbox governs
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        host.setExecMode(ExecModes{mode});
+        host.parse("%modern\n" + host_src, "host");
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 600 : 1;
+        for (int i = 0; i < count; ++i) {
+            hash<auto> r = host.callFunction("probe_run_cases", ExecModes{mode});
+            if (r != expected || i == count - 1) {
+                assertEq(expected, r, mode + ": run " + (i + 1));
+                break;
+            }
+        }
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-trusted-created-objects-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, "%modern\n" + host_src + AotDriverSource);
+        string exe = tmp.path + DirSep + "host";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s", libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe),
+            NOTHING, "QORE_JIT_TIMING=1");
+        hash<string, string> results;
+        foreach string line in (r.out.split("\n")) {
+            *list<*string> m = (line =~ x/^([^=]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> exp;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH) {
+                foreach hash<auto> j in (i.value.pairIterator()) {
+                    exp{i.key + "." + j.key} = j.value;
+                }
+            } else {
+                exp{i.key} = i.value;
+            }
+        }
+        assertEq(exp, results, "compiled host output:\n" + r.out);
+        assertEq(0, r.rc);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

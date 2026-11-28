@@ -507,6 +507,22 @@ private:
     QoreNetworkSecurityManager& operator=(const QoreNetworkSecurityManager&) = delete;
 };
 
+// ---- sandbox enforcement level (QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL): enum ----
+//! The enforcement level of a sandbox: what the sandbox keeps apart besides the functional domains of its code
+/** See QoreSandboxManager::setEnforcementLevel()
+
+    @since Qore 3.0
+*/
+enum QoreSandboxEnforcementLevel : int {
+    //! Code safety: the sandbox applies its policy, limits and functional-domain checks to the code that it governs,
+    //! and nothing more; the code is not isolated from the objects of other code
+    QSEL_CODE_SAFETY = 0,
+    //! Tenant isolation (the default): as for @ref QSEL_CODE_SAFETY, and the owner rules keep the code that the
+    //! sandbox governs from changing or reading the state of objects that its sandbox did not create
+    QSEL_TENANT_ISOLATION = 1,
+};
+// ---- end of sandbox enforcement level: enum ----
+
 //! Unified sandbox manager combining filesystem, network, and resource controls
 /** The QoreSandboxManager class provides a unified interface for all
     sandboxing features including:
@@ -742,6 +758,47 @@ public:
         @since Qore 3.0
     */
     DLLEXPORT bool trustsUncontrolledApis() const;
+
+    //! @name Enforcement level (QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL)
+    //@{
+    //! Sets the enforcement level of the sandbox
+    /** @param level @ref QSEL_TENANT_ISOLATION (the default of a new manager) or @ref QSEL_CODE_SAFETY
+        @param xsink raises \c SANDBOX-ACCESS-ERROR if the change is refused, \c SANDBOX-ENFORCEMENT-LEVEL-ERROR for
+        an invalid level or a composition of sandboxes
+
+        At @ref QSEL_TENANT_ISOLATION, the owner rules apply to the code that the sandbox governs, in addition to the
+        policy, limits and functional-domain checks of the sandbox: they keep that code from changing or reading the
+        state of objects that its sandbox did not create.  At @ref QSEL_CODE_SAFETY, only the policy, limits and
+        functional-domain checks apply: a host that uses a sandbox to keep code that it trusts from mistakes, or for
+        interrupts and limits, and not to isolate one tenant from another, sets it.
+
+        Raising the level to @ref QSEL_TENANT_ISOLATION is always allowed, and fixes it: the level of the manager can
+        never be lowered again.  Lowering it to @ref QSEL_CODE_SAFETY is allowed only to the creator of the manager
+        (trusted code, or the code of the %Program whose code created it, as for the other changes that lift a
+        restriction; see \c SandboxManager), never to code that the manager governs, and only while the level has not
+        been fixed.
+
+        @return 0 if the level was set, -1 if an exception was raised
+
+        @since Qore 3.0
+    */
+    DLLEXPORT int setEnforcementLevel(QoreSandboxEnforcementLevel level, ExceptionSink* xsink);
+
+    //! Returns the enforcement level of the sandbox; see setEnforcementLevel()
+    /** For a composition of sandboxes, the strictest level of its members: @ref QSEL_TENANT_ISOLATION if any member
+        has it
+
+        @since Qore 3.0
+    */
+    DLLEXPORT QoreSandboxEnforcementLevel getEnforcementLevel() const;
+
+    //! Returns true if the enforcement level of the sandbox can no longer be lowered; see setEnforcementLevel()
+    /** For a composition of sandboxes, true if any member's level is fixed
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isEnforcementLevelFixed() const;
+    //@}
 
     //! Returns the memory account of the sandbox; for internal use
     DLLLOCAL QoreSandboxMemoryAccount* getMemoryAccount() const {
@@ -1322,6 +1379,125 @@ DLLEXPORT QoreProgram* qore_get_caller_program();
     @since %Qore 3.0
 */
 #define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
+
+// ---- sandbox enforcement level (QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL): caller query ----
+//! Returns true if the owner rules apply to the code running on the current thread
+/** The owner rules keep the code of a sandbox at the enforcement level @ref QSEL_TENANT_ISOLATION from changing or
+    reading the state of objects that its sandbox did not create (QoreSandboxManager::setEnforcementLevel()).  They
+    apply if the calling code is sandboxed or acts for sandboxed code (decided as qore_check_process_wide_registration()
+    decides it) and a sandbox that governs it, resolved as QoreSandboxManagerHelper::All resolves it (the sandboxes of
+    the call stack, of the objects and callbacks that the code runs, of the thread's start and of a sandboxed caller
+    that the code acts for), has the level @ref QSEL_TENANT_ISOLATION: the strictest level of the governing sandboxes
+    decides.  Fails closed: sandboxed code that no sandbox manager governs is subject to them.
+
+    It reveals only whether the calling code is isolated, so it is not restricted itself.
+
+    @return true if the owner rules apply to the calling code, false if it is trusted or every sandbox that governs it
+    has the level @ref QSEL_CODE_SAFETY
+
+    @since Qore 3.0
+*/
+DLLEXPORT bool qore_caller_tenant_isolated();
+
+//! defined if the enforcement level of sandboxes is available
+/** QoreSandboxEnforcementLevel, QoreSandboxManager::setEnforcementLevel(),
+    QoreSandboxManager::getEnforcementLevel(), QoreSandboxManager::isEnforcementLevelFixed() and
+    qore_caller_tenant_isolated()
+
+    @since %Qore 3.0
+*/
+#define QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL 1
+// ---- end of sandbox enforcement level: caller query ----
+
+// ---- sandbox object owner check (QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK) ----
+class QoreObject;
+
+//! Returns true if the calling code may change or read the state of an object as its owner
+/** Trusted code may change any object.  Code that is sandboxed or acts for sandboxed code (as decided for
+    qore_check_process_wide_registration()), at the enforcement level @ref QSEL_TENANT_ISOLATION, may change an object
+    only if its sandbox created it: if every sandbox manager at that level that governs the code also governed the
+    creation of the object; code that only sandboxes at the level @ref QSEL_CODE_SAFETY govern owns every object.
+    It fails closed: sandboxed code that no sandbox manager governs, and code whose sandbox cannot be resolved, owns
+    no object.  The C++ counterpart of \c SandboxManager::isObjectOwnedByCaller().
+
+    A binary module's setter of state that other code relies on (such as a logger of an object that can be shared)
+    uses qore_check_caller_owns_object(); code that passes such state on to another object as a side effect of an
+    operation for its caller uses this function to leave the change out.
+
+    @param obj the object to check
+
+    @return true if the calling code is trusted or its sandbox created \a obj, false if not
+
+    @since Qore 3.0
+*/
+DLLEXPORT bool qore_caller_owns_object(const QoreObject& obj);
+
+//! Refuses a change to an object by sandboxed code whose sandbox did not create it
+/** Decides as qore_caller_owns_object() does.  The C++ counterpart of \c SandboxManager::checkObjectOwnedByCaller().
+
+    @param obj the object to check
+    @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
+    @param xsink raises \c SANDBOX-OBJECT-ACCESS-ERROR if the calling code does not own \a obj
+
+    @return 0 if the calling code owns \a obj, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_check_caller_owns_object(const QoreObject& obj, const char* what, ExceptionSink* xsink);
+
+//! Refuses the explicit deletion of an object for the calling code that the calling code may not delete
+/** For a binary module's API that deletes an object for its caller (such as a call of a destructor with the
+    reflection API).  The checks are made in the order of the \c delete operator: a system constant object is never
+    deleted (\c SYSTEM-OBJECT-ERROR); code that is restricted or acts for restricted code cannot delete a shared object
+    (\c SHARED-OBJECT-ERROR, see \c SandboxManager::shareObject()), whoever created it; then the owner check of
+    qore_check_caller_owns_object() (\c SANDBOX-OBJECT-ACCESS-ERROR)
+
+    @param obj the object to delete
+    @param xsink for the exception if the deletion is refused
+
+    @return 0 if the calling code may delete \a obj, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_check_caller_deletes_object(const QoreObject& obj, ExceptionSink* xsink);
+
+//! defined if qore_caller_owns_object(), qore_check_caller_owns_object() and qore_check_caller_deletes_object() are
+//! available
+/** @since %Qore 3.0
+*/
+#define QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK 1
+// ---- end of sandbox object owner check ----
+
+// ---- sandbox object transfer (QORE_HAVE_SANDBOX_OBJECT_TRANSFER) ----
+//! Hands an object that trusted code created to the sandboxed code that it serves, which then owns it
+/** An object is owned by a sandbox if sandboxed code created it (or trusted class code did directly in a method of an
+    object that the sandbox owns); an object that trusted code creates while it serves sandboxed code is governed by
+    that code's sandbox but owned by none, so that a shared object that trusted code creates lazily, for example, does
+    not become the object of whichever sandboxed caller came first.  Trusted code that creates an object for the
+    sandboxed code that it serves (a factory, or host code that configures the object for its caller) hands it to that
+    code with this function; the transfer is one-way.
+
+    It is refused (\c SANDBOX-ACCESS-ERROR) for sandboxed code, for an object that a sandbox owns already, when no
+    sandboxed caller is served, and for an object that was not created while the caller was served (its provenance
+    does not name the caller's sandbox): so that an object that exists already, such as a shared object, is never
+    handed to a sandbox by mistake.  To give the caller such an object, create a new object while serving the caller
+    and transfer that; a copy of such an object cannot be transferred either, as it keeps the provenance of the object
+    that it copies.
+
+    @param obj the object to hand over
+    @param xsink raises \c SANDBOX-ACCESS-ERROR if the transfer is refused
+
+    @return 0 if the caller owns \a obj now, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink);
+
+//! defined if qore_transfer_object_to_caller() is available
+/** @since %Qore 3.0
+*/
+#define QORE_HAVE_SANDBOX_OBJECT_TRANSFER 1
+// ---- end of sandbox object transfer ----
 
 //! defined if SandboxManager::callGoverned() is available (qore#7052)
 #define _QORE_HAS_SANDBOX_CALL_GOVERNED 1

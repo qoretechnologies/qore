@@ -1,0 +1,49 @@
+int: 20100
+float: 9950.00
+string: hi w199
+bool: 100
+list: [{i: 199}, {i: 199}]
+hash, 2 args: {k199: 199}
+no args: 8400
+3 args: 94600
+auto param: [1, 2, 3, 5, 0, 8, 9]
+given temporaries: destroy t198; returned "t198"; destroy t199; returned "t199"
+given temporary, return type and destructor exception: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+typed list: 600
+exception: FUNCREF-ERROR: x=7 (arg 7) stack: thrower:177 <- call_ref:353
+nested exception: FUNCREF-ERROR: x=8 (arg 8) stack: thrower:63 <- deep:177 <- call_ref:361
+exceptions in a loop: caught 200
+return type: 200 RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead stack: bad_return:181 <- call_ref_any:376
+named: 1600
+positional after named: 20108
+too few args: RUNTIME-OVERLOAD-ERROR
+too many args: RUNTIME-OVERLOAD-ERROR
+no arg for a parameter: RUNTIME-OVERLOAD-ERROR
+wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching 'inc(string)' can be found; the following variants were tested:
+NOTHING arg: RUNTIME-OVERLOAD-ERROR
+wrong type after warm-up: 40200 RUNTIME-OVERLOAD-ERROR
+default argument: 62700
+overloaded: 220500
+synchronized: 20100
+soft parameter: 20100
+implicit arguments: [3, null]
+reference argument: 199
+overload added later: int PARSE-EXCEPTION int RUNTIME-OVERLOAD-ERROR
+concurrent first use: 321600
+background: 20142
+module function: 40000
+module function exception: caught 200, last MODULE-FUNCREF-ERROR: module x=199 (arg 199) stack: mod_throw:177 <- call_ref:560
+module's reference: 40000
+script reference called by the module: 20100
+deleted Program: 21300 PROGRAM-ERROR
+thread entry handler: 55 entries 11 exits 11
+trusted self call: read:secret
+sandboxed reference called by trusted code: FILESYSTEM-ACCESS-DENIED
+sandboxed reference to a trusted function called by trusted code: FILESYSTEM-ACCESS-DENIED
+trusted reference called by sandboxed code: FILESYSTEM-ACCESS-DENIED
+sandboxed self call: FILESYSTEM-ACCESS-DENIED
+lent Program's own call: FILESYSTEM-ACCESS-DENIED
+lent Program's reference called by sandboxed code: FILESYSTEM-ACCESS-DENIED
+lent Program called by trusted code: read:secret
+sandbox-bound reference: FILESYSTEM-ACCESS-DENIED
+trusted sandbox-bound reference: read:secret

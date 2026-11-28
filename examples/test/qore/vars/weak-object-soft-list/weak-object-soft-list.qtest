@@ -29,7 +29,10 @@ class WeakObjectSoftListTest inherits QUnit::Test {
         #! reference to the deleted object
         const Expected = {
             "local-softlist": "list:0",
-            "local-softlist-weak-assign": "list:0",
+            # a weak store that would create a new list is refused (qore#7619)
+            "local-softlist-weak-assign": "RUNTIME-TYPE-ERROR",
+            # a weak store of a deleted object into a type that needs no conversion
+            "local-opt-softlist-weak-assign": "OBJECT-ALREADY-DELETED",
             "local-softlist-int": "list<int>:0",
             "local-softlist-class": "list<object<Obj>>:0",
             "closure-softlist": "list:0",

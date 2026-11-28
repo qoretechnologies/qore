@@ -1,0 +1,578 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc compilation of AOT qmods and their loading (dlopen) by the module loader, and a module load in another thread during a compilation
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class QccRequireCyclesTest
+
+#! Tests qcc with modules that require themselves or are in a require cycle (issue #7808)
+/** qcc did not reserve the name of the module that it compiles, as the module loader reserves the name of a module
+    that it loads: a %requires of the module in its own source, or in the source of a module that it requires,
+    loaded the module's source from the module path and merged it into the Program being compiled, which then
+    parsed the same declarations again ("variant ... cannot be added to an existing function").
+
+    The test compiles a module that requires itself (with and without reexport), the modules of a require cycle
+    (with and without reexport) and the modules of the load_module() cycle of #7807 (a function of RcM loads RcX,
+    which requires RcM with reexport), and checks that the qmods load in each execution mode and behave as the
+    sources do.  It also checks, in a process that compiles modules in process (a debug build's
+    dbg_aot_compile_module()), that a compilation that fails leaves no reservation of the name behind and that a
+    load of the name in another thread during a compilation waits for it and then loads the module, and that a
+    compilation of a name that another thread is loading fails at once with LOAD-MODULE-ERROR, parsing nothing.
+*/
+class QccRequireCyclesTest inherits QUnit::Test {
+    public {
+        #! the modules of the cycles
+        const Modules = {
+            "RcSelf": "%modern
+%requires(reexport) RcSelf
+module RcSelf {
+    version = \"1.0\";
+    desc = \"require cycle test: a module that requires itself with reexport\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcSelf {
+public string sub self_name() {
+    return \"self\";
+}
+}
+",
+            "RcSelfPlain": "%modern
+%requires RcSelfPlain
+
+module RcSelfPlain {
+    version = \"1.0\";
+    desc = \"require cycle test: a module that requires itself\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcSelfPlain {
+public string sub self_plain_name() {
+    return \"self-plain\";
+}
+}
+",
+            "RcA": "%modern
+%requires(reexport) RcB
+
+module RcA {
+    version = \"1.0\";
+    desc = \"require cycle test: A of a cycle with reexport\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcA {
+public string sub a_name() {
+    return \"a\";
+}
+}
+",
+            "RcB": "%modern
+%requires(reexport) RcA
+
+module RcB {
+    version = \"1.0\";
+    desc = \"require cycle test: B of a cycle with reexport\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcB {
+public string sub b_name() {
+    return \"b\";
+}
+}
+",
+            "RcC": "%modern
+%requires RcD
+
+module RcC {
+    version = \"1.0\";
+    desc = \"require cycle test: C of a cycle without reexport\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcC {
+public string sub c_name() {
+    return \"c\";
+}
+}
+",
+            "RcD": "%modern
+%requires RcC
+
+module RcD {
+    version = \"1.0\";
+    desc = \"require cycle test: D of a cycle without reexport\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcD {
+public string sub d_name() {
+    return \"d\";
+}
+}
+",
+            "RcM": "%modern
+module RcM {
+    version = \"1.0\";
+    desc = \"require cycle test: a module whose function loads a module that reexports it\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcM {
+public string sub m_name() {
+    return \"m\";
+}
+
+public string sub m_load() {
+    load_module(\"RcX\");
+    return \"loaded:\" + call_function(\"x_name\");
+}
+}
+",
+            "RcX": "%modern
+%requires(reexport) RcM
+
+module RcX {
+    version = \"1.0\";
+    desc = \"require cycle test: a module that reexports the module that loads it\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcX {
+public string sub x_name() {
+    return \"x:\" + m_name();
+}
+}
+",
+        };
+
+        #! the modules of the cycles that the cycle child requires, in its order
+        const CycleModules = ("RcSelf", "RcSelfPlain", "RcA", "RcB", "RcC", "RcD");
+
+        #! the child of the cycles: requires one module of each cycle (and RcD after RcC has loaded it)
+        const CycleChildSource = "%modern
+%requires RcSelf
+%requires RcSelfPlain
+%requires RcA
+%requires RcC
+%requires RcD
+printf(\"%s %s %s %s %s %s\\n\", self_name(), self_plain_name(), a_name(), b_name(), c_name(), d_name());
+hash<string, hash<auto>> mh = get_module_hash();
+foreach string m in (\"RcSelf\", \"RcSelfPlain\", \"RcA\", \"RcB\", \"RcC\", \"RcD\") {
+    printf(\"%s %s reexported: %y required: %y\\n\", m, (basename(mh{m}.filename) =~ x/\\.(qmod|qm)$/)[0],
+        mh{m}.\"reexported-modules\", mh{m}.\"required-modules\");
+}
+";
+
+        #! the child of the load_module() cycle of #7807
+        const LoadCycleChildSource = "%modern
+%requires RcM
+printf(\"%s\\n\", m_load());
+printf(\"%s\\n\", m_name());
+hash<string, hash<auto>> mh = get_module_hash();
+printf(\"%s %s\\n\", (basename(mh.RcM.filename) =~ x/\\.(qmod|qm)$/)[0],
+    (basename(mh.RcX.filename) =~ x/\\.(qmod|qm)$/)[0]);
+";
+
+        #! a module whose compilation fails (a parse error after its header)
+        const BrokenModuleSource = "%modern
+module RcNeg {
+    version = \"1.0\";
+    desc = \"require cycle test: a module whose compilation fails\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcNeg {
+public string sub neg_name() {
+    return no_such_function();
+}
+}
+";
+
+        #! the module of the same name that loads
+        const NegModuleSource = "%modern
+module RcNeg {
+    version = \"1.0\";
+    desc = \"require cycle test: a module loaded after a compilation of its name failed\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcNeg {
+public string sub neg_name() {
+    return \"neg\";
+}
+}
+";
+
+        #! the child that compiles the broken module in process and then loads the name
+        const NegChildSource = "%modern
+%ifdef QoreDebug
+*string err = dbg_aot_compile_module(\"single\", ARGV[0], ARGV[1]);
+printf(\"compile: %s\\n\", err ? \"failed\" : \"compiled\");
+load_module(\"RcNeg\");
+printf(\"%s\\n\", call_function(\"neg_name\"));
+%else
+printf(\"no debug\\n\");
+%endif
+";
+
+        #! the gate: its init, which runs while RcConc is compiled, starts a load of RcConc in another thread and
+        #! returns when that thread waits for the compilation
+        const GateModuleSource = "%modern
+module RcGate {
+    version = \"1.0\";
+    desc = \"require cycle test: starts a load of the module being compiled in another thread\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+    init = sub () {
+        RcGateState::start();
+    };
+}
+
+public namespace RcGate {
+public class RcGateState {
+    public {
+        static Counter done(1);
+        static string result = \"none\";
+        static bool waited = False;
+    }
+
+    static start() {
+        background RcGateState::load();
+        # the load waits for the compilation of RcConc, which this initialization is part of; the hook exists only
+        # in a debug build, and the case that uses this module skips in a release build
+%ifdef QoreDebug
+        RcGateState::waited = dbg_module_load_waiters(\"RcConc\", 1, 60000);
+%endif
+    }
+
+    static load() {
+        try {
+            load_module(\"RcConc\");
+            RcGateState::result = \"loaded:\" + call_function(\"conc_name\");
+        } catch (hash<ExceptionInfo> ex) {
+            RcGateState::result = ex.err + \": \" + ex.desc;
+        }
+        RcGateState::done.dec();
+    }
+
+    static string wait() {
+        RcGateState::done.waitForZero();
+        return sprintf(\"waited: %y; %s\", RcGateState::waited, RcGateState::result);
+    }
+}
+
+public string sub rc_gate_wait() {
+    return RcGateState::wait();
+}
+}
+";
+
+        #! the module compiled while another thread loads it
+        const ConcModuleSource = "%modern
+%requires RcGate
+
+module RcConc {
+    version = \"1.0\";
+    desc = \"require cycle test: a module loaded in another thread while it is compiled\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcConc {
+public string sub conc_name() {
+    return \"conc\";
+}
+}
+";
+
+        #! the child that compiles RcConc in process and reports the load of the other thread
+        const ConcChildSource = "%modern
+%ifdef QoreDebug
+*string err = dbg_aot_compile_module(\"single\", ARGV[0], ARGV[1]);
+printf(\"compile: %s\\n\", err ?? \"compiled\");
+load_module(\"RcGate\");
+printf(\"%s\\n\", call_function(\"rc_gate_wait\"));
+%else
+printf(\"no debug\\n\");
+%endif
+";
+
+        #! the module loaded after the compilation
+        const HeldModuleSource = "%modern
+module RcHeld {
+    version = \"1.0\";
+    desc = \"require cycle test: a module loaded after a compilation of its name failed\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcHeld {
+public string sub held_name() {
+    return \"held\";
+}
+}
+";
+
+        #! the module of the same name that the other thread compiles: a parse would fail
+        const HeldBrokenModuleSource = "%modern
+module RcHeld {
+    version = \"1.0\";
+    desc = \"require cycle test: a module whose parse fails\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RcHeld {
+public string sub held_name() {
+    return no_such_function();
+}
+}
+";
+
+        #! the child: another thread holds the load of RcHeld (an in-process compilation must run in the main thread,
+        #! as the compiler waits for the other threads to end), the main thread compiles it, releases the load and
+        #! loads the module
+        const HeldChildSource = "%modern
+%ifdef QoreDebug
+Counter held(1);
+bool hold_rc;
+background sub () {
+    hold_rc = dbg_module_load_hold(\"RcHeld\");
+    held.dec();
+}();
+held.waitForZero();
+printf(\"hold: %y\\n\", hold_rc);
+*string err = dbg_aot_compile_module(\"single\", ARGV[0], ARGV[1]);
+printf(\"%s\\n\", err ?? \"compiled\");
+printf(\"release: %y\\n\", dbg_module_load_release(\"RcHeld\"));
+load_module(\"RcHeld\");
+printf(\"%s\\n\", call_function(\"held_name\"));
+%else
+printf(\"no debug\\n\");
+%endif
+";
+
+        #! the execution modes the children run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the directory of the fixtures, the children and the qmods
+        TmpDir tmp("qore-qcc-require-cycles-");
+        string src_dir;
+        string aot_dir;
+        #! the output of qcc for each module
+        hash<string, string> qcc_out;
+    }
+
+    constructor() : QUnit::Test("QccRequireCyclesTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        src_dir = tmp.path + DirSep + "src";
+        aot_dir = tmp.path + DirSep + "aot";
+        mkdir(src_dir);
+        mkdir(aot_dir);
+        foreach hash<auto> i in (Modules.pairIterator()) {
+            writeFile(src_dir + DirSep + i.key + ".qm", i.value);
+        }
+        # each qmod is compiled against the sources of the modules that it requires
+        foreach string mod in (keys Modules) {
+            qcc_out{mod} = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1 "
+                "QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", libqore_dir, libqore_dir, src_dir, qcc_bin,
+                aot_dir + DirSep + mod + ".qmod", src_dir + DirSep + mod + ".qm"));
+        }
+        writeFile(tmp.path + DirSep + "cycles.q", CycleChildSource);
+        writeFile(tmp.path + DirSep + "load-cycle.q", LoadCycleChildSource);
+
+        addTestCase("qcc compiles modules that require themselves or are in a require cycle", \compileTest());
+        addTestCase("the modules of the cycles from source", \sourceTest());
+        addTestCase("the qmods of the cycles", \aotTest());
+        addTestCase("the load_module() cycle with source and AOT modules", \loadCycleTest());
+        addTestCase("a failed compilation leaves no reservation of the module name", \failedCompileTest());
+        addTestCase("a load in another thread during a compilation waits for it", \concurrentLoadTest());
+        addTestCase("a compilation of a name that another thread is loading fails", \heldLoadTest());
+        set_return_value(main());
+    }
+
+    compileTest() {
+        foreach string mod in (keys Modules) {
+            assertTrue(is_file(aot_dir + DirSep + mod + ".qmod"), "qcc compiled " + mod + ": " + qcc_out{mod});
+        }
+    }
+
+    #! the modules of a cycle from source: the module of a cycle that is loaded second is parsed while the first is
+    #! loaded, so its own request for the first loads nothing and is not a requirement (RcB, RcD)
+    sourceTest() {
+        checkCycleModes("qm", src_dir, {"RcB": "null", "RcD": "null"});
+    }
+
+    #! the qmods of a cycle: each one was compiled on its own, when its request for the other module of its cycle
+    #! loaded that module, so each one requires the other; the modules behave as the sources do
+    aotTest() {
+        checkCycleModes("qmod", aot_dir, {"RcB": "[\"RcA\"]", "RcD": "[\"RcC\"]"});
+    }
+
+    #! the load_module() cycle of #7807 with RcM and RcX each from source and AOT
+    loadCycleTest() {
+        string child = tmp.path + DirSep + "load-cycle.q";
+        foreach hash<auto> combo in ({"m": "qm", "x": "qm"}, {"m": "qm", "x": "qmod"}, {"m": "qmod", "x": "qm"},
+                {"m": "qmod", "x": "qmod"}) {
+            string dir = tmp.path + DirSep + "load-" + combo.m + "-" + combo.x;
+            mkdir(dir);
+            copyModule("RcM", combo.m, dir);
+            copyModule("RcX", combo.x, dir);
+            string expected = sprintf("loaded:x:m\nm\n%s %s\n", combo.m, combo.x);
+            foreach string mode in (ExecModes) {
+                assertEq(expected, runChild(child, mode, dir), sprintf("RcM %s, RcX %s: %s", combo.m, combo.x, mode));
+            }
+        }
+    }
+
+    failedCompileTest() {
+        string bad_dir = tmp.path + DirSep + "neg-bad";
+        string mod_dir = tmp.path + DirSep + "neg";
+        mkdir(bad_dir);
+        mkdir(mod_dir);
+        writeFile(bad_dir + DirSep + "RcNeg.qm", BrokenModuleSource);
+        writeFile(mod_dir + DirSep + "RcNeg.qm", NegModuleSource);
+        string child = tmp.path + DirSep + "neg.q";
+        writeFile(child, NegChildSource);
+        foreach string mode in (ExecModes) {
+            string out = runChild(child, mode, mod_dir, (bad_dir + DirSep + "RcNeg.qm",
+                tmp.path + DirSep + "RcNeg-" + mode + ".qmod"));
+            if (out == "no debug\n") {
+                testSkip("dbg_aot_compile_module() needs a debug build");
+            }
+            assertEq("compile: failed\nneg\n", out, mode);
+        }
+    }
+
+    concurrentLoadTest() {
+        string mod_dir = tmp.path + DirSep + "conc";
+        mkdir(mod_dir);
+        writeFile(mod_dir + DirSep + "RcGate.qm", GateModuleSource);
+        writeFile(mod_dir + DirSep + "RcConc.qm", ConcModuleSource);
+        string child = tmp.path + DirSep + "conc.q";
+        writeFile(child, ConcChildSource);
+        foreach string mode in (ExecModes) {
+            string out = runChild(child, mode, mod_dir, (mod_dir + DirSep + "RcConc.qm",
+                tmp.path + DirSep + "RcConc-" + mode + ".qmod"));
+            if (out == "no debug\n") {
+                testSkip("dbg_aot_compile_module() needs a debug build");
+            }
+            # the summary line of the compiler is left out
+            out = (foldl $1 + $2, (map $1 + "\n", out.split("\n"), $1 && $1 !~ /^qcc: /)) ?? "";
+            assertEq("compile: compiled\nwaited: True; loaded:conc\n", out, mode);
+        }
+    }
+
+    #! while another thread holds the load of the name, the compilation fails at once with LOAD-MODULE-ERROR and
+    #! parses nothing (the module that it would parse has a parse error, which is not reported), and the load of the
+    #! name completes after the hold is released
+    heldLoadTest() {
+        string bad_dir = tmp.path + DirSep + "held-bad";
+        string mod_dir = tmp.path + DirSep + "held";
+        mkdir(bad_dir);
+        mkdir(mod_dir);
+        writeFile(bad_dir + DirSep + "RcHeld.qm", HeldBrokenModuleSource);
+        writeFile(mod_dir + DirSep + "RcHeld.qm", HeldModuleSource);
+        string child = tmp.path + DirSep + "held.q";
+        writeFile(child, HeldChildSource);
+        foreach string mode in (ExecModes) {
+            # standard error is included: a parse would report its error there
+            string out = runChild(child, mode, mod_dir, (bad_dir + DirSep + "RcHeld.qm",
+                tmp.path + DirSep + "RcHeld-" + mode + ".qmod"), True);
+            if (out == "no debug\n") {
+                testSkip("dbg_aot_compile_module() needs a debug build");
+            }
+            assertEq("hold: True\nLOAD-MODULE-ERROR: cannot compile module 'RcHeld': a module of the same name is "
+                "being loaded in another thread\nrelease: True\nheld\n", out, mode);
+            assertFalse(is_file(tmp.path + DirSep + "RcHeld-" + mode + ".qmod"), mode + ": no qmod was written");
+        }
+    }
+
+    #! runs the cycle child in each execution mode with the modules in the given directory and checks its output
+    /** @param ext the extension of the modules' files
+        @param mod_dir the directory of the modules
+        @param second the requirements of the modules loaded second in their cycle
+    */
+    private checkCycleModes(string ext, string mod_dir, hash<string, string> second) {
+        string expected = "self self-plain a b c d\n"
+            + sprintf("RcSelf %s reexported: null required: null\n", ext)
+            + sprintf("RcSelfPlain %s reexported: null required: null\n", ext)
+            + sprintf("RcA %s reexported: [\"RcB\"] required: [\"RcB\"]\n", ext)
+            + sprintf("RcB %s reexported: %s required: %s\n", ext, second.RcB, second.RcB)
+            + sprintf("RcC %s reexported: null required: [\"RcD\"]\n", ext)
+            + sprintf("RcD %s reexported: null required: %s\n", ext, second.RcD);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, runChild(tmp.path + DirSep + "cycles.q", mode, mod_dir), sprintf("%s: %s", ext, mode));
+        }
+    }
+
+    private copyModule(string mod, string ext, string dir) {
+        string from = (ext == "qm" ? src_dir : aot_dir) + DirSep + mod + "." + ext;
+        if (!is_file(from)) {
+            return;
+        }
+        File f();
+        f.open2(dir + DirSep + mod + "." + ext, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readBinaryFile(from));
+        f.close();
+    }
+
+    #! runs a child; its standard error is included, unless the child compiles in process (\a args) and
+    #! \a with_stderr is not set: the diagnostics of the compiler are then left out
+    private string runChild(string child, string mode, string mod_dir, *list<string> args, bool with_stderr = False) {
+        string arg_str = args ? (foldl $1 + " " + $2, args) : "";
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s -b --exec-mode=%s "
+            "%s %s %s", libqore_dir, mod_dir, qore_bin, mode, child, arg_str,
+            (args && !with_stderr) ? "2>/dev/null" : "2>&1"));
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

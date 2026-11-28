@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - binary module loading and the C++ API of shared objects called from a test module's native code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedObjectCppApiTest
+
+#! Test for qore#7669: the C++ API of shared objects for binary modules
+/** The builtin class CppApiTest::SharedObjectProbe of the cppapiuser test module calls
+    qore_caller_creates_shared_objects(), qore_caller_can_share_objects(), qore_share_object(), qore_object_is_shared(),
+    qore_check_shared_object_change(), qore_check_shared_object_callback() and qore_update_shared_object() from C++.
+    Trusted code marks probes and updates them; a tenant (a restricted Program: a sandboxed Program whose sandbox
+    refuses uncontrolled APIs) cannot change a shared probe, share objects outside an update scope, or run its own code
+    locked, but builds a probe's cache on first use in a C++ update scope, in which the C++ code can share objects and
+    the tenant's own code cannot, nor open a nested scope (also from a Qore update scope); the scope ends with the
+    update and is not inherited by a thread; in the scope, the tenant is still the restricted caller
+    (qore_caller_creates_shared_objects() is False and a file that the update opens for it is refused by its sandbox)
+    and a callback of the tenant is refused by qore_check_shared_object_callback(); a probe that no Program owns is
+    updated only by code that may share objects, a probe of the tenant by nobody; null pointers are handled.  The hazard
+    that the API documents is shown too: a closure of a trusted class that the tenant gives runs in the scope with its
+    rights.  A tenant of a trusted (governed) sandbox, one that allows uncontrolled APIs, is sandboxed but not
+    restricted (qore#7737): it creates, shares and changes shared objects as trusted code does, while its sandbox's
+    file-system policy still applies.
+
+    SharedObjectCppApi.q checks these; its output must be the one in SharedObjectCppApi.expected in every execution
+    mode, on the IR tier, and in programs compiled with qcc -O0 and -O3.
+*/
+class SharedObjectCppApiTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedObjectCppApi.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedObjectCppApi.expected");
+    }
+
+    constructor() : QUnit::Test("shared object C++ API", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # top-level code calls no function often enough for tiered execution to compile it
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::Jit));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc("-O0"); });
+        addTestCase("qcc -O3", sub () { checkQcc("-O3"); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(string opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/shared-object-cpp-api";
+        string output = backquote(sprintf("%s %s -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected, backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

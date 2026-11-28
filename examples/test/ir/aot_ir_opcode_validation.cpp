@@ -8,6 +8,8 @@
 #include <qore/QoreString.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreAOTBinary.h>
 
 #include <cstdio>
@@ -83,6 +85,41 @@ static bool check(QoreProgram* pgm, const OpcodeCase& test, bool nested) {
     return ok;
 }
 
+// The verifier rejects the reserved CallIndirect opcode, alone and as an invoked opcode: no lowering emits it, and
+// neither the IR interpreter nor the LLVM lowering executes it.  The same function with Call is the control.
+static bool checkVerifier(QoreIROpcode opcode, bool nested) {
+    ExceptionSink xsink;
+    ValueHolder expr(new QoreStringNode("call"), &xsink);
+    QoreIRFunction fn("verify", "verify");
+    QoreIRBuilder builder(&fn);
+    QoreIRBasicBlock* entry = fn.createBlock("entry");
+    QoreIRBasicBlock* normal = fn.createBlock("normal");
+    QoreIRBasicBlock* exception = fn.createBlock("exception");
+    builder.setBlock(entry);
+    QoreIRValue arg = builder.createConstInt(1)->result;
+    if (nested) {
+        builder.createInvoke(*expr, {arg}, normal, exception)->invoke_opcode = opcode;
+    } else {
+        builder.createExprOp(opcode, *expr, {arg});
+        builder.createBranch(normal);
+    }
+    builder.setBlock(normal);
+    builder.createReturnNothing();
+    builder.setBlock(exception);
+    builder.createReturnNothing();
+
+    std::string error;
+    bool verified = QoreIRVerifier::verify(fn, error);
+    bool ok = opcode == QoreIROpcode::CallIndirect
+        ? !verified && error == "reserved opcode CallIndirect (297) in block 'entry'"
+        : verified && error.empty();
+    if (!ok) {
+        fprintf(stderr, "verifier, %s opcode %d: accepted=%d, error='%s'\n", nested ? "Invoke" : "Expr",
+            static_cast<int>(opcode), verified, error.c_str());
+    }
+    return ok && !xsink;
+}
+
 int main() {
     // The signal thread must stay disabled for valgrind, just as for qore -b.
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -100,6 +137,12 @@ int main() {
     for (const auto& test : cases) {
         for (bool nested : {false, true}) {
             ok = check(pgm, test, nested) && ok;
+            ++count;
+        }
+    }
+    for (QoreIROpcode opcode : {QoreIROpcode::CallIndirect, QoreIROpcode::Call}) {
+        for (bool nested : {false, true}) {
+            ok = checkVerifier(opcode, nested) && ok;
             ++count;
         }
     }

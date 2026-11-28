@@ -86,7 +86,7 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
         on_exit remove_tree(dir);
         foreach int opt in (0, 3) {
             string exe = dir + "/callee-" + opt;
-            string log = backquote(sprintf("%s -O%d -o %s %s 2>&1", qcc, opt, exe, fixture));
+            string log = backquote(sprintf("%s -O%d -g -o %s %s 2>&1", qcc, opt, exe, fixture));
             assertTrue(is_file(exe), log);
             assertEq(expected, ExecModeHarness::run_any(exe + " -b"), "qcc -O" + opt);
         }

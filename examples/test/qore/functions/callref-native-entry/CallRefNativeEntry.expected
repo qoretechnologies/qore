@@ -1,0 +1,42 @@
+int: 6997564
+int result: 6553700
+float: 6553500.000
+bool: 100
+bool as auto: False True
+int to float: 3.5
+float to int: 21
+no args: 42 -3e+307 True
+wide int: 1125899906842625 9223372036854775807 -9223372036854775807
+wide int loop: 1125899906842824
+tagged float: -9e+307 -1.5e+308
+string: hi there
+mixed native kinds: 18
+3 args: 123
+boxed and native: x:4:True
+int as auto: 248
+float as auto: 65528.0
+exception: CALLREF-ERROR: x=3 (arg 3) at thrower:211 <- call_int:349
+nested exception: CALLREF-ERROR: x=4 (arg 4) at thrower:136 <- deep:211 <- call_int:357
+native exception: DIVISION-BY-ZERO at divide:211 <- call_int:365
+native exception in a loop: 67
+native exceptions in a try block: -49
+recursion in the callee: 1000 STACK-LIMIT-EXCEEDED
+exceptions in a loop: 200
+return type: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead (arg {id: "INCOMPATIBLE-RUNTIME-TYPE", hint: "the value does not have the type that the target requires", suggestions: ["convert the value to the required type, or change the declared type of the target"], facts: {expectedType: "int", actualType: "string"}, doc: null})
+auto return to int: 3 RUNTIME-TYPE-ERROR
+store conversions: i:RUNTIME-TYPE-ERROR f3.7 b:RUNTIME-TYPE-ERROR i1 f1.0 b:RUNTIME-TYPE-ERROR i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR b:RUNTIME-TYPE-ERROR i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR bTrue i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR b:RUNTIME-TYPE-ERROR i:RUNTIME-TYPE-ERROR f2.5 b:RUNTIME-TYPE-ERROR
+entry's boxed value stored into native locals: i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR b:RUNTIME-TYPE-ERROR j4 I:RUNTIME-TYPE-ERROR F:RUNTIME-TYPE-ERROR B:RUNTIME-TYPE-ERROR I4 F4.0 B:RUNTIME-TYPE-ERROR i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR b:RUNTIME-TYPE-ERROR j5 I:RUNTIME-TYPE-ERROR F:RUNTIME-TYPE-ERROR B:RUNTIME-TYPE-ERROR I5 F5.0 B:RUNTIME-TYPE-ERROR i:RUNTIME-TYPE-ERROR f:RUNTIME-TYPE-ERROR b:RUNTIME-TYPE-ERROR j6 I:RUNTIME-TYPE-ERROR F:RUNTIME-TYPE-ERROR B:RUNTIME-TYPE-ERROR I6 F6.0 B:RUNTIME-TYPE-ERROR
+native bool and float stores: False 99.5
+named: RUNTIME-OVERLOAD-ERROR
+too few args: RUNTIME-OVERLOAD-ERROR
+too many args: RUNTIME-OVERLOAD-ERROR
+wrong type: RUNTIME-OVERLOAD-ERROR
+NOTHING arg: RUNTIME-OVERLOAD-ERROR
+float arg to int: RUNTIME-OVERLOAD-ERROR
+default argument: 6
+closure: 15
+runtime reference: 6997564
+reference in a hash: 23503
+recursion: 610 144
+concurrent first use: 248,8,65528.0,True,3.5,21,42,"hi x" x8
+sandboxed reference called by the program: 6997564

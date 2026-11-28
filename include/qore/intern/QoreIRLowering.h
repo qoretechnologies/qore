@@ -623,6 +623,16 @@ private:
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
+    /** Returns true if the value of the right operand of += on a float local is a float, an int or a bool whatever
+        the code executed (see design/qore-ir-spec.md, "Native float accumulation"): QoreValue::getAsFloat() then
+        converts it exactly as the AST operator converts the operand it adds (qore_plus_equals_float_operand(); the
+        two differ only for a char, which such a value never is), so a float add (AddAssignFloat) gives the AST
+        result.  The proof is the builder's facts of the lowered value (exactly float, int or bool, assigned and never
+        NOTHING: a constant, a typed arithmetic, comparison or conversion result, a read of a variable of that type
+        known to be assigned), or the call of a user function or static method of the same Program whose variant is
+        fixed at parse time and returns float, which the variant enforces on its return in every execution mode.
+    */
+    bool isExactFloatAddOperand(const QoreValue& expr, QoreIRValue value) const;
     bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
@@ -968,9 +978,11 @@ private:
         of the body, or the end of the handler (getScopeFlowPaths() with the handler, qore#7008).
     */
     bool setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error);
-    //! Gives the ScopeExit \a se past the inline cap in the code of a debugger's request, whose handlers can hand a
-    //! value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the value
-    //! that one of them handed over before it, which the entry of each path releases (qore#7008)
+    //! Gives the ScopeExit \a se past the inline cap outside the cleanups of a return statement, whose handlers can
+    //! hand a value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the
+    //! value that one of them handed over before it, which the entry of each path releases (qore#7008); in the code
+    //! of a debugger's request, and at the normal end of a block in the body of a handler lowered inline, where a loop
+    //! or a switch statement of the function can take the request of its handlers (qore#7625)
     bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
             const QoreProgramLocation* loc, std::string& error);
     //! Gives the ScopeExit \a se past the inline cap whose handlers' values replace the value of a return (its
@@ -1527,6 +1539,16 @@ private:
     void pushBlockCleanup(BlockCleanupEntry entry);
     //! Push a break / continue target, recording the number of temp scopes open where it is pushed
     void pushFlowTarget(FlowTarget target);
+    //! In the debug IR of the body of a handler compiled as a function of its own, emits the release of what the
+    //! handler run has handed over (QoreIROpcode::HandlerAbandonReturn) on the path of a debugger's break or continue
+    //! request (\a rc) that abandons the return of the block that the request leaves, where that block decides it
+    //! (qore#7625)
+    /** @param taken true if the function takes the request (a loop or a switch statement of the body): the return is
+        abandoned; false if the request leaves the function: the run of the handler decides
+        (qore_handler_abandon_return())
+    */
+    void emitHandlerAbandonReturn(int rc, bool taken, const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target);
     std::vector<QoreIRBasicBlock*> exception_stack;
     //! Scope stack depth at each exception handler's entry point.
     //! Parallel to exception_stack — records scope_stack.size() when each handler was pushed.

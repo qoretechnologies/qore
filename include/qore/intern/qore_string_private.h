@@ -555,6 +555,33 @@ public:
         }
     }
 
+    //! grows the string to hold \a i bytes, as check_char() does; memory that cannot be allocated raises
+    //! MEMORY-ALLOCATION-ERROR in \a xsink and returns -1, or, with no sink, fails with std::bad_alloc; the string is
+    //! then unchanged (qore#7466)
+    DLLLOCAL int check_char(size_t i, ExceptionSink* xsink) {
+        if (view_parent) {
+            materialize();
+        }
+        if (i >= allocated) {
+            size_t d = i >> 2;
+            allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
+            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
+            char* p = static_cast<char*>(qore_realloc_or_null(ownedBuffer(), allocated * sizeof(char)));
+            if (__builtin_expect(!p, 0)) {
+                // the string keeps its buffer, which holds at least its text and terminator (see check_char())
+                allocated = ownedBuffer() ? len + 1 : 0;
+                return raiseGrowFailure(xsink);
+            }
+            ownedBuffer() = p;
+            sb.sync(allocated);
+        }
+        return 0;
+    }
+
+    //! raises MEMORY-ALLOCATION-ERROR for a string that could not grow, or, with no sink, throws std::bad_alloc;
+    //! returns -1 (qore#7466)
+    DLLLOCAL static int raiseGrowFailure(ExceptionSink* xsink) __attribute__((noinline, cold));
+
     //! grows the string to hold \a i bytes, as check_char() does, without ending the process if the memory cannot be
     //! allocated
     /** @return 0 for OK, -1 if the memory could not be allocated; the string is then unchanged
@@ -1556,6 +1583,11 @@ public:
     }
 
     DLLLOCAL int concat(const QoreString* str, ExceptionSink* xsink);
+
+    //! concat() with the conversion of the encoding, raising MEMORY-ALLOCATION-ERROR in \a xsink if the string cannot
+    //! grow, which leaves it unchanged (qore#7466); for the runtime helpers of native code and the IR interpreter,
+    //! whose callers check the sink: the other callers of concat() keep its code
+    DLLLOCAL int concatRaising(const QoreString* str, ExceptionSink* xsink);
 
     // return 0 for success
     //! Appends the output of a printf() format

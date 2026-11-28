@@ -4,7 +4,10 @@
 # update scope that a method of a class of the object opens with SandboxManager::updateSharedObject(), with a closure
 # that the class created; a closure of other code, a callback of the caller, another object, a thread started in the
 # scope and code after the scope cannot change it; SandboxManager::checkSharedObjectCallback() accepts only closures
-# of trusted classes from sandboxed code (qore#6843); see shared-object-update-scope.qtest
+# of trusted classes from sandboxed code (qore#6843); see shared-object-update-scope.qtest.  The logger wrapper that is
+# not shared whose logger the tenant replaces is its own (its sandbox created it), as LoggerWrapper::setLogger()
+# refuses the owner rule of tenant isolation (qore#6842) to a caller that did not create the object, after the
+# shared-object rule, which answers first
 
 %modern
 %enable-all-warnings
@@ -188,6 +191,11 @@ string sub set_logger(Logger::LoggerWrapper w) {
     );
     return join(\" \", l);
 }
+
+# a logger wrapper that the tenant creates: its sandbox owns it (qore#6842)
+Logger::LoggerWrapper sub create_wrapper(Logger::Logger l) {
+    return new Logger::LoggerWrapper(l);
+}
 ";
 
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
@@ -220,11 +228,19 @@ printf("a closure of the class run while the state is held: %s, %s\n", p.callFun
     Logger host_logger("host");
     LoggerWrapper shared_wrapper(host_logger);
     SandboxManager::shareObject(shared_wrapper);
-    LoggerWrapper plain_wrapper(host_logger);
+    LoggerWrapper plain_wrapper = p.callFunction("create_wrapper", host_logger);
     printf("a tenant replaces the logger of a shared logger wrapper: %s, host logger kept: %y\n",
         p.callFunction("set_logger", shared_wrapper), shared_wrapper.isLogger(host_logger));
     printf("a tenant replaces the logger of a logger wrapper that is not shared: %s, host logger kept: %y\n",
         p.callFunction("set_logger", plain_wrapper), plain_wrapper.isLogger(host_logger));
+    # the order of the checks: the shared-object rule first, whoever created the object, then the owner rule
+    LoggerWrapper shared_own = p.callFunction("create_wrapper", host_logger);
+    SandboxManager::shareObject(shared_own);
+    LoggerWrapper host_wrapper(host_logger);
+    printf("order: a tenant replaces the logger of a shared logger wrapper of its own: %s, host logger kept: %y; of "
+        "one of the host that is not shared: %s, host logger kept: %y\n", p.callFunction("set_logger", shared_own),
+        shared_own.isLogger(host_logger), p.callFunction("set_logger", host_wrapper),
+        host_wrapper.isLogger(host_logger));
 }
 printf("trusted code updates an object that is not shared: %s\n", (string sub () {
     try {

@@ -1428,6 +1428,13 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     are locked so that they cannot be made less restrictive.  This is to prevent user modules from circumventing
     functional restrictions imposed by parse options.
 
+    @subsection aot_module_compile_cycles Compiling Modules That Require Themselves
+    \c qcc compiles a module as the module loader loads it: the module's name is reserved while its source is
+    parsed, so a @ref requires "%requires" of the module in its own source, or in the source of a module that it
+    requires (a require cycle), loads nothing, as when the module is loaded from source.  A compilation of a module
+    whose name another thread of the process is loading at the time fails with \c LOAD-MODULE-ERROR without
+    parsing the module, and a load of the name in another thread during a compilation waits for it to end.
+
     @subsection aot_module_runtime_identity AOT Module Runtime Compatibility
 
     The native code of an AOT-compiled module (\c "*.qmod" built by @ref qcc_tool "qcc") calls into the %Qore
@@ -1480,7 +1487,9 @@ different Qore library and cannot be run with this one; rebuild it with the qcc 
     @subsection aot_module_source_fallback Loading the Source of an AOT Module That Cannot Be Loaded
 
     When an AOT-compiled module (\c "*.qmod") cannot be loaded, because it was compiled for another AOT runtime
-    identity, is out of date with its sources, or uses functionality that the restrictions of the
+    identity, is out of date with its sources, is damaged (on Linux, a file that is shorter than the loadable
+    segments of its ELF headers, from a partial write or a bad copy, is refused with \c LOAD-MODULE-ERROR before it
+    is mapped, as mapping it would end the process with \c SIGBUS), or uses functionality that the restrictions of the
     @ref Qore::Program "Program" loading it do not allow (see @ref module_parse_option_masks), and the module's
     source is found (beside a compiled module loaded by its path, or in the module path for a module loaded by its
     name), the source module is loaded instead, as if there were no compiled module.  The loader reports why the
@@ -1617,6 +1626,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>init</b> = </tt><i>@ref closure "initialization closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>del</b> = </tt><i>@ref closure "deletion closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}</tt>
+
+    A module is declared once: a second module declaration anywhere in the module's code (in the same file, in another
+    file of a @ref separated_modules "separated module" or in a file included with
+    @ref include "%include") raises a \c PARSE-EXCEPTION at the second declaration that gives the location of the
+    first one; the keys of the second declaration are ignored, and the module is neither loaded nor compiled.
 
     Module properties are as follows:
     - \c version: (required) must be assigned to a string giving the version of the module

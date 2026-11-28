@@ -660,6 +660,9 @@ int QoreFile::chown(uid_t owner, gid_t group, ExceptionSink* xsink) {
     // changing the owner is a write to the file, whatever access it was opened with; the sandbox policy must allow
     // it as for chown()
     if (!priv->filename.empty()) {
+        // a name that derives from the process's current directory is named relative to it for code that is not
+        // given host directories that it did not give itself (qore#7662)
+        QoreHostDirBaseMessageScopeHelper msg_scope(priv->cwd_base);
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh && !smh->checkFilesystemAccess(priv->filename.c_str(), QSEC_WRITE, xsink)) {
             return -1;
@@ -1275,7 +1278,8 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
 
     if (rc) {
         if (!*xsink) {
-            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", fn);
+            // the message names the file in the form for the code that it is built for (qore#7507, qore#7662)
+            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", qore_msg_path(fn).c_str());
         }
         return -1;
     }

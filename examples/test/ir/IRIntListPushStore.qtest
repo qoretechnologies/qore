@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the native helpers of the store of a push to a list<int> local
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRIntListPushStoreTest
+
+#! The store of a push to a list<int> local on the runtime stack in native code
+/** Native code makes the store that follows <tt>push local, value</tt> to a local declared \c list<int> that is on the
+    runtime stack with qore_rt_coerce_int_list_value() and qore_rt_assign_int_list_local(), which keep a list of the
+    local's type as it is and skip the assignment when the variable holds the list that the push changed in place, and
+    coerce and assign any other value as the generic helpers do.  The scenario must print in every tier and as a
+    compiled executable what the AST tier prints, with and without the helpers; the LLVM IR of the functions shows
+    where they are used.
+*/
+class IRIntListPushStoreTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! disables the helpers
+        const Gate = "QORE_DISABLE_IR_INT_LIST_PUSH_STORE=1 ";
+
+        #! the functions that use the helpers: a loop, a shared list, wide values, a rejected value, a replaced and a
+        #! passed list, another thread's list, a variable replaced through reflection; the parameter of pass() is on
+        #! the runtime stack in JIT code (the scenario allows the debugger) and not in AOT code, so it is not checked
+        const Helper = ("pushLoop", "sharedList", "wideValues", "rejected", "replaced", "passed", "otherThread",
+            "reflected");
+
+        #! the functions that do not: a list that a weak reference designates is stored with the generic helpers
+        const Generic = ("weakList",);
+    }
+
+    constructor() : QUnit::Test("IRIntListPushStoreTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
+        fixture = get_script_dir() + "/IRIntListPushStoreScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (ExecModeHarness::ExecModes[1..]) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+                assertEq(astOutput(), run(mode, Gate), sprintf("exec-mode=%s output without the helpers matches AST",
+                    mode));
+            });
+        }
+        addTestCase("jit helper", \testJitHelper());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        list<string> lines = astOutput().split("\n");
+        assertEq("loop: 0 550545 133269504", lines[0]);
+        assertEq("shared: [11, 2, 3] [1, -8, 4]", lines[1]);
+        assertEq("weak: [11, 2, 3, 4] [11, 2, 3, 4]", lines[2]);
+        assertEq("wide: [9223372036854775807, 6, -140737488355328]", lines[3]);
+        assertEq("rejected: RUNTIME-TYPE-ERROR [2]", lines[4]);
+        assertEq("replaced: [105, 2, 3]", lines[5]);
+        assertEq("passed: [2, 2, 3] [1, 2, 50]", lines[6]);
+        assertEq("thread: [1, 2, 4] [1, 2]", lines[7]);
+        assertEq("reflected: [41, 42, 5] list<int>", lines[8]);
+    }
+
+    testJitHelper() {
+        string ir = run("jit", "QORE_DUMP_LLVM_IR=1 ");
+        checkHelper(ir, "qore_rt_assign_int_list_local", True, "jit");
+        checkHelper(ir, "qore_rt_coerce_int_list_value", True, "jit");
+        string disabled = run("jit", Gate + "QORE_DUMP_LLVM_IR=1 ");
+        checkHelper(disabled, "qore_rt_assign_int_list_local", False, "jit without the helpers");
+        checkHelper(disabled, "qore_rt_coerce_int_list_value", False, "jit without the helpers");
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-int-list-push-store-");
+        foreach hash<auto> i in ((("level": 0, "env": ""), ("level": 3, "env": ""), ("level": 3, "env": Gate))) {
+            string exe = sprintf("%s/scenario-O%d%s", tmp.path, i.level, i.env ? "-disabled" : "");
+            string out = ExecModeHarness::run_any(sprintf("%sQORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s", i.env, shellQuote(libqore_dir),
+                shellQuote(libqore_dir), shellQuote(qcc_bin), i.level, shellQuote(exe), shellQuote(fixture)));
+            string label = sprintf("AOT -O%d%s", i.level, i.env ? " disabled" : "");
+            assertTrue(is_file(exe), sprintf("%s compile produced an executable: %s", label, out.substr(-2000)));
+            checkHelper(out, "qore_rt_assign_int_list_local_aot", !i.env, label);
+            checkHelper(out, "qore_rt_coerce_int_list_value_aot", !i.env, label);
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))), label + " output matches AST");
+        }
+    }
+
+    #! checks which functions of the LLVM IR call the helper
+    private checkHelper(string ir, string helper, bool enabled, string label) {
+        foreach string name in (Helper) {
+            assertEq(enabled, callsHelper(ir, name, helper), sprintf("%s: %s calls %s", label, name, helper));
+        }
+        foreach string name in (Generic) {
+            assertFalse(callsHelper(ir, name, helper), sprintf("%s: %s does not call %s", label, name, helper));
+        }
+    }
+
+    #! returns True if an LLVM definition of the function (or of code it runs in a background thread) calls the helper
+    private bool callsHelper(string ir, string name, string helper) {
+        *list<*string> bodies = regex_extract(ir, "(?s)define [^\n]*@\"?" + name + "[_@][^\n]*\n(.*?)\n\\}",
+            Qore::RE_Global);
+        assertTrue(exists bodies[0], name + " has an LLVM definition");
+        return exists (select bodies, regex($1 ?? "", "(?:call|invoke) [^\n]*@" + helper + "(?:_throwing)?\\(")
+            )[0];
+    }
+
+    private string run(string mode, string env = "") {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

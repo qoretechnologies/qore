@@ -1,0 +1,49 @@
+int: fast
+float: fast
+string: fast
+bool: fast
+list: generic
+hash, 2 args: fast
+no args: fast
+3 args: fast
+auto param: generic
+given temporaries: fast
+given temporary, return type and destructor exception: fast
+typed list: generic
+exception: fast
+nested exception: fast
+exceptions in a loop: fast
+return type: fast
+named: generic
+positional after named: fast
+too few args: generic
+too many args: generic
+no arg for a parameter: generic
+wrong type: generic
+NOTHING arg: generic
+wrong type after warm-up: fast
+default argument: generic
+overloaded: generic
+synchronized: generic
+soft parameter: generic
+implicit arguments: fast
+reference argument: generic
+overload added later: fast
+concurrent first use: fast
+background: fast
+module function: fast
+module function exception: fast
+module's reference: generic
+script reference called by the module: generic
+deleted Program: generic
+thread entry handler: generic
+trusted self call: fast
+sandboxed reference called by trusted code: generic
+sandboxed reference to a trusted function called by trusted code: generic
+trusted reference called by sandboxed code: generic
+sandboxed self call: generic
+lent Program's own call: generic
+lent Program's reference called by sandboxed code: generic
+lent Program called by trusted code: fast
+sandbox-bound reference: generic
+trusted sandbox-bound reference: generic

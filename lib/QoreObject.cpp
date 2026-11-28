@@ -40,6 +40,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/QoreSandboxManager.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #ifdef QORE_HAVE_ALLOC_TRACKING
@@ -197,6 +198,119 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     // created them (ex: system objects, which hold no weak Program reference)
     qore_class_private::refClass(*const_cast<QoreClass*>(oc));
     sandbox_provenance = provenance.release();
+    // a sandbox owns the object if sandboxed code executes the expression that creates it (qore#6842)
+    if (sandbox_provenance && qore_sandboxed_code_active()) {
+        setCreatorOwnership();
+    }
+}
+
+void qore_object_private::setCreatorOwnership() {
+    const QoreSandboxContext* owner_provenance = nullptr;
+    if (!qore_creator_is_sandbox_owner(owner_provenance)) {
+        return;
+    }
+    // an object that trusted class code creates in a method of an object that a sandbox owns is owned as that object
+    // is: it takes that object's owner, not the one of the code on the call stack, and stays governed by the sandboxes
+    // of the creating code (qore#6842)
+    if (owner_provenance && owner_provenance != sandbox_provenance) {
+        QoreSandboxContext* ctx = qore_sandbox_owned_creation_context(owner_provenance, sandbox_provenance);
+        if (!ctx) {
+            // the provenance cannot be set: the object, which a sandbox owns, is given the owner that matches no
+            // sandboxed caller (fails closed: an object owned by no sandbox would be read as a whole by trusted code
+            // for any caller, qore#7921); it keeps the provenance of the creating code, which governs it
+            QoreSandboxContext* unrecorded = qore_sandbox_unrecorded_owner();
+            unrecorded->ref();
+            sandbox_owner.store(unrecorded, std::memory_order_relaxed);
+            return;
+        }
+        if (ctx == qore_sandbox_unrecorded_owner()) {
+            // the object whose method creates this one has that owner: so has this object, with its own provenance
+            sandbox_owner.store(ctx, std::memory_order_relaxed);
+            return;
+        }
+        sandbox_provenance->deref();
+        sandbox_provenance = ctx;
+    }
+    sandbox_owner.store(sandbox_provenance, std::memory_order_relaxed);
+}
+
+// returns -1 and raises an exception if the current code is sandboxed code that cannot delete the object: its sandbox
+// does not own it (qore#6842); \a builtin_caller: called by builtin code (a function or method that deletes the object
+// or takes it over), whose class context is the builtin's own, so the class context of the code that called it counts
+// as well
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(const QoreObject& obj, const char* action,
+        ExceptionSink* xsink, bool builtin_caller) {
+    // the code that runs the delete operator or the function that deletes the object: trusted code, also library code
+    // that serves sandboxed code, deletes objects through its own logic
+    const QoreProgram* pgm = getProgram();
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (!(pgm && qore_program_is_sandboxed(pgm)) && !(class_ctx && class_ctx->isSandboxedCode())) {
+        const qore_class_private* caller_ctx = builtin_caller ? runtime_get_caller_class() : nullptr;
+        if (!(caller_ctx && caller_ctx->isSandboxedCode())) {
+            return 0;
+        }
+    }
+    const QoreSandboxContext* owner = qore_object_private::get(obj)->getSandboxOwner();
+    if (qore_sandbox_current_code_created(owner, owner)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "sandboxed code cannot %s an object of class '%s' that its "
+        "sandbox did not create", action, obj.getClassName());
+    return -1;
+}
+
+int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink) {
+    // a system constant object is never deleted, as with the delete operator
+    if (qore_object_private::get(obj)->system_object) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot %s a system constant object (class '%s')", action,
+            obj.getClassName());
+        return -1;
+    }
+    // the order of the checks of a deletion (see qore_check_object_delete()): the shared-object rule (qore#6843) first,
+    // as the more specific refusal, then the owner rule (qore#6842)
+    if (qore_object_private::get(obj)->checkSharedChange(nullptr, xsink, true)) {
+        return -1;
+    }
+    return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink, true) : 0;
+}
+
+void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink) {
+    // the same order as qore_check_object_delete(): the shared-object rule, then the owner rule
+    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+        return;
+    }
+    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, "delete", xsink, false)) {
+        return;
+    }
+    o->doDelete(xsink);
+}
+
+// returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842): sandboxed code
+// (the code of a sandboxed Program), or trusted class code executing directly in a non-static method of an object that
+// a sandbox owns, if the code on the call stack is that sandbox's (it owns the object), whose ownership and provenance
+// the new object takes (returned in \a owner_provenance); not a static method or a function, which has no object of
+// its own, nor a method of another object, whose own object decides, nor a method of an object that the sandbox that
+// the code serves does not own
+bool qore_creator_is_sandbox_owner(const QoreSandboxContext*& owner_provenance) {
+    QoreProgram* pgm = getProgram();
+    if (pgm && qore_program_is_sandboxed(pgm)) {
+        return true;
+    }
+    const QoreObject* self = runtime_get_stack_object();
+    if (!self) {
+        return false;
+    }
+    const QoreSandboxContext* self_owner = qore_object_private::get(*self)->getSandboxOwner();
+    if (!self_owner) {
+        return false;
+    }
+    // an object whose owner could not be recorded (qore_sandbox_unrecorded_owner()) matches no caller: what trusted
+    // class code creates in its methods while sandboxed code exists takes that owner too (fails closed, qore#7921)
+    if (self_owner != qore_sandbox_unrecorded_owner() && !qore_sandbox_current_code_created(self_owner, true)) {
+        return false;
+    }
+    owner_provenance = self_owner;
+    return true;
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
@@ -219,6 +333,13 @@ QoreStringNode* QoreObject::getUniqueHash() const {
 }
 
 qore_object_private::~qore_object_private() {
+    {
+        // the context of a sandbox that the object was transferred to is referenced on its own
+        QoreSandboxContext* owner = sandbox_owner.load(std::memory_order_relaxed);
+        if (owner && owner != sandbox_provenance) {
+            owner->deref();
+        }
+    }
     if (sandbox_provenance) {
         sandbox_provenance->deref();
     }
@@ -385,8 +506,9 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
     };
 
     assert(xsink);
-    // get the current class context
-    const qore_class_private* class_ctx = runtime_get_class();
+    // get the current class context; the public members only if the sandboxed read rule refuses the code the
+    // non-public members of the object (qore#7033)
+    const qore_class_private* class_ctx = getWholeObjectReadContext(runtime_get_class());
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
         class_ctx = nullptr;
     bool has_public_members = theclass->hasPublicMembersInHierarchy();
@@ -721,6 +843,9 @@ QoreHashNode* qore_object_private::copyData(ExceptionSink* xsink, bool throw_exc
     return data->copy();
 }
 
+static bool qore_object_runtime_member_visible(const qore_class_private* theclass_priv,
+        const qore_class_private* class_ctx, const char* key);
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
@@ -732,9 +857,21 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     ReferenceHolder<QoreHashNode> new_data(xsink);
 
     // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+    const qore_class_private* reader_ctx = runtime_get_class();
+    const qore_class_private* class_ctx = reader_ctx;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         class_ctx = nullptr;
+    }
+
+    // the members of the source object that the calling code may read, as by the other reads of a whole object
+    // (qore#7657): every member for the code of the source object's class, those that it can use for a class context
+    // with private access to the source object's class, the public members otherwise; the public members only also if
+    // the sandboxed read rule refuses the code the non-public members of the source object (qore#7033), which is
+    // decided before the source object's lock is taken
+    const qore_class_private* src_ctx = reader_ctx;
+    if (src_ctx && (!qore_class_private::runtimeCheckPrivateClassAccess(*o.theclass, src_ctx)
+            || o.sandboxedReaderDenied(src_ctx))) {
+        src_ctx = nullptr;
     }
 
     // saves internal source data to merge
@@ -750,10 +887,25 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         if (!o.data->empty()) {
-            new_data = o.data->copy();
+            const qore_class_private* src_priv = qore_class_private::get(*o.theclass);
+            // every member for the source object's class, unless sandboxed code declared it with a parent class that
+            // trusted code declared, whose private members it cannot use (qore#6843)
+            if (src_ctx == src_priv && !src_priv->sandbox_private_members) {
+                new_data = o.data->copy();
+            } else {
+                new_data = new QoreHashNode(autoTypeInfo);
+                ConstHashIterator hi(o.data);
+                while (hi.next()) {
+                    if (src_ctx ? qore_object_runtime_member_visible(src_priv, src_ctx, hi.getKey())
+                            : !o.theclass->isPrivateMember(hi.getKey())) {
+                        // not possible for an exception to happen here
+                        qore_hash_private::get(**new_data)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+                    }
+                }
+            }
         }
 
-        if (class_ctx && o.cdmap) {
+        if (class_ctx && o.cdmap && src_ctx) {
             cdmap_t::iterator i = o.cdmap->find(class_ctx->classID);
             if (i != o.cdmap->end()) {
                 // see if the current object supports this class's data: the class itself, by identity (qore#7036)
@@ -787,6 +939,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     }
 
     if ((new_data && !new_data->empty()) || new_internal_data) {
+        // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+        SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
+
         QoreAutoVarRWWriteLocker al(rml);
 
         if (status == OS_DELETED) {
@@ -795,7 +950,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy,
-            &bound);
+            sandbox_write, &bound);
     } else if (raiseIfDeleted(vl, xsink)) {
         // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
         return;
@@ -854,6 +1009,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
             class_ctx = nullptr;
         }
+        // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+        SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
 
         if (mergeBindReferences<Lexical>(h, class_ctx, vl, bound, xsink, policy)) {
             bound.release(xsink);
@@ -867,7 +1024,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
             return;
         }
 
-        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy, &bound);
+        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy, sandbox_write, &bound);
     } else if (raiseIfDeleted(vl, xsink)) {
         // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
         return;
@@ -925,9 +1082,12 @@ public:
     SharedUpdateScopeHelper(const qore_object_private* obj, const QoreProgram* pgm,
             const QoreThreadProgramMarker& marker) {
         qore_shared_update_scopes.push_back({obj, pgm, marker});
+        // once the scope is in place: the class frames entered in it are recorded until it ends (qore#7795)
+        qore_thread_shared_update_scope_begin();
     }
 
     ~SharedUpdateScopeHelper() {
+        qore_thread_shared_update_scope_end(qore_shared_update_scopes.back().marker);
         qore_shared_update_scopes.pop_back();
     }
 
@@ -981,18 +1141,48 @@ int qore_object_private::checkSharedChangeIntern(const char* mem, ExceptionSink*
     return -1;
 }
 
-QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
+int qore_object_private::checkOpenSharedUpdateScope(const QoreProgram* scope_pgm, bool native,
+        ExceptionSink* xsink) const {
     if (!isShared()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "an object of class '%s' is not shared; an update scope is only "
             "for a shared object", theclass->getName());
-        return QoreValue();
+        return -1;
     }
-    // the code that calls: the code of a Program that no restricting sandbox governs (qore#7737)
-    const QoreProgram* pgm = getProgram();
-    // also the code of a class that restricted code declared (qore#7737)
-    if (!pgm || qore_program_is_restricted(pgm) || qore_calling_class_is_restricted()) {
-        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
-            "object of class '%s'", theclass->getName());
+    // the code that changes the object in the scope: the code of a Program that is not restricted
+    // (qore#7737); for an update closure also not the code of a class that restricted code declared, as the calling
+    // code is the scope's code (a C++ update is the module's own code, whose scope is that of the object's Program:
+    // its caller may be restricted, see qore_update_shared_object())
+    if (!scope_pgm || qore_program_is_restricted(scope_pgm) || (!native && qore_calling_class_is_restricted())) {
+        if (!native) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
+                "object of class '%s'", theclass->getName());
+        } else if (pgm) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope cannot be opened for an object of class "
+                "'%s' whose Program is restricted", theclass->getName());
+        } else if (isShared() && qore_caller_may_share_objects() && !getProgram()) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
+                "Program cannot be opened by code that runs in no Program", theclass->getName());
+        } else {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
+                "Program can only be opened by code that may share objects", theclass->getName());
+        }
+        return -1;
+    }
+    // a scope is not opened in code that restricted code called in an open scope: such code acts for restricted code
+    // (qore_thread_sandboxed_entered_since() counts restricted Programs only, qore#7737)
+    if (!qore_shared_update_scopes.empty()
+        && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
+            "for an object of class '%s'", theclass->getName());
+        return -1;
+    }
+    return 0;
+}
+
+QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
+    // the code that calls: the code of a Program that is not restricted (qore#7737)
+    const QoreProgram* call_pgm = getProgram();
+    if (checkOpenSharedUpdateScope(call_pgm, false, xsink)) {
         return QoreValue();
     }
     // the update: a closure that a method of a class of the object created, in the code of the same Program, which
@@ -1005,7 +1195,7 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     // restricting sandbox governs (checked above)
     if (!closure_class || closure_class->sandbox_ctx
         || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
-        || qore_closure_code_program(closure) != pgm) {
+        || qore_closure_code_program(closure) != call_pgm) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
@@ -1020,13 +1210,6 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
-    // a scope is not opened in code that restricted code called in an open scope: such code acts for restricted code
-    if (!qore_shared_update_scopes.empty()
-        && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
-        xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
-            "for an object of class '%s'", theclass->getName());
-        return QoreValue();
-    }
     // a closure runs in an update scope once only: code that obtains it cannot run the update again
     if (!closure->takeSharedUpdate()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update closure of an object of class '%s' has already been "
@@ -1037,6 +1220,29 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     return update->execValue(nullptr, xsink);
 }
 
+QoreValue qore_object_private::runSharedUpdateNative(q_shared_object_update_t update, void* arg,
+        ExceptionSink* xsink) {
+    // the code that changes the object in the scope: the code of the object's Program; for an object that no Program
+    // owns (an object of a builtin class that C++ code created), the code that calls, if it may share objects
+    // (fails closed)
+    const QoreProgram* scope_pgm = pgm;
+    if (!scope_pgm && isShared() && qore_caller_may_share_objects()) {
+        scope_pgm = getProgram();
+    }
+    if (checkOpenSharedUpdateScope(scope_pgm, true, xsink)) {
+        return QoreValue();
+    }
+    // the scope is taken where the code that calls runs; the update then runs as the code of the scope's Program, as a
+    // closure of a class of the object runs in its own Program, so that code that the calling code supplied and that
+    // the update calls is code that the scope's code called (see qore_thread_sandboxed_entered_since())
+    SharedUpdateScopeHelper scope(this, scope_pgm, qore_thread_program_marker());
+    ProgramThreadCountContextHelper pch(xsink, const_cast<QoreProgram*>(scope_pgm), true);
+    if (pch.enterFailed()) {
+        return QoreValue();
+    }
+    return update(obj, arg, xsink);
+}
+
 int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
         ExceptionSink* xsink) const {
     // fails closed, as checkSharedChangeIntern()
@@ -1045,7 +1251,8 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
     }
     // a closure that the code of a trusted library class created; not code of the caller or of another restricted
     // Program
-    const QoreClosureBase* closure = callback->getType() == NT_RUNTIME_CLOSURE
+    // no callback is not a closure of a trusted class (C++ API, qore_check_shared_object_callback())
+    const QoreClosureBase* closure = callback && callback->getType() == NT_RUNTIME_CLOSURE
         ? static_cast<const QoreClosureBase*>(callback) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
@@ -1093,6 +1300,16 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
     return -1;
 }
 
+int qore_object_private::checkSharedOwnerChange(const char* what, ExceptionSink* xsink) const {
+    // decides as checkSharedMethodChange(); only the phrasing of \a what differs ("change the logger of")
+    if (!isShared() || !qore_caller_is_restricted()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s an "
+        "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
+    return -1;
+}
+
 int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
     assert(isShared());
     // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
@@ -1120,10 +1337,12 @@ int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, Exc
     return -1;
 }
 
-int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink, bool chain_sandboxed) const {
     assert(isShared());
-    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
-    if (!qore_caller_is_restricted()) {
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange(); the
+    // provenance of the receiver of a builtin method that serializes it does not count, as decided once for the
+    // serialization (QoreSerializationCaller::chainSandboxed(), qore#7146)
+    if (!chain_sandboxed) {
         return 0;
     }
     if (qore_shared_object_trace()) {
@@ -1134,6 +1353,126 @@ int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
         "serialize an object of class '%s': the object is shared by every Program of the process",
         theclass->getName());
     return -1;
+}
+
+namespace {
+//! raises an exception for a C++ exception caught at the boundary of the shared object C++ API (qore#7669); no C++
+//! exception leaves it
+void qore_shared_object_api_raise(ExceptionSink* xsink, const char* err, const char* desc) noexcept {
+    if (!xsink) {
+        return;
+    }
+    try {
+        xsink->raiseException(err, "%s", desc);
+    } catch (...) {
+        // without memory for the exception, nothing more can be reported
+    }
+}
+}
+
+bool qore_caller_creates_shared_objects() {
+    // only restricted code creates objects that are not shared (qore#7737): the code of a trusted (governed) sandbox
+    // creates shared objects as other trusted code does; fails closed: an object of a caller whose sandbox cannot be
+    // resolved is treated as shared
+    try {
+        return qore_caller_restricted_state() != 1;
+    } catch (...) {
+        return true;
+    }
+}
+
+bool qore_caller_can_share_objects() {
+    try {
+        return qore_caller_may_share_objects();
+    } catch (...) {
+        // fails closed
+        return false;
+    }
+}
+
+int qore_share_object(QoreObject* obj, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "no object was given to mark as shared");
+        return -1;
+    }
+    try {
+        return qore_object_private::get(*obj)->shareChecked(xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while marking an object as shared");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "an object could not be marked as shared");
+    }
+    return -1;
+}
+
+bool qore_object_is_shared(const QoreObject* obj) {
+    return obj && qore_object_private::get(*obj)->isShared();
+}
+
+int qore_check_shared_object_change(const QoreObject* obj, const char* what, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        return 0;
+    }
+    try {
+        return qore_object_private::get(*obj)->checkSharedMethodChange(what ? what : "change the object", xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while checking a change of a shared "
+            "object");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the change of a shared object could not be "
+            "checked");
+    }
+    // fails closed
+    return -1;
+}
+
+int qore_check_shared_object_callback(const QoreObject* obj, const ResolvedCallReferenceNode* callback,
+        const char* what, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj) {
+        return 0;
+    }
+    try {
+        return qore_object_private::get(*obj)->checkSharedCallback(callback, what ? what : "run code", xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory while checking a callback of a shared "
+            "object");
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the callback of a shared object could not be "
+            "checked");
+    }
+    // fails closed
+    return -1;
+}
+
+QoreValue qore_update_shared_object(QoreObject* obj, q_shared_object_update_t update, void* arg,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    if (!obj || !update) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", obj
+            ? "no update was given for the update scope of a shared object"
+            : "no object was given for an update scope");
+        return QoreValue();
+    }
+    // the scope ends on every path out of runSharedUpdateNative(), also when the update throws a C++ exception
+    try {
+        return qore_object_private::get(*obj)->runSharedUpdateNative(update, arg, xsink);
+    } catch (const std::bad_alloc&) {
+        qore_shared_object_api_raise(xsink, "OUT-OF-MEMORY", "out of memory in the update scope of a shared object");
+    } catch (const std::exception& e) {
+        try {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "the C++ update of a shared object of class '%s' threw a "
+                "C++ exception: %s", obj->getClassName(), e.what());
+        } catch (...) {
+            // without memory for the exception, nothing more can be reported
+        }
+    } catch (...) {
+        qore_shared_object_api_raise(xsink, "SHARED-OBJECT-ERROR", "the C++ update of a shared object threw a C++ "
+            "exception");
+    }
+    return QoreValue();
 }
 
 void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
@@ -1340,7 +1679,7 @@ bool qore_object_private::mergeMayBindReference(const QoreValue& src) const {
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-        LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound) {
+        LexicalSemanticPolicy policy, SandboxWrite sandbox_write, const QoreReferenceBindPairList* bound) {
     //printd(5, "qore_object_private::merge() obj: %p\n", obj);
 
     QoreHashNode* id = nullptr;
@@ -1359,7 +1698,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSin
 
             // check member status
             const qore_class_private* member_class_ctx = nullptr;
-            if (checkMemberAccessGetTypeInfo(xsink, hi.getKey(), class_ctx, member_class_ctx, ti)) {
+            if (checkMemberAccessGetTypeInfo(xsink, hi.getKey(), class_ctx, member_class_ctx, ti, sandbox_write)) {
                 return;
             }
 
@@ -1436,21 +1775,24 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSin
 
 void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data) {
-    return mergeInternImpl<false>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, {});
+    return mergeInternImpl<false>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, {},
+        sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED);
 }
 
 void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
         LexicalSemanticPolicy policy) {
-    return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy);
+    return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy,
+        sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED);
 }
 
 //! returns the class context of the calling code if it can see the non-public members of objects of the class, as
-//! getRuntimeMemberHash() determines it, or nullptr
-static const qore_class_private* qore_object_runtime_member_class_context(const QoreClass& cls,
+//! getRuntimeMemberHash() determines it, or nullptr: also if the sandboxed read rule refuses the code the non-public
+//! members of the object (qore#7033); called without the object's lock
+static const qore_class_private* qore_object_runtime_member_class_context(const qore_object_private& obj,
         const qore_class_private** storage_ctx = nullptr) {
-    const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(cls, class_ctx)) {
+    const qore_class_private* class_ctx = obj.getWholeObjectReadContext(runtime_get_class());
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj.theclass, class_ctx)) {
         // a class context with no private access to the object's class still has the storage of some members
         // (qore#7180)
         if (storage_ctx) {
@@ -1462,10 +1804,11 @@ static const qore_class_private* qore_object_runtime_member_class_context(const 
 }
 
 //! returns true if the member is visible to the class context in getRuntimeMemberHash(): every member for the object's
-//! class, otherwise those that the class context can use on the object
+//! class, unless sandboxed code declared it with a parent class that trusted code declared, whose private members it
+//! cannot use (qore#6843); otherwise those that the class context can use on the object
 static bool qore_object_runtime_member_visible(const qore_class_private* theclass_priv,
         const qore_class_private* class_ctx, const char* key) {
-    if (class_ctx == theclass_priv) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members) {
         return true;
     }
     const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(key, class_ctx);
@@ -1493,7 +1836,7 @@ QoreListNode* qore_object_private::getRuntimeMemberList(ExceptionSink* xsink) co
 QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink) const {
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
     const qore_class_private* storage_ctx = nullptr;
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*this, &storage_ctx);
 
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
@@ -1527,7 +1870,7 @@ QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink
     // the keys of getRuntimeMemberHash(), in its order, without copying the values: the visible members, then the
     // class context's internal data, whose keys replace visible members of the same name in place
     const QoreHashNode* odata = getInternalData(class_ctx);
-    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members && (!odata || odata->empty())) {
         return data->getKeys();
     }
     ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
@@ -1568,7 +1911,7 @@ int64 qore_object_private::getRuntimeMemberCount() const {
 int64 qore_object_private::getRuntimeMemberCountSlow() const {
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
     const qore_class_private* storage_ctx = nullptr;
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*this, &storage_ctx);
 
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
@@ -1599,7 +1942,7 @@ int64 qore_object_private::getRuntimeMemberCountSlow() const {
 
     // the size of getRuntimeMemberHash() without copying the values
     const QoreHashNode* odata = getInternalData(class_ctx);
-    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members && (!odata || odata->empty())) {
         return data->size();
     }
     int64 rc = 0;
@@ -1656,7 +1999,7 @@ bool qore_object_private::hasRuntimeMembers() const {
         }
     }
     const qore_class_private* storage_ctx = nullptr;
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*this, &storage_ctx);
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
         return false;
@@ -1708,6 +2051,9 @@ void qore_object_private::getContextStorageMembers(const qore_class_private* sto
 }
 
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink, const qore_class_private* class_ctx) const {
+    // the public members only if the sandboxed read rule refuses the code the non-public members of the object
+    // (qore#7033)
+    class_ctx = getWholeObjectReadContext(class_ctx);
     // a class context with no private access to the object's class still has the storage of some members (issue #7180)
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
@@ -1863,7 +2209,7 @@ QoreValue qore_object_private::takeMemberValue(QoreHashNode* odata, const char* 
 }
 
 QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
-        bool for_delete, bool* exists) {
+        bool for_delete, bool* exists, bool keep_system_object) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         // a member of a shared object held in external storage cannot be removed by sandboxed code (qore#6843)
@@ -1886,8 +2232,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
     }
     const qore_class_private* member_class_ctx = nullptr;
+    // check_access is false for a member of self (see checkMemberAccessGetTypeInfo())
     bool declared;
-    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti, &declared)) {
+    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti,
+            check_access ? SW_CHECK : SW_SELF, &declared)) {
         return QoreValue();
     }
     // a member of a shared object cannot be removed by sandboxed code (qore#6843)
@@ -1917,6 +2265,16 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         }
 
         QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
+
+        // a system constant object is never deleted: the member is left as it is (qore#6842)
+        if (keep_system_object) {
+            const QoreValue cv = odata->getKeyValue(key);
+            if (cv.getType() == NT_OBJECT && qore_object_private::get(*cv.get<const QoreObject>())->system_object) {
+                xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
+                    cv.get<const QoreObject>()->getClassName());
+                return QoreValue();
+            }
+        }
 
         // a missing member is not created: an empty key would let a later write skip the checks of a new member
         // (qore#6749), and it would show in the keys of the object; the key of a member that is not declared is
@@ -2100,6 +2458,9 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
         class_ctx = nullptr;
 
+    // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+    SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
+
     // issue #2791: make sure the return hash has type hash<auto> so that types can be stripped if necessary
     QoreHashNode* rvh = new QoreHashNode(autoTypeInfo);
     // in case the lvalue cannot hold a hash, then dereference after the lock is released
@@ -2127,7 +2488,8 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         const QoreTypeInfo* mti = nullptr;
         const qore_class_private* member_class_ctx = nullptr;
         bool declared;
-        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti, &declared)) {
+        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti, sandbox_write,
+                &declared)) {
             return;
         }
 
@@ -2143,12 +2505,17 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
             odata = data;
         }
 
+        // the member of the result is created before the value leaves the object: memory that cannot be allocated
+        // for it leaves the value in the object (qore#7763)
+        hash_assignment_priv ha(*rvh, key);
+
         // issue #4122: do not return values that are not set in the object; the key of a member that is not declared
         // is removed (qore#7179)
         bool exists;
         QoreValue n = takeMemberValue(odata, key, declared, exists);
 
         if (!exists) {
+            ha.removeMemberCreatedForAssignment();
             continue;
         }
         if (!scan_value_removed && needs_scan(n)) {
@@ -2156,7 +2523,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         }
 
         // note that no exception can occur here
-        rvh->setKeyValue(key, n, lvh.vl.xsink);
+        ha.assignNative(n, lvh.vl.xsink);
         assert(!*lvh.vl.xsink);
     }
 
@@ -2171,8 +2538,15 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 template <bool Lexical, bool Lock>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) const {
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+    // get the current class context for possible internal data; the public members only if the sandboxed read rule
+    // refuses the code the non-public members of the object (qore#7033): decided before the lock is taken, or, if this
+    // thread holds the lock already, failing closed (see getWholeObjectReadContextHeld())
+    const qore_class_private* class_ctx;
+    if constexpr (Lock) {
+        class_ctx = getWholeObjectReadContext(runtime_get_class());
+    } else {
+        class_ctx = getWholeObjectReadContextHeld(runtime_get_class());
+    }
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         // the class context has no private access to the object's class: it still has the storage of some members
@@ -2385,7 +2759,9 @@ void qore_object_mark_process_constant(QoreValue v) {
     }
 }
 
-int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
+template <bool SelfWrite>
+QORE_INTERN_ALWAYS_INLINE int qore_object_private::getLValueImpl(const char* key, LValueHelper& lvh,
+        const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
     lvh.disableMemberWriteBack();
     // the length of the key, for the lookups below (qore#7194)
     const size_t len = strlen(key);
@@ -2399,7 +2775,8 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     }
     const QoreTypeInfo* mti = nullptr;
     const qore_class_private* member_class_ctx = nullptr;
-    if (checkMemberAccessGetTypeInfo(xsink, key, len, class_ctx, member_class_ctx, mti)) {
+    if (checkMemberAccessGetTypeInfoT<SelfWrite ? SW_SELF : SW_CHECK>(xsink, key, len, class_ctx, member_class_ctx,
+            mti, nullptr)) {
         return -1;
     }
     // a member of a shared object is resolved to be written, unless the value of a reference is only read (qore#6843)
@@ -2445,6 +2822,207 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     lvh.setObjectContext(this);
 
     return 0;
+}
+
+int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+        bool for_remove, ExceptionSink* xsink) {
+    return getLValueImpl<false>(key, lvh, class_ctx, for_remove, xsink);
+}
+
+int qore_object_private::getSelfLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+        bool for_remove, ExceptionSink* xsink) {
+    return getLValueImpl<true>(key, lvh, class_ctx, for_remove, xsink);
+}
+
+int qore_object_private::checkSandboxedMemberWrite(const char* mem, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    assert(class_ctx);
+    if (!sandboxedWriterDeniedIntern(*class_ctx)) {
+        return 0;
+    }
+    // a shared object: the shared-object rule (qore#6843) answers first, as for a deletion, then the owner rule
+    // (qore#6842); the write is refused either way.  The paths that decide the owner rule before they take the
+    // object's lock (SW_DENIED: merges and the removal of a slice) check the shared-object rule before it
+    if (checkSharedChange(mem, xsink)) {
+        return -1;
+    }
+    raiseSandboxedMemberWriteError(mem, class_ctx, xsink);
+    return -1;
+}
+
+bool qore_object_private::sandboxedWriterDeniedIntern(const qore_class_private& class_ctx) const {
+    // the code of a class that trusted code declared
+    if (!class_ctx.isSandboxedCode()) {
+        return false;
+    }
+    // an object of the writing code's class or of a subclass of it: that code is part of the object's class already.
+    // The class is found by its ID, not by qore_class_private::equal(), which also matches a class of another Program
+    // with the same name and signature, such as one that sandboxed code declares to look like a trusted class.  A class
+    // ID is given to a class when it is declared and kept only by the copies of that class (in the Programs that
+    // inherit or import it), which have the source Program of the class: a class with the ID of the writing code's
+    // class is that class, declared by the same sandboxed code (a copy of a trusted class is not sandboxed code, and
+    // its writes returned above)
+    ClassAccess access = Public;
+    if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
+        return false;
+    }
+    const QoreSandboxContext* owner = getSandboxOwner();
+    return !qore_sandbox_current_code_created(owner, owner);
+}
+
+bool qore_object_private::heldReaderDeniedIntern(const qore_class_private& class_ctx) const {
+    // the code of a class that trusted code declared
+    if (!class_ctx.isSandboxedCode()) {
+        return false;
+    }
+    // an object of the reading code's class or of a subclass of it, as for sandboxedWriterDeniedIntern()
+    ClassAccess access = Public;
+    if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
+        return false;
+    }
+    // the owner is not decided with the object's lock held: fails closed
+    return true;
+}
+
+int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
+        const qore_class_private& reader_ctx, ExceptionSink* xsink) const {
+    const QoreMemberInfo* mi = qore_class_private::get(*theclass)->runtimeGetMemberInfo(mem, lookup_ctx);
+    // an undeclared or public member
+    if (!mi || mi->access <= Public) {
+        return 0;
+    }
+    if (!sandboxedWriterDeniedIntern(reader_ctx)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
+        "cannot read non-public member '%s' of an object of class '%s' that its sandbox did not create",
+        reader_ctx.name.c_str(), mem, theclass->getName());
+    return -1;
+}
+
+void qore_object_private::setCopyProvenance(const qore_object_private& source) {
+    QoreSandboxContext* src = source.sandbox_provenance;
+    QoreSandboxContext* src_owner = source.getSandboxOwner();
+    if (src) {
+        src->ref();
+    }
+    // the context of a sandbox that the source was transferred to is referenced on its own
+    if (src_owner && src_owner != src) {
+        src_owner->ref();
+    }
+    QoreSandboxContext* old_owner = sandbox_owner.exchange(src_owner, std::memory_order_acq_rel);
+    if (old_owner && old_owner != sandbox_provenance) {
+        old_owner->deref();
+    }
+    if (sandbox_provenance) {
+        sandbox_provenance->deref();
+    }
+    sandbox_provenance = src;
+}
+
+int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, const char* mname,
+        ExceptionSink* xsink) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    // no class context (no access to non-public methods besides a call of self), or a call of self
+    if (!class_ctx || &obj == runtime_get_stack_object()) {
+        return 0;
+    }
+    const qore_object_private* priv = obj.priv;
+    // the call can have entered the Program of the method already (CodeEvaluationHelper); the code that makes it is
+    // the code of class_ctx, whose sandboxes are decided in the Program of that class
+    bool denied;
+    if (class_ctx->spgm.load(std::memory_order_acquire) == getProgram()) {
+        denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+    } else {
+        // a reference to the Program of the calling class, which this cold path takes as the other readers do
+        struct ProgramRefHolder {
+            ~ProgramRefHolder() {
+                if (p) {
+                    p->deref();
+                }
+            }
+            QoreProgram* p;
+        } cpgm{class_ctx->getReferencedSourceProgram()};
+        if (!cpgm.p) {
+            // the Program has released the class: the call is refused if its code was sandboxed (fails closed)
+            denied = class_ctx->isSandboxedCode();
+        } else {
+            try {
+                QoreProgramContextHelper pch(cpgm.p);
+                denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+            } catch (std::bad_alloc&) {
+                // the sandboxes cannot be resolved: fails closed
+                denied = true;
+            }
+        }
+    }
+    if (!denied) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
+        "cannot call non-public method '%s()' of an object of class '%s' that its sandbox did not create",
+        class_ctx->name.c_str(), mname, priv->theclass->getName());
+    return -1;
+}
+
+bool qore_object_private::callerReadsNonPublicMembersIntern() const {
+    // the code of a class that trusted code declared, or of a trusted Program that is not a library module's (such as
+    // the host's), reads the objects of trusted code as it did before the rule, also for a sandboxed caller; an object
+    // that a sandbox owns only for that sandbox, so that trusted code cannot show a sandboxed caller the state of
+    // another sandbox's objects.  The owner decides, not the creation provenance: an object that trusted code created
+    // while it served sandboxed code is governed by that code's sandbox but owned by no sandbox, so it is an object of
+    // trusted code, which its own class reads as a whole (qore#7921).  A builtin class (such as Serializable) and
+    // library code read for their caller, which decides
+    if (!getSandboxOwner()) {
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !class_ctx->sys) {
+            if (!class_ctx->isSandboxedCode()) {
+                return true;
+            }
+        } else {
+            // the Program of the calling code (the global ::getProgram()), never the object's: tenant code without a
+            // class context is refused by it; qualified so that a member function of the same name cannot shadow it
+            const QoreProgram* pgm = ::getProgram();
+            if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+                return true;
+            }
+        }
+    }
+    return qore_caller_created_object(*obj);
+}
+
+QoreHashNode* qore_object_private::copyDataForCaller(ExceptionSink* xsink, bool throw_exception) const {
+    if (callerReadsNonPublicMembers()) {
+        return copyData(xsink, throw_exception);
+    }
+    QoreSafeVarRWReadLocker sl(rml);
+
+    if (status == OS_DELETED) {
+        if (throw_exception) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+        }
+        return nullptr;
+    }
+
+    // the public members, as code outside the class sees them
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ConstHashIterator hi(data);
+    while (hi.next()) {
+        if (theclass->isPrivateMember(hi.getKey())) {
+            continue;
+        }
+        // not possible for an exception to happen here
+        qore_hash_private::get(*h)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+    }
+    return h;
+}
+
+void qore_object_private::raiseSandboxedMemberWriteError(const char* mem, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    assert(class_ctx);
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
+        "cannot change non-public member '%s' of an object of class '%s' that its sandbox did not create",
+        class_ctx->name.c_str(), mem, theclass->getName());
 }
 
 int qore_object_private::getLValueResolved(const char* key,
@@ -2547,15 +3125,27 @@ QoreValue qore_object_private::getReferencedMemberForSelf(const char* mem, Excep
     if (cls->memberGate && (cls->member_write_gate || cls->memberGate->isBuiltin()) && !cls->members.find(mem)) {
         return cls->evalMemberGate(obj, mem, xsink);
     }
-    return getReferencedMemberNoMethod(mem, xsink);
+    // a member of self: the sandboxed read rule allows it (qore#7033)
+    return getReferencedMemberNoMethodIntern<false>(mem, xsink);
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
+    return getReferencedMemberNoMethodIntern<true>(mem, xsink);
+}
+
+template <bool CheckRead>
+QoreValue qore_object_private::getReferencedMemberNoMethodIntern(const char* mem, ExceptionSink* xsink) const {
     const qore_class_private* cls = qore_class_private::get(*theclass);
+    const qore_class_private* class_ctx = runtime_get_class();
+    // the sandboxed read rule (qore#7033), also for a member held in external storage
+    if constexpr (CheckRead) {
+        if (checkSandboxedMemberRead(mem, class_ctx, class_ctx, xsink)) {
+            return QoreValue();
+        }
+    }
     if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
         return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
     }
-    const qore_class_private* class_ctx = runtime_get_class();
     const qore_class_private* member_class_ctx = cls->runtimeGetMemberContext(mem, class_ctx);
 
     // the accessor members were checked above (#6272)
@@ -3647,12 +4237,17 @@ bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreV
     if (cls->member_write_gate || cls->memberGate || cls->has_member_accessors || cls->memberNotification) {
         return false;
     }
-    const qore_class_private* ctx = runtime_get_class();
+    const qore_class_private* reader_ctx = runtime_get_class();
+    const qore_class_private* ctx = reader_ctx;
     if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, ctx)) {
         ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, name.c_str(), ctx);
     }
     const qore_class_private* storage_ctx = nullptr;
     if (checkMemberAccess(name.c_str(), ctx, storage_ctx)) {
+        return false;
+    }
+    // the sandboxed read rule (qore#7033): a reader that it refuses takes the ordinary path, which applies it
+    if (sandboxedReaderDenied(reader_ctx)) {
         return false;
     }
     // Checking the reference count and taking the result reference must be exclusive: two readers could both
@@ -3668,7 +4263,8 @@ bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreV
 QoreValue qore_object_private::evalMember(const char* mem, size_t len, ExceptionSink* xsink) {
     assert(strlen(mem) == len);
     // get the current class context
-    const qore_class_private* class_ctx = runtime_get_class();
+    const qore_class_private* reader_ctx = runtime_get_class();
+    const qore_class_private* class_ctx = reader_ctx;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         // a class on the private:internal path to the member uses it (issue #6800)
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, mem, class_ctx);
@@ -3687,6 +4283,10 @@ QoreValue qore_object_private::evalMember(const char* mem, size_t len, Exception
         } else {
             doPublicException(mem, xsink);
         }
+        return QoreValue();
+    }
+    // the sandboxed read rule (qore#7033)
+    if (checkSandboxedMemberRead(mem, class_ctx, reader_ctx, xsink)) {
         return QoreValue();
     }
 
@@ -3820,6 +4420,12 @@ QoreValue QoreObject::getMemberValueNoMethod(const QoreString* key, AutoVLock *v
 
 // unlocking the lock is managed with the AutoVLock object
 QoreValue QoreObject::getMemberValueNoMethod(const char* key, AutoVLock *vl, ExceptionSink* xsink) const {
+    // the sandboxed read rule for the code of the current class context (qore#7033)
+    const qore_class_private* reader_ctx = runtime_get_class();
+    if (priv->checkSandboxedMemberRead(key, reader_ctx, reader_ctx, xsink)) {
+        return QoreValue();
+    }
+
     // do lock handoff
     qore_object_lock_handoff_helper qolhm(const_cast<qore_object_private*>(priv), *vl);
 
@@ -3852,6 +4458,10 @@ QoreValue QoreObject::getMemberValueNoMethod(const char* key, const QoreClass* c
         // check for illegal access
         if (priv->checkMemberAccess(key, class_ctx, member_class_ctx, xsink)) {
             return false;
+        }
+        // the sandboxed read rule (qore#7033)
+        if (priv->checkSandboxedMemberRead(key, class_ctx, qore_class_private::get(*cls), xsink)) {
+            return QoreValue();
         }
     } else {
         class_ctx = qore_class_private::get(*priv->theclass);
@@ -3929,15 +4539,20 @@ void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) 
 }
 
 void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
-    // the member is removed as by the delete operator, with its access checks, member gate and accessors, the
-    // object's scan count and recursive set: an undeclared member's key is removed, a declared member keeps its slot
-    // with no value, and a member that is not set is not created (qore#7179, qore#7208)
-    ValueHolder v(priv->takeMember(xsink, key, true, true), xsink);
+    // the member is removed as by the delete operator, with its access checks (also the sandboxed write rule,
+    // qore#6842), member gate and accessors, the object's scan count and recursive set: an undeclared member's key is
+    // removed, a declared member keeps its slot with no value, and a member that is not set is not created (qore#7179,
+    // qore#7208); a member that holds a system constant object is left as it is (qore#6842)
+    ValueHolder v(priv->takeMember(xsink, key, true, true, nullptr, true), xsink);
     if (*xsink) {
         return;
     }
+    // an object is deleted only if the current code may delete it, otherwise it is released (qore#6842)
     if (v->getType() == NT_OBJECT) {
-        v->get<QoreObject>()->doDelete(xsink);
+        QoreObject* o = v->get<QoreObject>();
+        if (!qore_check_object_delete(*o, "delete", xsink)) {
+            o->doDelete(xsink);
+        }
     }
 }
 
@@ -3966,6 +4581,8 @@ void QoreObject::removeMember(const char* key, ExceptionSink* xsink) {
 }
 
 QoreListNode* QoreObject::getMemberList(ExceptionSink* xsink) const {
+    // the names of the public members only for code that may not read the non-public members (qore#7033)
+    bool non_public = priv->callerReadsNonPublicMembers();
     QoreSafeVarRWReadLocker sl(priv->rml);
 
     if (priv->status == OS_DELETED) {
@@ -3973,7 +4590,17 @@ QoreListNode* QoreObject::getMemberList(ExceptionSink* xsink) const {
         return nullptr;
     }
 
-    return priv->data->getKeys();
+    if (non_public) {
+        return priv->data->getKeys();
+    }
+    QoreListNode* l = new QoreListNode(stringTypeInfo);
+    ConstHashIterator hi(priv->data);
+    while (hi.next()) {
+        if (!priv->theclass->isPrivateMember(hi.getKey())) {
+            l->push(new QoreStringNode(hi.getKey()), nullptr);
+        }
+    }
+    return l;
 }
 
 QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* value_list, ExceptionSink* xsink) {
@@ -4005,12 +4632,24 @@ void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) 
 }
 
 int QoreObject::size(ExceptionSink* xsink) const {
+    // the number of the public members only for code that may not read the non-public members (qore#7033)
+    bool non_public = priv->callerReadsNonPublicMembers();
     QoreSafeVarRWReadLocker sl(priv->rml);
 
     if (priv->status == OS_DELETED)
         return 0;
 
-    return priv->data->size();
+    if (non_public) {
+        return priv->data->size();
+    }
+    int rc = 0;
+    ConstHashIterator hi(priv->data);
+    while (hi.next()) {
+        if (!priv->theclass->isPrivateMember(hi.getKey())) {
+            ++rc;
+        }
+    }
+    return rc;
 }
 
 int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink* xsink) const {
@@ -4046,8 +4685,9 @@ QoreHashNode* QoreObject::copyData(ExceptionSink* xsink) const {
 bool QoreObject::hasMember(const char* mem, ExceptionSink* xsink) const {
     AutoVLock vl(xsink);
 
-    // get the current class context
-    const qore_class_private* class_ctx = runtime_get_class();
+    // get the current class context; the public members only if the sandboxed read rule refuses the code the
+    // non-public members of the object (qore#7033)
+    const qore_class_private* class_ctx = priv->getWholeObjectReadContext(runtime_get_class());
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
         // a class on the private:internal path to the member uses it (issue #6800)
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, mem, class_ctx);
@@ -4208,7 +4848,8 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
         return 0;
     }
 
-    QoreHashNodeHolder h(priv->copyData(xsink, false), xsink);
+    // the members that the calling code may read as a whole (qore#7033)
+    QoreHashNodeHolder h(priv->copyDataForCaller(xsink, false), xsink);
     if (*xsink) {
         return -1;
     }

@@ -12,7 +12,7 @@
 
 class AOTIROpcodeValidationTest inherits QUnit::Test {
     constructor() : Test("AOT IR opcode validation", "1.0", \ARGV) {
-        addTestCase("unsupported opcodes in Expr and Invoke payloads", \nativeValidation());
+        addTestCase("unsupported opcodes in Expr and Invoke payloads and in the verifier", \nativeValidation());
         set_return_value(main());
     }
 
@@ -32,7 +32,7 @@ class AOTIROpcodeValidationTest inherits QUnit::Test {
         int rc;
         string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 10 AOT IR opcode validation checks\n", output);
+        assertEq("PASS: 14 AOT IR opcode validation checks\n", output);
     }
 
     private static string shellQuote(string value) {

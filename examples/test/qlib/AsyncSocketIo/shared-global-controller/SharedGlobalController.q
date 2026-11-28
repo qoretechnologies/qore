@@ -90,22 +90,33 @@ string sub try_one(string name, AsyncSocketIoController c) {
 
 # uses the logger that trusted code set on the wrapper: its level and its messages
 string sub use_logger(AsyncSocketIoController c) {
-    return try_use(sub () {
-        c.setLevel(\"ALL\");
+    # the level is state of the shared wrapper: the shared-object rule refuses it (qore#6843, before the owner rule
+    # of qore#6842)
+    string level = try_use(sub () { c.setLevel(\"ALL\"); });
+    # the wrapper has no logger for the tenant, so its messages reach no logger
+    string logging = try_use(sub () {
         c.info(\"a message of the tenant\");
         c.log(\"ERROR\", \"another message of the tenant\");
-    }) + sprintf(\", info enabled: %y\", c.isInfoEnabled());
+    });
+    return sprintf(\"setLevel(): %s, info() and log(): %s, info enabled: %y\", level, logging, c.isInfoEnabled());
 }
 
-# uses the logger through a copy of the wrapper, which is not shared
-string sub use_copy(AsyncSocketIoController c) {
+# uses the logger through a copy of the wrapper, which is not shared and has no logger; the copy keeps the provenance
+# of the wrapper (qore#7033), so it is not the tenant's either, and the tenant cannot change its level or logger
+string sub use_copy(AsyncSocketIoController c, Logger host_logger) {
     AsyncSocketIoController copy;
-    string rv = try_use(sub () {
-        copy = c.copy();
-        copy.setLevel(\"ALL\");
-        copy.info(\"a message of the tenant through a copy\");
-    });
-    return sprintf(\"%s, copy shared: %y\", rv, copy ? SandboxManager::isSharedObject(copy) : NOTHING);
+    string rv = try_use(sub () { copy = c.copy(); });
+    if (!copy) {
+        return rv;
+    }
+    # setLogger() of the class refuses first, as the logger of any wrapper is also the logger of the process-wide
+    # controller; the inherited LoggerWrapper::setLogger() refuses as the copy is not the tenant's
+    return sprintf(\"%s, copy shared: %y, copy owned: %y, the copy has the host's logger: %y, setLevel() on the \"
+        \"copy: %s, setLogger() on the copy: %s, LoggerWrapper::setLogger() on the copy: %s, info() through the \"
+        \"copy: %s\", rv, SandboxManager::isSharedObject(copy), SandboxManager::isObjectOwnedByCaller(copy),
+        copy.isLogger(host_logger), try_use(sub () { copy.setLevel(\"ALL\"); }),
+        try_use(sub () { copy.setLogger(tenant_logger); }), try_use(sub () { base_set_logger(copy, tenant_logger); }),
+        try_use(sub () { copy.info(\"a message of the tenant through a copy\"); }));
 }
 
 # asks whether the wrapper uses a logger
@@ -174,7 +185,7 @@ ctrl.setLogger(host_logger);
 printf("the tenant uses the host's logger: %s; host level: %s, messages: %d\n", tenant.callFunction("use_logger", ctrl),
     host_logger.getLevel().getStr(), appender.count);
 printf("the tenant uses the host's logger through a copy: %s; host level: %s, messages: %d\n",
-    tenant.callFunction("use_copy", ctrl), host_logger.getLevel().getStr(), appender.count);
+    tenant.callFunction("use_copy", ctrl, host_logger), host_logger.getLevel().getStr(), appender.count);
 printf("the tenant calls isLogger() with the host's logger: %y\n",
     tenant.callFunction("is_logger", ctrl, host_logger));
 # trusted code that acts for the tenant: a callback of the host that the tenant calls

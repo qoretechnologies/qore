@@ -482,23 +482,61 @@ static int check_background_creator(const ResolvedCallReferenceNodeIntern* r, Ex
     return po && (*po & QoreParseOptions(QDOM_THREAD_CONTROL)) ? qore_check_background_direct_call(xsink) : 0;
 }
 
-void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
-    creator_po = runtime_get_effective_program_parse_options();
+//! returns the effective parse options that a reference created now by the code of \a pgm, the thread's current
+//! Program, records as its creator's (see ResolvedCallReferenceNodeIntern::captureCreatorParseOptions())
+static QoreParseOptions qore_current_creator_parse_options(ThreadData* td, const QoreProgram* pgm) {
+    QoreParseOptions po = runtime_get_effective_parse_options_for(td, pgm);
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
     // permissions of that code, which uses the domains that its module declares (see
     // qore_relieve_module_declared_domains()); only module code runs with the module's override, so a reference that
     // the caller's code creates to the module's code is not relieved (the caller's code clears the module's
     // override); the Program running the code is tested, not the Program of the reference, which is the object's for
     // a method reference
-    const QoreProgram* pgm = ::getProgram();
-    if (pgm && runtime_get_module_call_program() == pgm) {
-        creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
+    if (pgm && runtime_get_module_call_program(td) == pgm) {
+        po = qore_relieve_module_declared_domains(po, pgm);
     }
+    return po;
+}
+
+void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
+    ThreadData* td = qore_get_thread_data();
+    const QoreProgram* pgm = runtime_get_program(td);
+    creator_po = qore_current_creator_parse_options(td, pgm);
     has_creator_po = true;
     creator_non_module = pgm && !qore_program_is_module_inline(pgm);
     // the run-time call reference classes call this from their constructors, when the reference is complete: a
     // reference to library module code records the restrictions of the code that creates it (qore#6520)
     qore_capture_call_reference_origin(this, getOriginCodeProgram());
+}
+
+// the predicate of the call paths that apply nothing of the reference's creator (qore#5578): a rule that makes the
+// generic call path apply more of the creator's context, or of the calling code's, to the callee (such as the fixes of
+// qore#7678, functions reached through a lent Program, and qore#7302, the immediate calling code) must be added here
+// too, or the fast call through the reference would skip it
+bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(const QoreProgram* pgm) const {
+    return creatorContextIsCurrent(qore_get_thread_data(), pgm);
+}
+
+bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(ThreadData* td, const QoreProgram* pgm) const {
+    assert(td == qore_get_thread_data() && pgm == runtime_get_program(td));
+    // the sandbox provenance and the origin restrictions recorded for the reference, which a call applies
+    // (QoreSandboxProvenanceHelper); a reference has them from its construction on, or never; tested first, so that a
+    // call path that relies on this predicate to skip QoreSandboxProvenanceHelper (the call-reference entries of AOT
+    // code) never skips recorded provenance, also of a reference that records no creator context
+    if (QoreSandboxContext* context = qore_get_call_reference_provenance(this)) {
+        context->deref();
+        return false;
+    }
+    // a reference that its own code calls in place applies no creator context
+    if (!has_creator_po) {
+        return true;
+    }
+    return creator_non_module == (pgm && !qore_program_is_module_inline(pgm))
+        && creator_po == qore_current_creator_parse_options(td, pgm);
+}
+
+int ResolvedCallReferenceNodeIntern::checkBackgroundCreator(ExceptionSink* xsink) const {
+    return check_background_creator(this, xsink);
 }
 
 //! returns the Program whose code a user function runs, or nullptr for a builtin function
@@ -814,7 +852,8 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                 m = qore_class_private::get(*const_cast<QoreClass*>(n_qc))->parseFindAnyMethod(method.c_str(),
                     class_ctx);
                 // as for a call of the method (qore#6843)
-                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false) && !err) {
+                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false,
+                        qore_class_private::get(*n_qc)) && !err) {
                     err = -1;
                 }
                 if (m) {
@@ -961,7 +1000,7 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, meth);
@@ -1005,7 +1044,7 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, method);
@@ -1188,7 +1227,7 @@ QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
 }
 
 bool RunTimeResolvedMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimeResolvedMethodReferenceNode* vc = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(v);
+    const RunTimeResolvedMethodReferenceNode* vc = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(v);
     return vc && vc->obj == obj && vc->method == method;
 }
 
@@ -1208,7 +1247,8 @@ __attribute__((noinline)) const AbstractQoreNode* qore_get_call_reference_scan_n
     if (const ResolvedCallReferenceNode* callback = qore_get_sandbox_bound_callback(n)) {
         return callback;
     }
-    if (const RunTimePseudoMethodReferenceNode* pr = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(n)) {
+    // the class is final: tested by its exact type, without the string comparisons of a dynamic_cast
+    if (const RunTimePseudoMethodReferenceNode* pr = qore_exact_node_cast<RunTimePseudoMethodReferenceNode>(n)) {
         const QoreValue& v = pr->getValue();
         return v.isOpaque() ? nullptr : v.getInternalNode();
     }
@@ -1306,11 +1346,9 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     ReferenceHolder<QoreHashNode> member_hash(xsink);
     if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
-        // the code member binds the names, as a named call through it does
-        if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
-            return iref->dispatchNamed(args, arg_names, policy, xsink);
-        }
-        return ResolvedCallReferenceNodeIntern::dispatchNamed(args, arg_names, policy, xsink);
+        // the code member binds the names as a named call through it does, also a closure, which is not an internal
+        // call reference (qore#7748)
+        return qore_call_ref_invoke_named(ref, args, arg_names, policy, xsink);
     }
     // the pseudo-method with its variants bound to the arguments by name, as a direct named call does
     // (MethodCallNode::execPseudoNamed())
@@ -1321,7 +1359,7 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimePseudoMethodReferenceNode* vc = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(v);
+    const RunTimePseudoMethodReferenceNode* vc = qore_exact_node_cast<RunTimePseudoMethodReferenceNode>(v);
     return vc && vc->method == method && vc->val.isEqualHard(val, xsink);
 }
 
@@ -1599,10 +1637,12 @@ void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocati
 }
 
 int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {
-    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+    // made for every call through a call reference: the classes are final, so they are tested by their exact type,
+    // without the string comparisons of a dynamic_cast
+    if (const RunTimeResolvedMethodReferenceNode* r = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(rcr)) {
         return r->checkObject(xsink);
     }
-    if (const RunTimeObjectMethodReferenceNode* r = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+    if (const RunTimeObjectMethodReferenceNode* r = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(rcr)) {
         return r->checkObject(xsink);
     }
     return 0;
@@ -1615,13 +1655,13 @@ static const QoreMethod* qore_call_reference_code_method(const ResolvedCallRefer
     const QoreMethod* m = nullptr;
     // the object a method is called on, if any: the call is dispatched on its class
     const QoreObject* obj = nullptr;
-    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+    if (const RunTimeResolvedMethodReferenceNode* r = qore_exact_node_cast<RunTimeResolvedMethodReferenceNode>(rcr)) {
         m = r->getMethod();
         obj = r->getObject();
     } else if (const RunTimeObjectMethodReferenceNode* r
-            = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+            = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(rcr)) {
         m = r->findMethod();
-    } else if (const MethodCallReferenceNode* r = dynamic_cast<const MethodCallReferenceNode*>(rcr)) {
+    } else if (const MethodCallReferenceNode* r = qore_exact_node_cast<MethodCallReferenceNode>(rcr)) {
         m = r->getMethod();
         obj = r->getObject();
     } else if (const LocalStaticMethodCallReferenceNode* r
@@ -1718,7 +1758,7 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
 }
 
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
+    const RunTimeObjectMethodReferenceNode* vc = qore_exact_node_cast<RunTimeObjectMethodReferenceNode>(v);
     return vc && obj == vc->obj && method == vc->method;
 }
 
@@ -1768,7 +1808,7 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
             // as for a call of the method (qore#6843)
-            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), true)) {
+            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), false)) {
                 return -1;
             }
             if (m) {
@@ -2085,7 +2125,7 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2103,7 +2143,7 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
 }
 
-QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2115,7 +2155,7 @@ QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Ex
         getCallReceiverTypeInfo(*method, receiver_type_info, args));
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2133,7 +2173,7 @@ QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
         arg_names, policy, pgm);
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2159,7 +2199,7 @@ DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(con
 }
 
 bool DeferredStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const DeferredStaticMethodCallReferenceNode* d = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(v);
+    const DeferredStaticMethodCallReferenceNode* d = qore_exact_node_cast<DeferredStaticMethodCallReferenceNode>(v);
     return d && class_path == d->class_path && method_name == d->method_name;
 }
 
@@ -2565,11 +2605,11 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         return -1;
     }
 
-    // as for a call of the method (qore#6843): a reference to a normal method is a reference to the method of the
-    // object of the code
+    // as for a call of the method (qore#6843); a reference is not a call of the version of a base class by its
+    // override: the method is called when the reference is called, which may be anywhere
     if (qore_class_private::parseCheckSandboxMethodAccess(loc, qm, parse_context.oflag
             ? qore_class_private::get(*QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
-            : parse_get_class_priv(), !qm->isStatic())) {
+            : parse_get_class_priv(), false)) {
         return -1;
     }
 
@@ -2687,6 +2727,33 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     return rv;
 }
 
+const LocalFunctionCallReferenceNode::FastCallInfo* LocalFunctionCallReferenceNode::takeFastCallInfo() const {
+    uint8_t state = FCS_UNKNOWN;
+    // one thread takes the facts; the acquire of a failed exchange pairs with the release store of the facts
+    if (!fast_call_state.compare_exchange_strong(state, FCS_TAKING, std::memory_order_acquire,
+            std::memory_order_acquire)) {
+        return state == FCS_ELIGIBLE ? &fast_call_info : nullptr;
+    }
+    bool eligible = false;
+    // a reference with explicit type arguments instantiates the function when it is called; a function with more
+    // than one variant resolves its variant with the arguments, also later, when a parse commit added a variant
+    if (!explicit_inst && uf->hasSingleCallVariant()) {
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        // the variant's code is entered without the generic call path only if it needs nothing of it: see
+        // UserVariantBase::isStaticallyFastCallEligible() (also a variant that declares a functional domain, whose
+        // check against the caller's restrictions the generic call path makes, is excluded, qore#6337)
+        if (uvb && uvb->isStaticallyFastCallEligible() && uvb->getUserSignature()) {
+            fast_call_info.variant = variant;
+            fast_call_info.uvb = uvb;
+            fast_call_info.num_params = uvb->getUserSignature()->numParams();
+            eligible = true;
+        }
+    }
+    fast_call_state.store(eligible ? FCS_ELIGIBLE : FCS_NOT_ELIGIBLE, std::memory_order_release);
+    return eligible ? &fast_call_info : nullptr;
+}
+
 void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
     if (explicit_inst) {
         QoreTypeParamInstantiation resolved;
@@ -2746,7 +2813,7 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2757,7 +2824,7 @@ QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, Exc
     return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
 }
 
-QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2768,7 +2835,7 @@ QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, Except
     return uf->evalFunctionTmpArgs(nullptr, args, pgm, rc, xsink, explicit_inst.get());
 }
 
-QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2780,7 +2847,7 @@ QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, con
     return uf->evalFunctionNamed(args, pgm, rc, xsink, explicit_inst.get(), 0, arg_names, policy);
 }
 
-QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2798,7 +2865,7 @@ DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreP
 }
 
 bool DeferredFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const DeferredFunctionCallReferenceNode* d = dynamic_cast<const DeferredFunctionCallReferenceNode*>(v);
+    const DeferredFunctionCallReferenceNode* d = qore_exact_node_cast<DeferredFunctionCallReferenceNode>(v);
     return d && function_name == d->function_name;
 }
 
@@ -2949,7 +3016,7 @@ QoreValue ResolvedCallReferenceNodeIntern::dispatchNamed(const QoreListNode* arg
 namespace {
 //! A fixed callback, bound at registration time; native subclasses still implement execValue().
 
-class SandboxBoundCallReference : public ResolvedCallReferenceNode {
+class SandboxBoundCallReference final : public ResolvedCallReferenceNode {
 public:
     //! calls the callback with named arguments as dispatchValue() calls it with positional arguments
     QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
@@ -3345,13 +3412,17 @@ AbstractQoreNode* ResolvedCallReferenceNode::realCopy() const {
 
 QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
         const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) {
-    if (const ResolvedCallReferenceNodeIntern* ri = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r)) {
+    // the classes are tested without the string comparisons of a dynamic_cast: only QoreClosureBase's constructor
+    // gives NT_RUNTIME_CLOSURE, and SandboxBoundCallReference is final
+    if (r->getType() == NT_RUNTIME_CLOSURE) {
+        assert(dynamic_cast<const QoreClosureBase*>(r));
+        return static_cast<const QoreClosureBase*>(r)->dispatchNamed(args, arg_names, xsink);
+    }
+    // an internal reference first: its test excludes a sandbox-bound reference without a dynamic_cast
+    if (const ResolvedCallReferenceNodeIntern* ri = qore_get_resolved_call_reference_intern(r)) {
         return ri->dispatchNamed(args, arg_names, policy, xsink);
     }
-    if (const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(r)) {
-        return cb->dispatchNamed(args, arg_names, xsink);
-    }
-    if (const SandboxBoundCallReference* sb = dynamic_cast<const SandboxBoundCallReference*>(r)) {
+    if (const SandboxBoundCallReference* sb = qore_exact_node_cast<SandboxBoundCallReference>(r)) {
         return sb->dispatchNamed(args, arg_names, policy, xsink);
     }
     // a call reference implemented outside of the library takes its arguments by position
@@ -3364,4 +3435,152 @@ QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm) {
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
         & ~QoreParseOptions(PO_IN_MODULE);
     return qore_non_module_program_restrictions(pgm) & restricting;
+}
+
+void qore_call_reference_set_lent_program(QoreValue v) {
+    if (v.getType() != NT_FUNCREF) {
+        return;
+    }
+    AbstractQoreNode* n = v.getInternalNode();
+    if (FunctionCallReferenceNode* f = dynamic_cast<FunctionCallReferenceNode*>(n)) {
+        f->setLentProgram();
+    } else if (StaticMethodCallReferenceNode* m = dynamic_cast<StaticMethodCallReferenceNode*>(n)) {
+        m->setLentProgram();
+    }
+}
+
+QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchValueLent(args, xsink);
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return execValueTmpArgsLent(args, xsink);
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchNamedLent(args, arg_names, policy, xsink);
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchLexicalValueLent(args, xsink, policy);
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchValueLent(args, xsink);
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return execValueTmpArgsLent(args, xsink);
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchNamedLent(args, arg_names, policy, xsink);
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchLexicalValueLent(args, xsink, policy);
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
 }

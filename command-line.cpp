@@ -142,6 +142,8 @@ static const char* aot_output = nullptr;
 
 // AOT optimization level (0-3, default 2)
 static int aot_opt_level = 2;
+//! --compile-debugging: compile with debugging, as qcc -g (qore#7676)
+static bool aot_debugging = false;
 
 // AOT target triple for cross-compilation
 static const char* aot_target = nullptr;
@@ -285,6 +287,9 @@ static const char helpstr[] =
    "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
    "      --compile-module         compile a .qm user module to a native\n"
    "                               shared library (.so) binary module\n"
+   "      --compile-debugging      compile with debugging, as qcc -g: calls report\n"
+   "                               their entry and exit to any debugger, at a cost\n"
+   "                               in performance\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -1239,6 +1244,10 @@ static void set_compile_mode(const char* arg) {
     compile_mode = true;
 }
 
+static void set_aot_debugging(const char* arg) {
+    aot_debugging = true;
+}
+
 static void set_aot_output(const char* arg) {
     aot_output = arg;
 }
@@ -1425,6 +1434,7 @@ static struct opt_struct_s {
    { '\0', "show-targets",         ARG_NONE, set_show_targets },
    { '\0', "static",               ARG_NONE, set_aot_static },
    { '\0', "compile-module",       ARG_NONE, set_compile_module },
+   { '\0', "compile-debugging",    ARG_NONE, set_aot_debugging },
    { '\0', "strip-source",         ARG_NONE, set_strip_source },
    { '\0', "include-source",       ARG_NONE, set_include_source },
    // debugging options
@@ -1989,6 +1999,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          const char* opt_override = opt_override_holder.c_str();
          if (opt_override) {
             aot_opt_level = atoi(opt_override);
+         }
+
+         // the compilation has debugging exactly when --compile-debugging is given, as with qcc -g (qore#7676)
+         if (aot_debugging) {
+            SystemEnvironment::set("QORE_AOT_DEBUGGING", "1", 1);
+         } else {
+            SystemEnvironment::unset("QORE_AOT_DEBUGGING");
          }
 
          std::string error;

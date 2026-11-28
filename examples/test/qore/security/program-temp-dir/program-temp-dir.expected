@@ -1,0 +1,23 @@
+restricted tmp_location: "<dir>"
+restricted TmpDir: "<dir>"
+restricted child: "<dir>"
+restricted set lent: "SANDBOX-ACCESS-ERROR"
+restricted set child: "SANDBOX-ACCESS-ERROR"
+restricted module Program: "<dir>"
+second restricted module Program: "<scratch>/second"
+second restricted tmp_location: "<scratch>/second"
+host module Program: <default>
+sandboxed tmp_location: "<dir>"
+sandboxed TmpDir: "<dir>"
+sandboxed child: "<dir>"
+sandboxed set lent: "SANDBOX-ACCESS-ERROR"
+outside the policy tmp_location: FILESYSTEM-ACCESS-DENIED
+unrestricted tmp_location: "<dir>"
+getTempDir: "<dir>"
+cleared: null
+set relative: PROGRAM-TEMP-DIR-ERROR
+set missing: PROGRAM-TEMP-DIR-ERROR
+set not a directory: PROGRAM-TEMP-DIR-ERROR
+set NUL character: PROGRAM-TEMP-DIR-ERROR
+removed tmp_location: TMP-ERROR
+restricted getTempDir: PARSE-EXCEPTION: external info

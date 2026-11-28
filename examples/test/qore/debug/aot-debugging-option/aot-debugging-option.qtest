@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables and modules
+# test-platform: macos - AOT code generation, module loading and linking of code compiled with and without qcc -g
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotDebuggingOptionTest
+
+#! the debug support of AOT code that costs performance is compiled only with qcc -g (qore#7676)
+/** Code compiled with -g checks for a debugger before its direct calls, has debug IR of its own for the functions whose
+    native code's IR was rewritten, and records the choice in its header; code compiled without it has none of these,
+    and a debugger attached while such code is loaded gets one warning on stderr.  qcc links only objects compiled with
+    the same choice as the link.
+*/
+class AotDebuggingOptionTest inherits QUnit::Test {
+    public {
+        #! the start of the warning (qore_aot_note_code_without_debugging())
+        const Warning = "warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Orders = ("attach-first", "load-first");
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+        string dir = normalize_dir(get_script_dir());
+        string debug_dir = normalize_dir(get_script_dir() + "/..");
+    }
+
+    constructor() : QUnit::Test("AotDebuggingOption", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("header flag", \headerFlagTest());
+        addTestCase("debugger checks of calls", \callChecksTest());
+        addTestCase("debug IR of rewritten functions", \debugIrTest());
+        addTestCase("warning for a module in every execution mode", \moduleWarningTest());
+        addTestCase("warning for an executable", \executableWarningTest());
+        addTestCase("objects link with the same choice", \linkTest());
+        addTestCase("manifest", \manifestTest());
+        set_return_value(main());
+    }
+
+    #! qcc --dump-info shows the flag of code compiled with -g only
+    headerFlagTest() {
+        TmpDir tmp("qore-aot-debugging-flag-");
+        foreach string g in (("", "-g")) {
+            string exe = compile(tmp.path, "flag" + g, "-O3 " + g, dir + "/link-entry.qr");
+            string info = run(quote(qcc_bin) + " --dump-info " + quote(exe));
+            *string kind = (info =~ x/^\s+kind:(.*)$/m)[0];
+            assertNeq(NOTHING, kind, g + ": the kind line");
+            assertEq(g == "-g", kind =~ /\bdebugging\b/, g + ": the kind line names debugging: " + kind);
+        }
+        # qore --compile with --compile-debugging, which is qcc -g
+        foreach string opt in (("", "--compile-debugging")) {
+            string exe = tmp.path + DirSep + "qore-compile" + opt;
+            run(quote(qore_bin) + " -b --compile " + opt + " --output " + quote(exe) + " "
+                + quote(dir + "/link-entry.qr"));
+            assertTrue(is_file(exe), opt + ": qore --compile produced the executable");
+            *string kind = (run(quote(qcc_bin) + " --dump-info " + quote(exe)) =~ x/^\s+kind:(.*)$/m)[0];
+            assertEq(opt.val(), kind =~ /\bdebugging\b/, "qore --compile " + opt + ": " + kind);
+        }
+    }
+
+    #! only code compiled with -g refers to the counter of the debuggers before its direct calls
+    callChecksTest() {
+        TmpDir tmp("qore-aot-debugging-checks-");
+        string src = debug_dir + "/aot-debugger-events/guard-calls.qr";
+        foreach string g in (("", "-g")) {
+            string exe = compile(tmp.path, "guard" + g, "-O3 " + g, src);
+            assertEq("240\n", run(quote(exe) + " -b"), g + ": result");
+            bool checks = binary_to_string(ReadOnlyFile::readBinaryFile(exe), "ISO-8859-1")
+                .find("qore_rt_aot_direct_call_mode") >= 0;
+            assertEq(g == "-g", checks, g + ": the calls check for a debugger");
+        }
+    }
+
+    #! a function whose native code's IR was rewritten has its separately lowered IR with and without -g
+    /** The serialized IR of a function is not only the debugger's: a source-stripped build runs it at parse time, and it
+        costs compile time only, so it is written without -g too; a debugger gets the events of the rewritten functions
+        that it calls in both, and without -g the warning for the code of the Program
+    */
+    debugIrTest() {
+        TmpDir tmp("qore-aot-debugging-ir-");
+        string src = debug_dir + "/aot-debug-ir-rewrites/debug-ir-rewrites.qr";
+        string ast = run(quote(qore_bin) + " -b --enable-debug --exec-mode=ast " + quote(src));
+        assertRegex("debug IR entry counts: \\{.*concatPair: [1-9]", ast, "the AST interpreter reports the calls");
+        string with = run(quote(compile(tmp.path, "rewrites-g", "-O3 -g", src)) + " -b");
+        assertEq(ast, with, "-g: the debugger gets what it gets from the AST interpreter");
+        string without = run(quote(compile(tmp.path, "rewrites", "-O3", src)) + " -b");
+        assertEq(1, countWarnings(without), "without -g: one warning");
+        *string entries = (without =~ x/^debug IR entry counts: (.*)$/m)[0];
+        assertNeq(NOTHING, entries, "without -g: the entry counts");
+        # the rewritten function runs its IR, which reports its entry
+        assertRegex("\\bconcatPair: [1-9]", entries, "without -g: the rewritten function has its IR: " + entries);
+    }
+
+    #! a module gives no warning, compiled with or without -g, in every execution mode, whether it is loaded first or
+    #! the debugger attaches first
+    /** The code of a module runs in the module's own Program, of which a debugger attached to a Program that uses the
+        module gets no events; the warning is only for the AOT code registered into the debugged Program (as by an
+        executable, see executableWarningTest()), so the modules that a debugger such as qdbg loads itself, compiled
+        without -g as the modules of the build are, give none either
+    */
+    moduleWarningTest() {
+        TmpDir tmp("qore-aot-debugging-module-");
+        foreach string g in (("", "-g")) {
+            string mod_dir = tmp.path + DirSep + "mod" + g;
+            mkdir(mod_dir);
+            run(quote(qcc_bin) + " -m " + g + " -o " + quote(mod_dir + DirSep + "DbgOptMod.qmod") + " "
+                + quote(dir + "/DbgOptMod.qm"));
+            assertTrue(is_file(mod_dir + DirSep + "DbgOptMod.qmod"), g + ": qcc produced the module");
+            foreach string mode in (Modes) {
+                foreach string order in (Orders) {
+                    string label = sprintf("%s %s %s", g ?: "without -g", mode, order);
+                    string output = run("QORE_MODULE_DIR=" + quote(mod_dir) + " " + quote(qore_bin)
+                        + " -b --enable-debug --exec-mode=" + mode + " " + quote(dir + "/attach-load.qr") + " "
+                        + order);
+                    assertRegex("(?m)^" + order + ": 5$", output, label + ": result");
+                    assertEq(0, countWarnings(output), label + ": no warning for the code of a module");
+                }
+            }
+            # no debugger: no warning
+            string output = run("QORE_MODULE_DIR=" + quote(mod_dir) + " " + quote(qore_bin)
+                + " -b --enable-debug -e 'load_module(\"DbgOptMod\"); printf(\"%d\\n\", "
+                + "call_function(\"DbgOptMod::dbgOptAdd\", 1, 2));'");
+            assertEq("3\n", output, g + ": no debugger, no warning");
+        }
+    }
+
+    #! an executable compiled without -g whose code attaches a debugger gives one warning; with -g, none
+    executableWarningTest() {
+        TmpDir tmp("qore-aot-debugging-exe-");
+        string src = debug_dir + "/aot-debugger-events/function-debugger.qr";
+        string with = run(quote(compile(tmp.path, "fd-g", "-O3 -g", src)) + " -b");
+        assertEq("function-debugger: ok\n", with, "-g: the debugger gets every event, with no warning");
+        # without -g the calls made in a loop that was running when the debugger attached give no events, and the
+        # worker reports it
+        string without = run(quote(compile(tmp.path, "fd", "-O3", src)) + " -b");
+        assertEq(1, countWarnings(without), "without -g: one warning for all the attachments of the worker");
+    }
+
+    #! an object compiled with one choice does not link with the other
+    linkTest() {
+        TmpDir tmp("qore-aot-debugging-link-");
+        string src = dir + "/link-entry.qr";
+        hash<string, string> objs;
+        foreach string g in (("", "-g")) {
+            objs{g} = tmp.path + DirSep + "entry" + g + ".qo";
+            run(quote(qcc_bin) + " -c " + g + " -o " + quote(objs{g}) + " " + quote(src));
+            assertTrue(is_file(objs{g}), g + ": qcc produced the object");
+        }
+        foreach string g in (("", "-g")) {
+            string exe = tmp.path + DirSep + "linked" + g;
+            # the same choice: the executable runs
+            run(quote(qcc_bin) + " " + g + " -e dbgOptEntry -o " + quote(exe) + " " + quote(objs{g}));
+            assertEq("linked\n", run(quote(exe) + " -b"), g + ": linked with the same choice");
+            # the other choice: an error that names the object
+            string other = g ? "" : "-g";
+            string bad = tmp.path + DirSep + "bad" + g;
+            hash<auto> rv = runStatus(quote(qcc_bin) + " " + other + " -e dbgOptEntry -o " + quote(bad) + " "
+                + quote(objs{g}));
+            assertNeq(0, rv.status, g + ": linked with the other choice fails");
+            assertRegex("error: .*'" + objs{g} + "' was compiled " + (g ? "with" : "without")
+                + " debugging \\(qcc -g\\), but the link is " + (g ? "without" : "with") + " it", rv.output,
+                g + ": the error names the object");
+            assertFalse(is_file(bad), g + ": no executable");
+        }
+    }
+
+    #! the manifest of a qcc build records the choice
+    manifestTest() {
+        TmpDir tmp("qore-aot-debugging-manifest-");
+        foreach string g in (("", "-g")) {
+            string manifest = tmp.path + DirSep + "manifest" + g + ".json";
+            run(quote(qcc_bin) + " -O3 " + g + " --write-manifest=" + quote(manifest) + " -o "
+                + quote(tmp.path + DirSep + "m" + g) + " " + quote(dir + "/link-entry.qr"));
+            string text = ReadOnlyFile::readTextFile(manifest);
+            assertRegex("\"debugging\": " + (g ? "true" : "false") + "\\b", text,
+                g + ": the manifest records the choice");
+        }
+    }
+
+    private string compile(string tmp_dir, string name, string opts, string src) {
+        string exe = tmp_dir + DirSep + name;
+        run(quote(qcc_bin) + " " + opts + " -o " + quote(exe) + " " + quote(src));
+        assertTrue(is_file(exe), name + ": qcc produced the executable");
+        return exe;
+    }
+
+    #! runs a command with stderr after stdout
+    private string run(string command) {
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        return ExecModeHarness::run_any(prefix + command);
+    }
+
+    #! runs a command and returns its status and its output with stderr
+    private hash<auto> runStatus(string command) {
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        int status;
+        string output = backquote(prefix + command + " 2>&1", \status);
+        return {"status": status, "output": output};
+    }
+
+    private static int countWarnings(string output) {
+        int n = 0;
+        foreach string line in (output.split("\n")) {
+            if (line.find(Warning) == 0) {
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}
