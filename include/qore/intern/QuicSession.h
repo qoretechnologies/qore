@@ -503,7 +503,8 @@ public:
 
         @param fd the socket
         @param batch the datagrams to send; empty on return, also on an error
-        @param addr destination address, or nullptr for connected UDP sockets
+        @param addr destination address of the datagrams without a path of their own (QuicPacketBatch), or nullptr
+        for connected UDP sockets
         @param addrlen destination address length, or 0 for connected UDP sockets
         @param local_addr per-session local address for source IP pinning, or nullptr
         @param local_addrlen local address length, or 0
@@ -1189,8 +1190,8 @@ public:
     DLLLOCAL void updateRemoteAddr(const struct sockaddr* addr, socklen_t len);
 
     //! Update the stored remote peer address — caller MUST hold mtx_
-    /** Used by ngtcp2 callbacks (pathValidationCallback) and writePacketsLocked()
-        which are already executing under mtx_.  Avoids recursive mutex acquisition.
+    /** Used by ngtcp2 callbacks (pathValidationCallback), which are already executing
+        under mtx_.  Avoids recursive mutex acquisition.
         @param addr new remote address
         @param len address length
     */
@@ -1213,7 +1214,7 @@ public:
 
     //! Get the migration generation counter (incremented on each path update)
     /** Memory ordering: acquire pairs with the release in updateRemoteAddr() /
-        writePacketsLocked() to ensure the caller sees the updated address data
+        updateAddrsFromCurrentPathLocked() to ensure the caller sees the updated address data
         (memcpy'd under mtx_) after observing the incremented counter. */
     DLLLOCAL uint64_t getMigrationGen() const { return migration_gen_.load(std::memory_order_acquire); }
 
@@ -1772,6 +1773,15 @@ private:
     */
     DLLLOCAL bool refuseRequestOnClosedLocked(ExceptionSink* xsink);
 
+    //! Adds the datagram that ngtcp2 wrote in pkt_buf_ for \a path to \a packets
+    /** A server's datagram is sent to its path (see QuicPacketBatch); must be called with mtx_ held
+    */
+    DLLLOCAL void addWrittenPacketLocked(QuicPacketBatch& packets, size_t len, const ngtcp2_path& path);
+
+    //! Takes the connection's addresses (remote_addr_, local_addr_) from its current path; must be called with mtx_
+    //! held
+    DLLLOCAL void updateAddrsFromCurrentPathLocked();
+
     //! Generate outgoing packets without locking (caller must hold mtx_)
     DLLLOCAL int writePacketsLocked(QuicPacketBatch& batch, ExceptionSink* xsink);
 
@@ -2218,7 +2228,7 @@ private:
     //! Address change generation counter — incremented each time remote_addr_ is updated.
     /** NOTE: this is a "change generation", NOT a "migration count".  A single
         connection migration can trigger 2-3 increments: once from initiateMigration(),
-        once from writePacketsLocked() (ngtcp2 output path), and/or once from
+        once from updateAddrsFromCurrentPathLocked() (the current path), and/or once from
         pathValidationCallback().  This is harmless — the counter's purpose is stale
         address detection, not counting logical migration events.  Consumers must not
         assume a 1:1 mapping between increments and migration operations.

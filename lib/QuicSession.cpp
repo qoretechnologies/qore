@@ -2667,6 +2667,44 @@ void QuicSession::accountStreamWrite(int64_t stream_id, ngtcp2_ssize ndatalen, i
     }
 }
 
+void QuicSession::addWrittenPacketLocked(QuicPacketBatch& packets, size_t len, const ngtcp2_path& path) {
+    // a client's datagrams are sent on its connected socket, which has one path
+    if (is_server_ && path.remote.addrlen) {
+        // the datagram is marked as one of the current path now, when it is written: the address that a sender has
+        // for the connection can be older (see sendQuicPacketsBatch())
+        const ngtcp2_path* cur = ngtcp2_conn_get_path2(conn_);
+        bool current = cur->remote.addrlen == path.remote.addrlen
+            && !memcmp(cur->remote.addr, path.remote.addr, path.remote.addrlen)
+            && cur->local.addrlen == path.local.addrlen
+            && (!path.local.addrlen || !memcmp(cur->local.addr, path.local.addr, path.local.addrlen));
+        packets.addPacket(pkt_buf_, len, reinterpret_cast<const struct sockaddr*>(path.remote.addr),
+            static_cast<socklen_t>(path.remote.addrlen), reinterpret_cast<const struct sockaddr*>(path.local.addr),
+            static_cast<socklen_t>(path.local.addrlen), current);
+    } else {
+        packets.addPacket(pkt_buf_, len);
+    }
+}
+
+void QuicSession::updateAddrsFromCurrentPathLocked() {
+    const ngtcp2_path* cur = ngtcp2_conn_get_path2(conn_);
+    if (cur->remote.addrlen > 0 && cur->remote.addrlen <= sizeof(remote_addr_)
+            && (remote_addrlen_ != cur->remote.addrlen
+                || memcmp(&remote_addr_, cur->remote.addr, cur->remote.addrlen) != 0)) {
+        memcpy(&remote_addr_, cur->remote.addr, cur->remote.addrlen);
+        remote_addrlen_ = cur->remote.addrlen;
+        path_migrated_.store(true, std::memory_order_release);
+        migration_gen_.fetch_add(1, std::memory_order_release);
+        printd(2, "QuicSession::updateAddrsFromCurrentPathLocked(): remote address updated from the current path "
+            "(session %lld)\n", (long long)session_id_);
+    }
+    if (cur->local.addrlen > 0 && cur->local.addrlen <= sizeof(local_addr_)
+            && (local_addrlen_ != cur->local.addrlen
+                || memcmp(&local_addr_, cur->local.addr, cur->local.addrlen) != 0)) {
+        memcpy(&local_addr_, cur->local.addr, cur->local.addrlen);
+        local_addrlen_ = cur->local.addrlen;
+    }
+}
+
 int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
@@ -2857,7 +2895,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                     pending_datagrams_.pop_front();
                 }
                 if (dg_nwrite > 0) {
-                    packets.addPacket(pkt_buf_, static_cast<size_t>(dg_nwrite));
+                    addWrittenPacketLocked(packets, static_cast<size_t>(dg_nwrite), ps.path);
                     ++total_packets;
                     total_bytes += static_cast<size_t>(dg_nwrite);
                     continue;
@@ -2898,41 +2936,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
 
         // Each ngtcp2_conn_writev_stream result is a separate QUIC packet
-        // that must be sent as its own UDP datagram
-        packets.addPacket(pkt_buf_, static_cast<size_t>(nwrite));
+        // that must be sent as its own UDP datagram, to the path that ngtcp2 wrote it for
+        addWrittenPacketLocked(packets, static_cast<size_t>(nwrite), ps.path);
         last_tx_ts_ = ts;
         ++total_packets;
         total_bytes += static_cast<size_t>(nwrite);
         printd(5, "writePacketsLocked() packet #%d: %d bytes, stream_id=" QLLD " ndatalen=%d\n",
             total_packets, (int)nwrite, (int64)stream_id, (int)ndatalen);
 
-        // Update stored addresses from ngtcp2's output path.  During migration,
-        // ngtcp2 updates the active path and outputs packets for the new address;
-        // we must track this so the caller sends to the correct destination.
-        // This runs under mtx_ (caller holds the lock).
-        //
-        // Performance: the memcmp per packet is negligible — addresses are typically
-        // 16 bytes (IPv4) or 28 bytes (IPv6), memcmp short-circuits on the first
-        // differing byte (matching addresses are the common case), and this code
-        // already runs under the session mutex.  This is the only place that catches
-        // implicit path updates from ngtcp2 (e.g. server-side passive migration),
-        // so it cannot be moved to a less frequent path.
-        if (ps.path.remote.addrlen > 0 && ps.path.remote.addrlen <= sizeof(remote_addr_)) {
-            if (memcmp(&remote_addr_, ps.path.remote.addr, ps.path.remote.addrlen) != 0) {
-                memcpy(&remote_addr_, ps.path.remote.addr, ps.path.remote.addrlen);
-                remote_addrlen_ = ps.path.remote.addrlen;
-                path_migrated_.store(true, std::memory_order_release);
-                migration_gen_.fetch_add(1, std::memory_order_release);
-                printd(2, "QuicSession::writePacketsLocked(): remote address updated from "
-                    "ngtcp2 output path (session %lld)\n", (long long)session_id_);
-            }
-        }
-        if (ps.path.local.addrlen > 0 && ps.path.local.addrlen <= sizeof(local_addr_)) {
-            if (memcmp(&local_addr_, ps.path.local.addr, ps.path.local.addrlen) != 0) {
-                memcpy(&local_addr_, ps.path.local.addr, ps.path.local.addrlen);
-                local_addrlen_ = ps.path.local.addrlen;
-            }
-        }
     }
 
     // a reset found in an iteration that ended the loop otherwise (a full batch, or a connection that is closing) is
@@ -2940,6 +2951,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
     if (!pending_length_resets_.empty()) {
         applyLengthResetsLocked();
         pending_write_.store(true, std::memory_order_release);
+    }
+
+    // the connection's addresses are those of its current path: ngtcp2 writes datagrams for other paths as well (a
+    // PATH_CHALLENGE to a path being validated, a PATH_RESPONSE to a probe), which are sent to their own path (see
+    // addWrittenPacketLocked()) and do not change them (qore#7847); the current path changes on a server's passive
+    // migration, which this is the only place to see
+    if (total_packets) {
+        updateAddrsFromCurrentPathLocked();
     }
 
     // Account for the complete batch at its write timestamp, as ngtcp2_conn_write_aggregate_pkt() does.
@@ -3021,7 +3040,7 @@ QuicSendResult QuicSession::sendPackets(int fd, QuicPacketBatch& batch, const st
         unsent_.swap(batch);
     } else {
         for (int i = 0; i < batch.size(); ++i) {
-            unsent_.addPacket(batch.packetData(i), batch.packetLen(i));
+            unsent_.addPacketFrom(batch, i);
         }
     }
     batch.clear();
@@ -3236,7 +3255,7 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
             packets.swap(unsent_);
         } else {
             for (int i = 0; i < packets.size(); ++i) {
-                unsent_.addPacket(packets.packetData(i), packets.packetLen(i));
+                unsent_.addPacketFrom(packets, i);
             }
             packets.swap(unsent_);
             unsent_.clear();

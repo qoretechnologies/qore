@@ -627,13 +627,13 @@ static int quic_client_send_packets(QuicSession& session, int fd, QuicPacketBatc
         QuicPacketBatch passed;
         for (int i = 0; i < batch.size(); ++i) {
             if (i < result.kept) {
-                passed.addPacket(batch.packetData(i), batch.packetLen(i));
+                passed.addPacketFrom(batch, i);
                 continue;
             }
             if (drop_all || dropped.count(test_seq)) {
                 qore_dbg_quic_note_dropped_client_datagram();
             } else {
-                passed.addPacket(batch.packetData(i), batch.packetLen(i));
+                passed.addPacketFrom(batch, i);
             }
             ++test_seq;
         }
@@ -3436,10 +3436,11 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
         return 0;
     }
 
-    // Re-check migration after packet generation: writePacketsLocked() detects
-    // new paths from ngtcp2 output (e.g. server-side passive migration) and sets
-    // path_migrated_.  Without this second check, the first post-migration batch
-    // (including PATH_RESPONSE) would be sent to the old client address.
+    // Re-check migration after packet generation: writePacketsLocked() takes the
+    // addresses of the connection's current path, which changes on a server-side
+    // passive migration, and sets path_migrated_.  The datagrams written here carry
+    // their own path (a PATH_CHALLENGE or PATH_RESPONSE for another path is sent to
+    // it, qore#7847); these addresses are those of any datagram without one.
     if (quic_session->hasPathMigrated()) {
         quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
         quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
@@ -3749,10 +3750,11 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
         return 0;
     }
 
-    // Re-check migration after packet generation: writePacketsLocked() detects
-    // new paths from ngtcp2 output (e.g. server-side passive migration) and sets
-    // path_migrated_.  Without this second check, the first post-migration batch
-    // (including PATH_RESPONSE) would be sent to the old client address.
+    // Re-check migration after packet generation: writePacketsLocked() takes the
+    // addresses of the connection's current path, which changes on a server-side
+    // passive migration, and sets path_migrated_.  The datagrams written here carry
+    // their own path (a PATH_CHALLENGE or PATH_RESPONSE for another path is sent to
+    // it, qore#7847); these addresses are those of any datagram without one.
     if (quic_session->hasPathMigrated()) {
         quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
         quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
