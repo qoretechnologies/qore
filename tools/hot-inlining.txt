@@ -11,8 +11,27 @@
 
 # the parse options of the callee of an inline method call in the IR interpreter
 executeInterpreterInlineIRMethodTarget QoreIRInlineCalleeParseOptionsHelper::QoreIRInlineCalleeParseOptionsHelper
-# the location of a JIT call that can deoptimize
-execJITWithDeopt QoreJITStackLocation::QoreJITStackLocation
+# the location of a JIT call that can deoptimize, in the function that runs the JIT code: execJITWithDeopt() is a
+# static template with one instance per fast-call path, each called once and inlined by GCC into the fast-call
+# function of its path, which holds the location; when its last out-of-line instance (the AOT direct call that
+# releases its arguments in the frame) was inlined too, the caller of the old entry no longer existed: each
+# fast-call function that runs JIT code is named instead
+execClosureDirect QoreJITStackLocation::QoreJITStackLocation
+execClosureDirectConsume QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_direct_aot_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_direct_aot_consume_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_fast QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_fast_consume_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_fast_with_target QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_fast_with_target_consume_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_method_fast_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_method_fast_consume_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_self_recursive QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_self_recursive_consume_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_static_method_direct_impl QoreJITStackLocation::QoreJITStackLocation
+qore_rt_call_static_method_direct_consume_impl QoreJITStackLocation::QoreJITStackLocation
+try_dispatch_method_fast QoreJITStackLocation::QoreJITStackLocation
+try_dispatch_method_fast_consume QoreJITStackLocation::QoreJITStackLocation
 # the parameters of a fast call (JIT runtime) and of a call of a user variant
 instantiateFastCallParams QoreTypeInfo::acceptInputParam
 instantiateFastCallParams LocalVar::applyNoNarrowContainerType
