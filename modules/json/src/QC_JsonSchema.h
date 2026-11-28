@@ -35,6 +35,10 @@
 DLLLOCAL void qore_json_schema_check_recursion();
 
 #define JSONCONS_JSONSCHEMA_CHECK_RECURSION() qore_json_schema_check_recursion()
+// the sets of the property names of a validated instance hash them with the keyed hash of the process; the module's
+// initialization creates its key, so that constructing such a set cannot fail (qore#7750)
+#include "qore/intern/qore_keyed_hash.h"
+#define JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET qore_keyed_string_set
 #include <jsoncons_ext/jsonschema/jsonschema.hpp>
 
 #include <memory>

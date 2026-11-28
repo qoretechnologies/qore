@@ -28,6 +28,7 @@
 #include <functional>
 #include <vector>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <iterator>
 
@@ -250,7 +251,22 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
     }
 }
 
+// the sets of the property names of a validated instance hash them with the keyed hash of the process (qore#7750)
+static_assert(qore_is_keyed_hasher<jsoncons::jsonschema::property_name_set::hasher>::value,
+    "the property name sets of the JSON schema validator use the keyed hash of the process");
+static_assert(std::is_same_v<decltype(jsoncons::jsonschema::evaluation_results::evaluated_properties),
+    jsoncons::jsonschema::property_name_set>, "the evaluated properties of jsoncons are a property name set");
+
+//! records the site of the property name sets of the validator in debug builds (QORE_KEYED_HASH_SITE())
+static void json_schema_keyed_hash_site() {
+#ifdef DEBUG
+    jsoncons::jsonschema::property_name_set probe;
+    QORE_KEYED_HASH_SITE("json-schema-1", probe);
+#endif
+}
+
 bool JsonSchemaValidator::validate(QoreValue data, ExceptionSink* xsink) const {
+    json_schema_keyed_hash_site();
     if (!valid || !schema) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Schema is not valid");
         return false;
@@ -287,6 +303,7 @@ bool JsonSchemaValidator::validate(QoreValue data, ExceptionSink* xsink) const {
 }
 
 QoreHashNode* JsonSchemaValidator::validateWithErrors(QoreValue data, ExceptionSink* xsink) const {
+    json_schema_keyed_hash_site();
     assert(hashdeclJsonSchemaValidationError);
     assert(hashdeclJsonSchemaValidationResult);
 
