@@ -1318,8 +1318,10 @@ authenticate();
     them to.  Both raise \c PERMISSION-DENIED; the file-system policy of a sandbox applies when the path is opened.
     Such a data provider is confined to the directory that its creator gave (the connection's directory) by the real
     paths of the files that it reaches, with symbolic links resolved, also against a concurrent change of a path (see
-    @ref filedataprovider_root_lock "FileDataProvider: Root Directory and Lock"); library code that confines the paths
-    of its callers to a directory in the same way runs the operation with
+    @ref filedataprovider_root_lock "FileDataProvider: Root Directory and Lock"), as a file poller (also the
+    \c filepoller data provider of a file connection) delivers only the files under its directory (see
+    @ref filepoller_confinement "FilePoller: Confinement to the Polled Directory"); library code that confines the
+    paths of its callers to a directory in the same way runs the operation with
     @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()".
 
     @since %Qore 3.0

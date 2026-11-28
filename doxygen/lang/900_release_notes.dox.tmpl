@@ -2407,6 +2407,8 @@
       - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - delivers only the files under the polled directory by their real paths (see @ref filepoller_confinement)
+        (<a href="https://github.com/qoretechnologies/qore/issues/7873">issue 7873</a>)
       - see @ref file_poller_2_1 for all changes
 
     - @ref fixedlengthutilintro "FixedLengthUtil" module
@@ -3444,6 +3446,10 @@
       links and concurrent path changes, with the new
       @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()"; see
       @ref filedataprovider_root_lock (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>)
+    - security fix: a file poller (also the \c filepoller data provider of a file connection) delivers only the files
+      under its directory by their real paths, also against a concurrent change of a path, and its directory cannot
+      be changed by code restricted from the file system; see @ref filepoller_confinement
+      (<a href="https://github.com/qoretechnologies/qore/issues/7873">issue 7873</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)
