@@ -34,13 +34,19 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
     constructor() : QUnit::Test("HTTP/1.1 response send progress", "1.0", \ARGV) {
         addTestCase("a buffered response completes while the peer keeps reading", sub () { progress(False); });
         addTestCase("a streamed response leaves time for another request", sub () { progress(True); });
+        addTestCase("the send bound renews with each progress and ends a stalled send", \boundSteps());
         addTestCase("a response times out when the peer stops reading", \stalled());
         addTestCase("the minimum rate bounds a progressing response", \belowRate());
         set_return_value(main());
     }
 
+    #! the client reads the whole response, which the server sends as the client's reads make room for it, and a
+    #! streamed response's connection then serves another request
+    /** The bound of the send by its progress is checked without a clock in boundSteps(); here the timeouts are only
+        a safety net, so that the result does not depend on the load of the machine (qore#7835)
+    */
     progress(bool stream) {
-        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 750ms, "ttl": 1s});
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 60s, "ttl": 60s});
         on_exit server.stop();
         server.setDefaultHandler("large", new ProgressHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
@@ -49,24 +55,79 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
         on_exit client.close();
         client.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: %s\r\n\r\n",
             stream ? "stream" : "buffer", stream ? "keep-alive" : "close"));
-        hash<auto> header = client.readHTTPHeader(5s);
+        hash<auto> header = client.readHTTPHeader(60s);
         assertEq(ProgressHandler::Size, header."content-length".toInt());
         int total = 0;
-        # Move a full TCP window regularly, for several times the configured timeout.
+        # the server sends a TCP window at a time, as the reads make room for it
         while (total < ProgressHandler::Size) {
-            *binary chunk = client.recvBinary(min(256 * 1024, ProgressHandler::Size - total), 5s);
+            *binary chunk = client.recvBinary(min(256 * 1024, ProgressHandler::Size - total), 60s);
             if (!chunk) {
                 break;
             }
             total += chunk.size();
-            usleep(30000);
         }
         assertEq(ProgressHandler::Size, total, "complete response body");
         if (stream) {
             client.send("GET /ping HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-            client.readHTTPHeader(5s);
-            assertEq("ok", client.recv(2, 5s));
+            client.readHTTPHeader(60s);
+            assertEq("ok", client.recv(2, 60s));
         }
+    }
+
+    #! the bound of an HTTP/1 response send by its progress, checked step by step without a socket or a clock
+    /** The time of the whole send is many times the stall timeout, but each delivery comes within it, so every step
+        renews the bound; without delivery, the send fails once the stall timeout has passed; a fused operation that
+        waits for the next request is not measured.  The steps run with dbg_http_send_bound_steps() (debug builds), so
+        the result does not depend on the load of the machine (qore#7835)
+    */
+    boundSteps() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http_send_bound_steps() is only in a debug build of the library");
+        }
+        const int Stall = 750;
+        # a delivery every 500 ms for 32 s
+        list<hash<auto>> steps = ();
+        int delivered = 0;
+        int now = 0;
+        for (int i = 0; i < 64; ++i) {
+            delivered += 256 * 1024;
+            now += 500;
+            steps += {"delivered": delivered, "now": now};
+        }
+        # no delivery: still within the stall timeout, then past it
+        steps += {"delivered": delivered, "now": now + Stall - 1};
+        steps += {"delivered": delivered, "now": now + Stall};
+        list<hash<auto>> r = call_function("dbg_http_send_bound_steps", Stall, 0, 300, steps);
+        assertEq(66, r.size());
+        assertEq(64, (select r[0..63], $1.result == "ok" && $1.renewed).size(),
+            "each delivery renews the bound, for many times the stall timeout");
+        assertEq(Stall / 2, r[63].wake, "the next check comes after half of the stall timeout");
+        assertEq({"result": "ok", "wake": 1, "renewed": False}, r[64], "no delivery, within the stall timeout");
+        assertEq("stalled", r[65].result, "no delivery for the stall timeout");
+
+        # a fused operation waiting for the next request is not measured, and a new response starts a new bound
+        r = call_function("dbg_http_send_bound_steps", Stall, 0, 300, (
+            {"delivered": 1000, "now": 0},
+            {"delivered": -1, "now": 5000},
+            {"delivered": 0, "now": 10000},
+            {"delivered": 0, "now": 10000 + Stall - 1},
+        ));
+        assertEq(("ok", "not-measured", "ok", "ok"), (map $1.result, r));
+        assertEq((True, True, True, False), (map $1.renewed, r));
+
+        # the minimum rate: a client that takes less than it fails; one that takes more does not
+        list<hash<auto>> slow = ();
+        list<hash<auto>> fast = ();
+        for (int i = 1; i <= 40; ++i) {
+            slow += {"delivered": i * 1024, "now": i * 100};
+            fast += {"delivered": i * 1024 * 1024, "now": i * 100};
+        }
+        list<hash<auto>> slow_steps = call_function("dbg_http_send_bound_steps", 60000, 1024 * 1024, 300, slow);
+        list<string> slow_results = map $1.result, slow_steps;
+        assertTrue(slow_results.contains("below-rate"), sprintf("a slow client is below the rate: %y", slow_results));
+        list<hash<auto>> fast_steps = call_function("dbg_http_send_bound_steps", 60000, 1024 * 1024, 300, fast);
+        assertEq(40, (select fast_steps, $1.result == "ok").size(),
+            "a fast client is not below the rate");
     }
 
     stalled() {

@@ -1181,6 +1181,18 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
     return nullptr;
 }
 
+QoreProgram* AsyncIoDeferredRelease::getUdataProgram() const {
+    switch (udata.getType()) {
+        case NT_RUNTIME_CLOSURE:
+        case NT_FUNCREF:
+            return udata.get<const ResolvedCallReferenceNode>()->getProgram();
+        case NT_OBJECT:
+            return udata.get<const QoreObject>()->getProgram();
+        default:
+            return nullptr;
+    }
+}
+
 void AsyncIoDeferredRelease::setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx) {
     module_cleanup_delegate = async_io_module_cleanup_delegate(ctx);
     module_cleanup_canceled = async_io_module_cleanup_canceled(ctx);
@@ -2760,6 +2772,227 @@ AioCallbackAppScope::~AioCallbackAppScope() {
     aio_callback_app_set = old_set;
 }
 
+static const char* getDispatchTypeName(QoreCallDispatcher::DispatchType type);
+
+namespace {
+//! The controllers whose callback worker could not be started while no worker ran, with work queued for it (qore#7834)
+/** Their I/O threads start a worker when one may start again: a thread has ended and been joined, or the default
+    thread stack size has changed (qore_async_io_worker_start_possible()).  The lock is a leaf: no other lock is taken
+    with it held, so the reaper can take it, and qore_async_io_worker_start_possible() signals the controllers outside
+    it, with each one pinned so that it is not destroyed meanwhile (unregistration waits for the pins)
+*/
+struct AioWorkerStartRegistry {
+    QoreThreadLock lck;
+    QoreCondition cond;
+    std::set<AsyncIoControllerPriv*> ctrls;
+    //! the number of controllers registered, read without the lock
+    std::atomic<int> count{0};
+};
+
+AioWorkerStartRegistry& aio_worker_start_registry() {
+    static AioWorkerStartRegistry* r = new AioWorkerStartRegistry;
+    return *r;
+}
+
+//! registers a controller that wants a callback worker; a failure to allocate leaves the next item queued to start one
+void aio_register_worker_start_wanted(AsyncIoControllerPriv* ctrl) noexcept {
+    AioWorkerStartRegistry& r = aio_worker_start_registry();
+    try {
+        AutoLocker al(r.lck);
+        if (r.ctrls.insert(ctrl).second) {
+            r.count.fetch_add(1, std::memory_order_release);
+        }
+    } catch (...) {
+    }
+}
+
+//! unregisters a controller, and waits until no call uses it; called without the controller's lock
+void aio_unregister_worker_start_wanted(AsyncIoControllerPriv* ctrl) noexcept {
+    AioWorkerStartRegistry& r = aio_worker_start_registry();
+    if (!r.count.load(std::memory_order_acquire) && !ctrl->worker_start_retry_pins.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(r.lck);
+    if (r.ctrls.erase(ctrl)) {
+        r.count.fetch_sub(1, std::memory_order_release);
+    }
+    while (ctrl->worker_start_retry_pins.load(std::memory_order_acquire)) {
+        r.cond.wait(r.lck);
+    }
+}
+}
+
+void qore_async_io_worker_start_possible() noexcept {
+    AioWorkerStartRegistry& r = aio_worker_start_registry();
+    if (!r.count.load(std::memory_order_acquire)) {
+        return;
+    }
+    // the controllers are signalled in batches of a fixed size, so that no memory is allocated
+    constexpr size_t batch = 16;
+    AsyncIoControllerPriv* pinned[batch];
+    size_t skip = 0;
+    while (true) {
+        size_t n = 0;
+        bool more = false;
+        {
+            AutoLocker al(r.lck);
+            size_t i = 0;
+            for (AsyncIoControllerPriv* c : r.ctrls) {
+                if (i++ < skip) {
+                    continue;
+                }
+                if (n == batch) {
+                    more = true;
+                    break;
+                }
+                c->worker_start_retry_pins.fetch_add(1, std::memory_order_acq_rel);
+                pinned[n++] = c;
+            }
+        }
+        for (size_t i = 0; i < n; ++i) {
+            pinned[i]->requestWorkerStartRetry();
+        }
+        {
+            AutoLocker al(r.lck);
+            for (size_t i = 0; i < n; ++i) {
+                pinned[i]->worker_start_retry_pins.fetch_sub(1, std::memory_order_acq_rel);
+            }
+            r.cond.broadcast();
+        }
+        if (!more) {
+            break;
+        }
+        skip += n;
+    }
+}
+
+void AsyncIoControllerPriv::requestWorkerStartRetry() noexcept {
+    try {
+        AutoLocker al(m);
+        if (shutting_down) {
+            return;
+        }
+        for (auto& tp : io_threads) {
+            if (!readsCommands(*tp) || !tp->running.load(std::memory_order_acquire)) {
+                continue;
+            }
+            Command c;
+            c.cmd = IoCommand::RetryWorkerStart;
+            tp->cmdq.push(std::move(c));
+            // notify() does not block; notifying under m keeps the context alive until it returns
+            tp->notifier->notify();
+            return;
+        }
+    } catch (...) {
+        // the command could not be queued: the next item queued starts a worker
+    }
+}
+
+#ifdef DEBUG
+//! the number of callback worker starts that fail from now on (dbg_async_io_fail_callback_worker_starts(); qore#7834)
+static std::atomic<int> qore_dbg_fail_callback_worker_starts{0};
+//! true if only the starts made when work is queued fail, not those of the retries (qore#7834)
+static std::atomic<bool> qore_dbg_fail_callback_worker_starts_enqueue_only{false};
+//! the number of callback worker starts that succeed before the failures begin (qore#7834)
+static std::atomic<int> qore_dbg_callback_worker_starts_before_failures{0};
+
+void QoreCallDispatcher::dbgFailCallbackWorkerStarts(int count, bool enqueue_only, int after) {
+    qore_dbg_fail_callback_worker_starts_enqueue_only.store(enqueue_only);
+    qore_dbg_callback_worker_starts_before_failures.store(after < 0 ? 0 : after);
+    qore_dbg_fail_callback_worker_starts.store(count < 0 ? 0 : count);
+}
+
+//! returns true, and counts it, if the next callback worker start is to fail
+static bool qore_dbg_take_callback_worker_start_failure(bool retry) {
+    if (retry && qore_dbg_fail_callback_worker_starts_enqueue_only.load()) {
+        return false;
+    }
+    if (!qore_dbg_fail_callback_worker_starts.load()) {
+        return false;
+    }
+    int before = qore_dbg_callback_worker_starts_before_failures.load();
+    while (before > 0) {
+        if (qore_dbg_callback_worker_starts_before_failures.compare_exchange_weak(before, before - 1)) {
+            return false;
+        }
+    }
+    int n = qore_dbg_fail_callback_worker_starts.load();
+    while (n > 0) {
+        if (qore_dbg_fail_callback_worker_starts.compare_exchange_weak(n, n - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+//! returns the Program whose end releases the queued item: the Program that it holds (an operation's, a release's, a
+//! task's), or else the Program of the code of a callback (a timer's) or of a timer's user data that it releases, which
+//! the item does not hold, as nothing enters the Program for it (the callback enters it itself), but which the end of
+//! the Program releases while the Program exists, with the objects that it holds, whose destructors must run in it;
+//! otherwise the controller's stop() released it after the Program was deleted (qore#7842)
+static QoreProgram* aio_item_teardown_program(const QoreCallDispatcher::AsyncWorkItem& item) {
+    if (item.pgm) {
+        return item.pgm;
+    }
+    if (item.type == QoreCallDispatcher::DT_CALLBACK && item.callback) {
+        return item.callback->getProgram();
+    }
+    // a timer's user data (a callback or an object), released after the timer
+    if (item.type == QoreCallDispatcher::DT_RELEASE && item.release) {
+        return item.release->getUdataProgram();
+    }
+    return nullptr;
+}
+
+static bool aio_queued_item_of_program(const QoreCallDispatcher::AsyncWorkItem& item, const QoreProgram* pgm) {
+    return pgm && aio_item_teardown_program(item) == pgm;
+}
+
+bool QoreCallDispatcher::startWorkerLocked(std::string& error, bool retry) {
+    ++active_workers;
+    ExceptionSink xsink;
+    // a callback worker runs the work of every submitter, each item under the sandbox it captured when it was
+    // submitted (AsyncIoSandboxContext), so it does not inherit the starting code's sandbox
+    int tid;
+#ifdef DEBUG
+    if (qore_dbg_take_callback_worker_start_failure(retry)) {
+        xsink.raiseException("THREAD-CREATION-FAILURE", "the start of a callback worker fails "
+            "(dbg_async_io_fail_callback_worker_starts())");
+        tid = -1;
+    } else
+#endif
+    tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT);
+    if (tid != -1) {
+        return true;
+    }
+    --active_workers;
+    if (xsink) {
+        QoreString mark, err_text, desc_text;
+        qore_log_exception_text(xsink, mark, err_text, desc_text);
+        error = std::string(mark.c_str()) + err_text.c_str() + ": " + desc_text.c_str();
+        xsink.clear();
+    }
+    return false;
+}
+
+void QoreCallDispatcher::retryWorkerStart() {
+    bool wanted = false;
+    {
+        AutoLocker al(m);
+        // a worker is started for the queued items that no worker takes; none is wanted any more if the queue is
+        // empty or a worker runs (the next item queued, or a worker that became free, took the work)
+        if (!stopping && !async_queue.empty() && !active_workers) {
+            std::string error;
+            wanted = !startWorkerLocked(error, true);
+        }
+    }
+    // still wanted: the registration stays for the next thread that ends; no new report, as the first one is logged
+    if (!wanted && ctrl) {
+        aio_unregister_worker_start_wanted(ctrl);
+    }
+}
+
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     // Hold a dependency reference to the object's program to keep the
     // program struct alive (not freed) while the callback is pending.
@@ -2814,6 +3047,14 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     bool release_off_io_thread = false;
     // set when work that the module cleanup handed over is released here because no worker can run it (qore#6928)
     bool release_cleanup_delegate = false;
+    // the exception of a callback worker that could not be started, which is logged after the lock is dropped (the
+    // logger can run Qore code), and whether the item is discarded for it, as no worker can run it (qore#7834)
+    std::string worker_start_error;
+    bool worker_start_failed = false;
+    bool worker_start_wanted = false;
+    // the work item's type and owner, for the log
+    const char* worker_start_type = getDispatchTypeName(item.type);
+    std::string worker_start_owner = item.owner.empty() ? std::string("-") : item.owner;
     {
         AutoLocker al(m);
 
@@ -2822,8 +3063,10 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         // connection, a scan of the garbage collector), nor on a worker that can run after the Program's threads were
         // waited for; the thread that cancels the Program's work releases it in the Program (with its parse options,
         // counted in its threads), before its threads are waited for (clearProgramShuttingDown())
-        if (!stopping && item.type == DT_RELEASE && item.pgm && shutting_down_programs.count(item.pgm)) {
-            parked_program_releases[item.pgm].push_back(std::move(item));
+        // the Program whose end releases the item, which it may not hold (qore#7842)
+        QoreProgram* teardown_pgm = shutting_down_programs.empty() ? nullptr : aio_item_teardown_program(item);
+        if (!stopping && item.type == DT_RELEASE && teardown_pgm && shutting_down_programs.count(teardown_pgm)) {
+            parked_program_releases[teardown_pgm].push_back(std::move(item));
             return;
         }
 
@@ -2838,7 +3081,7 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         // which is fine because the strong ref was taken at submit time and the
         // destructor chain runs while the program is still in its
         // post-cancelByProgram / pre-data-clearance window.
-        bool pgm_shutting_down_now = item.pgm && shutting_down_programs.count(item.pgm) > 0;
+        bool pgm_shutting_down_now = teardown_pgm && shutting_down_programs.count(teardown_pgm) > 0;
 
         // Reject enqueues for owners whose teardown is already in progress.  A
         // worker would discard such an item anyway (see the owner_shutting_down
@@ -2878,14 +3121,9 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             // for all items.  Idle workers are still woken by work_avail.signal() below.
             int committed = (int)async_queue.size() + active_processing;
             if (committed >= active_workers && active_workers < max_workers) {
-                ++active_workers;
-                ExceptionSink xsink;
-                // a callback worker runs the work of every submitter, each item under the sandbox it captured
-                // when it was submitted (AsyncIoSandboxContext), so it does not inherit the starting code's sandbox
-                int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT);
-                if (tid == -1) {
-                    --active_workers;
-                }
+                // the failure is handled here: it is logged below, not left in a sink to be printed as an unhandled
+                // exception in the thread that queues the work (an I/O thread, as a rule)
+                worker_start_failed = !startWorkerLocked(worker_start_error);
             }
 
             if (!active_workers && ((item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work)
@@ -2904,12 +3142,40 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
                 // the references are released with the delegation of the cleanup, as a worker would release them
                 release_cleanup_delegate = true;
             } else {
+                // with no worker running, a worker is started for the item when one may start again: by the next item
+                // queued, or by the controller's I/O thread when a thread has ended or the default thread stack size
+                // has changed (qore_async_io_worker_start_possible(); qore#7834); with a worker running, the worker
+                // takes it when it is free
+                if (worker_start_failed && !active_workers) {
+                    worker_start_wanted = true;
+                }
                 // Enqueue even if no workers exist — stop() will drain and clean up.
                 // Cannot execute synchronously here: caller may be the I/O thread,
                 // and Qore code could call submit() causing deadlock.
                 async_queue.push_back(std::move(item));
                 work_avail.signal();
             }
+        }
+    }
+
+    if (worker_start_wanted && ctrl) {
+        // the controller's I/O thread starts a worker when one may start again
+        aio_register_worker_start_wanted(ctrl);
+    }
+    if (worker_start_failed) {
+        // logged with the async I/O logger, or else reported on the standard error output, as an exception of a
+        // callback is (qore#6275): a callback that waits is never silent
+        const char* what = worker_start_error.empty() ? "unknown error" : worker_start_error.c_str();
+        const char* fmt = worker_start_wanted
+            ? "AsyncIoController: no callback worker runs, and none could be started; the callback (type=%s owner=%s) "
+                "waits until one can start: %s"
+            : "AsyncIoController: a callback worker could not be started; the callback (type=%s owner=%s) is queued "
+                "for the workers running: %s";
+        if (!ctrl || !ctrl->log(worker_start_wanted ? QORE_LOG_LEVEL_ERROR : QORE_LOG_LEVEL_WARN, fmt,
+                worker_start_type, worker_start_owner.c_str(), what)) {
+            fprintf(stderr, fmt, worker_start_type, worker_start_owner.c_str(), what);
+            fputc('\n', stderr);
+            fflush(stderr);
         }
     }
 
@@ -3290,7 +3556,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
         size_t release_count = 0;
         size_t other_count = 0;
         for (const auto& qi : async_queue) {
-            if (qi.pgm == pgm) {
+            if (aio_queued_item_of_program(qi, pgm)) {
                 if (!stopping && qi.type == DT_RELEASE) {
                     ++release_count;
                 } else {
@@ -3319,7 +3585,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
         // rationale (workerLoop+0x3c6 SIGSEGV on stale spop_obj).
         auto it = async_queue.begin();
         while (it != async_queue.end()) {
-            if (it->pgm == pgm) {
+            if (aio_queued_item_of_program(*it, pgm)) {
                 // active_per_owner is incremented at enqueue time; the matching
                 // decrement must happen here for drained items, or waitForOwnerIdle()
                 // would hang on items that will never be popped.
@@ -3338,7 +3604,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
                 // Program, with its parse options and counted in its threads, by clearProgramShuttingDown(), not here
                 // in the calling thread outside the Program (qore#7226); the memory was reserved above
                 if (parked && it->type == DT_RELEASE) {
-                    parked->push_back(std::move(*it));
+                    parked->push_back(std::move(*it));  // parked under pgm: the item's teardown Program
                 } else {
                     drained.push_back(std::move(*it));
                 }
@@ -4762,6 +5028,9 @@ int AsyncIoControllerPriv::checkForked(const char* method, ExceptionSink* xsink)
 AsyncIoControllerPriv::~AsyncIoControllerPriv() {
     // not reached in a forked child: deref() does not free a controller of the parent
     assert(!forked());
+    // no retry of a callback worker start uses the controller any more (qore#7834); without the lock, as the retry
+    // takes it
+    aio_unregister_worker_start_wanted(this);
     {
         AutoLocker al(m);
         // Broadcast+drop-map-ref for every pending cancel wait; each entry's
@@ -7869,6 +8138,8 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
         // nothing runs in this process (see forked())
         return;
     }
+    // no callback worker is started again for the work that waits for one: stop() releases it (qore#7834)
+    aio_unregister_worker_start_wanted(this);
     bool do_signal = false;
     {
         AutoLocker al(m);
@@ -11484,6 +11755,14 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 case IoCommand::WakeSocket: {
                     // I/O thread only — no lock needed
                     t.wake_socket_hashes.insert(cmd.sock_hash);
+                    break;
+                }
+
+                case IoCommand::RetryWorkerStart: {
+                    // a callback worker may be started again (qore#7834)
+                    if (QoreCallDispatcher* d = call_dispatcher.load(std::memory_order_acquire)) {
+                        d->retryWorkerStart();
+                    }
                     break;
                 }
 

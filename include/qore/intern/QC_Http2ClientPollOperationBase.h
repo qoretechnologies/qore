@@ -480,7 +480,8 @@ public:
     //! Drains all registered stream queues after a read poll cycle
     /** Reads all available data from each registered stream's per-stream buffer
         and pushes it to the corresponding Queue.  When a stream is closed, a
-        NOTHING sentinel is pushed and the registration is removed.
+        NOTHING sentinel is pushed and the registration is removed; when its connection is closed (an abort() on
+        another thread), the failure of the connection is pushed instead (pushStreamFailureMarker(), issue #7699).
 
         @param xsink exception sink
     */
@@ -498,8 +499,23 @@ public:
     //! Marks this object for registrations given up with stream_queues_lock held; see RObject::edgesRemoved()
     DLLLOCAL void markStreamQueuesRemoved();
 
+    //! Pushes the failure of the connection to a stream's queue, and notifies its notifier
+    /** The marker is a hash with \c error and \c end_stream set; it is pushed even if the queue is full, and a
+        queue that refuses it has its error for its consumer already.  Pushed for the registrations that
+        clearStreamQueues() takes away, and by the drain for a stream whose connection is closed (issue #7699).
+    */
+    DLLLOCAL static void pushStreamFailureMarker(StreamQueueInfo& info, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Holds the drain at the check of a stream's end when the dbg_h2_client_hold_drain_stream_end() hook is armed
+    DLLLOCAL static void dbgHoldDrainStreamEnd();
+
+    //! Lets a drain held by dbgHoldDrainStreamEnd() go on; called by abort() once it has closed the connection
+    DLLLOCAL static void dbgReleaseDrainStreamEnd();
+#endif
+
     //! Clears all stream queue registrations (called in abort/cleanup)
-    /** Pushes NOTHING sentinels to all queues, notifies all EventNotifiers,
+    /** Pushes the failure of the connection to all queues (pushStreamFailureMarker()), notifies all EventNotifiers,
         and derefs all queue/notifier objects.
 
         @param xsink exception sink
@@ -882,6 +898,23 @@ DLLLOCAL extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
     @param hold true to hold the registrations pending from now on, false to apply them again
 */
 DLLLOCAL void qore_dbg_h2_client_hold_stream_registrations(bool hold);
+
+//! Debug-only: holds the next stream queue drain of an HTTP/2 client connection at the check of a stream's end
+/** Called by the dbg_h2_client_hold_drain_stream_end() test hook.  When armed, the next drain that reaches the check
+    of whether a registered stream has ended (after it took the stream's data) waits there, with the stream queues
+    locked, until an abort() of an HTTP/2 client operation has closed its connection, or until the hook is disarmed;
+    the wait is bounded by a hang guard of 60 seconds.  The hook is process-wide and one-shot.
+
+    @param hold true to arm the hook, false to disarm it and let a held drain go on
+*/
+DLLLOCAL void qore_dbg_h2_client_hold_drain_stream_end(bool hold);
+
+//! Debug-only: waits until a drain is held by the dbg_h2_client_hold_drain_stream_end() test hook
+/** @param timeout_ms the maximum time to wait in milliseconds
+
+    @return true if a drain is held, false if the time ran out first
+*/
+DLLLOCAL bool qore_dbg_h2_client_wait_drain_stream_end_held(int64_t timeout_ms);
 #endif
 
 #endif // _QORE_CLASS_HTTP2CLIENTPOLLOPERATIONBASE_H

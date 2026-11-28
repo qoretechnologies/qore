@@ -10,6 +10,7 @@
 
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 %requires Util
 %requires reflection
@@ -96,8 +97,10 @@ exit: 0
         }
     }
 
-    #! runs the command; returns its output and its exit status, without the message of an out-of-memory exit
+    #! runs the command; returns its output and its exit status, without the message of an out-of-memory exit; a
+    #! warning of the module loader on stderr is not its output
     private string run(string cmd) {
-        return replace(backquote(cmd + " 2>&1; echo \"exit: $?\""), "OUT OF MEMORY: aborting\n", "");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, NOTHING, "QORE_JIT_TIMING=1");
+        return replace(r.out, "OUT OF MEMORY: aborting\n", "") + sprintf("exit: %d\n", r.rc);
     }
 }

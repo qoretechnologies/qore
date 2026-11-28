@@ -1,0 +1,362 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - directory listings under a file-system policy and status queries relative to pinned directories
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A directory listing under a file-system policy reports the status of an entry that the policy allowed: a symbolic
+# link in the listed directory that is replaced by a link to a file outside of the allowed directory between the
+# policy's decision for the entry and the read of its status does not make the listing report the status (type, size,
+# times) of the file outside (qore#7833).  The replacement is made with dbg_fs_swap_on_open() (debug builds) at that
+# point of the listing.  The policy decides for the entries of the root directory and of /dev/fd in the status
+# listings as in the listings of names.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxDirListPinnedTest
+
+class SandboxDirListPinnedTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string link;
+        string inside_file;
+        string outside_file;
+        string outside_dir;
+        Program sandbox;
+    }
+
+    const SandboxCode = '
+# the listing of a directory by sandboxed code
+auto sub run(string op, string path) {
+    Dir d();
+    d.chdir(path);
+    switch (op) {
+        case "list full": return map {$1.name: $1}, d.list(True);
+        case "listInfo": return map {$1.name: $1}, d.listInfo();
+        case "listInfo regex": return map {$1.name: $1}, d.listInfo("^l$");
+        case "listFileInfo": return map {$1.name: $1}, d.listFileInfo();
+        case "listFileInfo regex": return map {$1.name: $1}, d.listFileInfo("^l$");
+        case "listDirInfo": return map {$1.name: $1}, d.listDirInfo();
+        case "listFiles": return d.listFiles();
+        case "listDirs": return d.listDirs();
+        case "list info names": return map $1.name, d.listInfo();
+        case "list": return d.list();
+    }
+    throw "TEST-ERROR", sprintf("unknown operation %y", op);
+}
+';
+
+    constructor() : QUnit::Test("sandbox directory listing pinned", "1.0", \ARGV) {
+        addTestCase("a full listing does not report the status of a file outside of the policy", \fullListTest());
+        addTestCase("a listing of directories does not report a directory outside of the policy", \listDirsTest());
+        addTestCase("a listing of files does not report a file outside of the policy", \listFilesTest());
+        addTestCase("the status listings do not report the status of a file outside of the policy",
+            \infoListTest());
+        addTestCase("a listing confined to a file-system root does not report a file outside of it",
+            \rootConfinedTest());
+        addTestCase("the listings without a replacement are unchanged", \unchangedTest());
+        addTestCase("the status listings of the root directory apply the policy to its entries", \rootDirTest());
+        addTestCase("the status listings of /dev/fd apply the policy to the files of the descriptors",
+            \descriptorDirTest());
+        addTestCase("a descriptor of a removed file is not reported as the file that has its name now",
+            \removedDescriptorTest());
+        addTestCase("a link whose text is longer than a path is not reported as a shorter one", \longLinkTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("qore-dir-list-pinned-");
+        allowed = dir + DirSep + "allowed";
+        link = allowed + DirSep + "l";
+        inside_file = allowed + DirSep + "inside.txt";
+        outside_file = dir + DirSep + "outside.txt";
+        outside_dir = dir + DirSep + "outside-dir";
+        mkdir(allowed);
+        mkdir(outside_dir);
+        writeFile(inside_file, "inside");
+        writeFile(outside_file, "the file outside of the allowed directory");
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        unlink(link);
+        symlink(inside_file, link);
+    }
+
+    tearDown() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+    }
+
+    private writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+        f.close();
+    }
+
+    #! returns the identity of a file: its device and inode
+    private static string fileId(hash<auto> info) {
+        return sprintf("%d:%d", info.dev, info.inode);
+    }
+
+    #! returns True if the path is the directory or below it
+    private static bool inDir(string path, string dir) {
+        return path == dir || path.equalPartial(dir + "/");
+    }
+
+    #! returns a Program whose sandbox allows every file but the given path
+    private Program denyingSandbox(string denied) {
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(True);
+        manager.addFilesystemDeniedPath(denied);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse(SandboxCode, "sandbox");
+        return p;
+    }
+
+    #! replaces the link with one to the given target at the listing's point between the decision and the status
+    private arm(string target) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        call_function("dbg_fs_swap_on_open", link, target);
+    }
+
+    #! checks that the link was replaced, so that the listing ran with the replacement
+    private checkSwapped(string target, string label) {
+        assertEq(target, readlink(link), label + ": the link was replaced in the listing");
+    }
+
+    fullListTest() {
+        arm(outside_file);
+        hash<auto> l = sandbox.callFunction("run", "list full", allowed);
+        checkSwapped(outside_file, "list full");
+        # the link, which leads outside when its status is read, is left out
+        assertFalse(l.hasKey("l"), sprintf("the status of the file outside is not reported: %y", l.l));
+        # the other entry is reported
+        assertEq(hstat(inside_file).inode, l."inside.txt".inode);
+    }
+
+    listDirsTest() {
+        arm(outside_dir);
+        list<string> l = sandbox.callFunction("run", "listDirs", allowed);
+        checkSwapped(outside_dir, "listDirs");
+        # the link refers to a file that the policy allowed, not to a directory: its replacement by a link to a
+        # directory outside is not reported
+        assertEq((), l, "no directory is reported");
+    }
+
+    listFilesTest() {
+        # the link refers to a directory inside, which is replaced by a link to a file outside
+        string inside_dir = allowed + DirSep + "sub";
+        mkdir(inside_dir);
+        on_exit rmdir(inside_dir);
+        unlink(link);
+        symlink(inside_dir, link);
+        arm(outside_file);
+        list<string> l = sandbox.callFunction("run", "listFiles", allowed);
+        checkSwapped(outside_file, "listFiles");
+        assertEq(("inside.txt",), sort(l), "the file outside is not reported");
+    }
+
+    infoListTest() {
+        foreach string op in (("listInfo", "listInfo regex", "listFileInfo", "listFileInfo regex")) {
+            unlink(link);
+            symlink(inside_file, link);
+            arm(outside_file);
+            hash<auto> l = sandbox.callFunction("run", op, allowed);
+            checkSwapped(outside_file, op);
+            assertFalse(l.hasKey("l"), sprintf("%s: the status of the file outside is not reported: %y", op, l.l));
+        }
+        # a link to a file inside replaced by a link to a directory outside is not reported as a directory
+        unlink(link);
+        symlink(inside_file, link);
+        arm(outside_dir);
+        assertEq({}, sandbox.callFunction("run", "listDirInfo", allowed), "listDirInfo: no directory is reported");
+        checkSwapped(outside_dir, "listDirInfo");
+    }
+
+    #! the confinement of SandboxManager::callWithFilesystemRoot() (qore#7821), as for a FileDataProvider whose root
+    #! is locked, without a sandbox of the Program
+    rootConfinedTest() {
+        hash<auto> outside = hstat(outside_file);
+        arm(outside_file);
+        list<hash<DirStatInfo>> l = SandboxManager::callWithFilesystemRoot(allowed, QSEC_READ,
+            list<hash<DirStatInfo>> sub () {
+                Dir d();
+                d.chdir(allowed);
+                return d.listFileInfo();
+            });
+        checkSwapped(outside_file, "callWithFilesystemRoot");
+        assertEq((), (select l, $1.name == "l"), "the link that leads outside is left out");
+        foreach hash<DirStatInfo> e in (l) {
+            assertNeq(outside.inode, e.inode, sprintf("the status of the file outside is not reported: %y", e));
+        }
+        assertEq(hstat(inside_file).inode, (select l, $1.name == "inside.txt")[0].inode, "the file inside is listed");
+    }
+
+    unchangedTest() {
+        hash<auto> l = sandbox.callFunction("run", "list full", allowed);
+        assertEq(("inside.txt", "l"), sort(keys l));
+        assertEq(hstat(inside_file).inode, l.l.inode, "the status of the target of the link");
+        assertEq(inside_file, l.l.link, "the target of the link");
+        assertEq(("inside.txt", "l"), sort(sandbox.callFunction("run", "listFiles", allowed)));
+        assertEq((), sandbox.callFunction("run", "listDirs", allowed));
+        assertEq(("inside.txt", "l"), sort(sandbox.callFunction("run", "list", allowed)));
+    }
+
+    rootDirTest() {
+        # a directory in the root directory that is not a link, to deny
+        *string top;
+        Dir root();
+        root.chdir("/");
+        foreach string name in (sort(root.list())) {
+            *hash<StatInfo> info = hlstat("/" + name);
+            if (info.type == "DIRECTORY" && is_readable("/" + name)) {
+                top = name;
+                break;
+            }
+        }
+        if (!top) {
+            testSkip("the root directory has no readable directory");
+        }
+        Program p = denyingSandbox("/" + top);
+        list<string> names = p.callFunction("run", "list", "/");
+        assertFalse(names.contains(top), "the denied directory is not listed by name");
+        assertTrue(names.size() > 0, "the root directory has other entries");
+        list<string> info_names = p.callFunction("run", "list info names", "/");
+        assertFalse(info_names.contains(top), "the status of the denied directory is not reported");
+        # the entries whose status can be read and that do not lead into the denied directory (a link in the root
+        # directory is listed by its own path, but its status is that of its target)
+        string denied_top = "/" + top;
+        list<string> readable = select names, hstat("/" + $1) && !inDir(realpath("/" + $1), denied_top);
+        assertEq(sort(readable), sort(info_names), "the status listing has the entries of the listing of names");
+        assertFalse(p.callFunction("run", "listDirs", "/").contains(top), "listDirs leaves the denied directory out");
+    }
+
+    descriptorDirTest() {
+        if (!is_dir("/dev/fd")) {
+            testSkip("no /dev/fd");
+        }
+        # the files of descriptors open in this process: one that the policy denies, one that it allows
+        string denied_dir = dir + DirSep + "denied";
+        mkdir(denied_dir);
+        string denied_file = denied_dir + DirSep + "held.txt";
+        writeFile(denied_file, "a file that the policy denies");
+        File denied_f();
+        denied_f.open2(denied_file);
+        File inside_f();
+        inside_f.open2(inside_file);
+        # files are identified by device and inode, as the descriptors are of several file systems
+        string denied_id = fileId(hstat(denied_file));
+        string inside_id = fileId(hstat(inside_file));
+
+        Program p = denyingSandbox(denied_dir);
+        hash<auto> l = p.callFunction("run", "listInfo", "/dev/fd");
+        list<string> ids = map fileId($1), l.iterator();
+        assertFalse(ids.contains(denied_id), "the status of the file of a descriptor that the policy denies "
+            "is not reported");
+        assertTrue(ids.contains(inside_id), "the status of the file of a descriptor that the policy allows is "
+            "reported");
+        denied_f.close();
+        inside_f.close();
+    }
+
+    #! the decoy checks the identity of the target of a procfs link (Linux, where /dev/fd is a link to /proc/self/fd);
+    #! where the entries of /dev/fd are not links (macOS, the BSDs), the policy decides for the file of the
+    #! descriptor, which no longer has a path, and the decoy is not reached in any case
+    removedDescriptorTest() {
+        if (!is_dir("/dev/fd")) {
+            testSkip("no /dev/fd");
+        }
+        # a file held open and removed, and another file that has the name that procfs gives the removed file
+        string held = allowed + DirSep + "held.txt";
+        writeFile(held, "the file held open");
+        File held_f();
+        held_f.open2(held);
+        unlink(held);
+        string decoy = held + " (deleted)";
+        writeFile(decoy, "another file");
+        on_exit unlink(decoy);
+        string decoy_id = fileId(hstat(decoy));
+        string inside_id = fileId(hstat(inside_file));
+        File inside_f();
+        inside_f.open2(inside_file);
+
+        Program p = denyingSandbox(dir + DirSep + "outside-dir");
+        hash<auto> l = p.callFunction("run", "listInfo", "/dev/fd");
+        list<string> ids = map fileId($1), l.iterator();
+        assertFalse(ids.contains(decoy_id), "the file that has the name of the removed file is not reported");
+        assertTrue(ids.contains(inside_id), "the file of another descriptor is reported");
+        held_f.close();
+        inside_f.close();
+    }
+
+    #! creates a link with the given text, or skips the test if the system cannot hold it
+    private makeLongLink(string text, string path) {
+        try {
+            symlink(text, path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SYMLINK-ERROR" && ex.arg == ENAMETOOLONG) {
+                testSkip("the system holds no link text of QORE_PATH_MAX bytes");
+            }
+            rethrow;
+        }
+    }
+
+    longLinkTest() {
+        # link texts of QORE_PATH_MAX (1024) + 1 bytes, whose first QORE_PATH_MAX bytes name an entry that exists;
+        # a text cut short there is not taken for the link's text (macOS holds at most 1023 bytes)
+        string sub_dir = allowed + DirSep + "sub";
+        mkdir(sub_dir);
+        on_exit rmdir(sub_dir);
+        string long_link = allowed + DirSep + "long";
+
+        # the text names the directory "sub" (with a trailing separator), and so does the text cut short: the same file
+        string text = strmul("./", 509) + ".//sub" + "/";
+        assertEq(1025, text.size());
+        makeLongLink(text, long_link);
+        {
+            on_exit unlink(long_link);
+            assertFalse(sandbox.callFunction("run", "list full", allowed).hasKey("long"), "list full: the link to the "
+                "directory is left out");
+            assertFalse(sandbox.callFunction("run", "listInfo", allowed).hasKey("long"), "listInfo: the link to the "
+                "directory is left out");
+            assertFalse(sandbox.callFunction("run", "listDirs", allowed).contains("long"), "listDirs: the link to the "
+                "directory is left out");
+        }
+
+        # the text names a file that does not exist; the text cut short names one that does
+        text = strmul("./", 507) + "inside.txt" + "X";
+        assertEq(1025, text.size());
+        makeLongLink(text, long_link);
+        on_exit unlink(long_link);
+        assertFalse(sandbox.callFunction("run", "list full", allowed).hasKey("long"), "list full: the link is left "
+            "out");
+        assertFalse(sandbox.callFunction("run", "listInfo", allowed).hasKey("long"), "listInfo: the link is left out");
+        assertFalse(sandbox.callFunction("run", "listFiles", allowed).contains("long"), "listFiles: the link is left "
+            "out");
+    }
+}
