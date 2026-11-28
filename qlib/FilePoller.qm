@@ -114,6 +114,40 @@ module FilePoller {
     order, so a file that is refused every time is retried on every poll and blocks the files after it in that order.
     An error getting the list of files stops polling.
 
+    @section filepoller_confinement Confinement to the Polled Directory
+
+    A poller delivers only the files under the directory that it polls by their real paths, with symbolic links
+    resolved, as the root directory of a FileDataProvider with the \c lock option confines its paths:
+    - the entries of the directory whose names match the mask are listed by name, without following symbolic links,
+      and the status of each one is read with
+      @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()" in the real path
+      of the directory (resolved for every poll), so that an entry whose real path is outside of the directory (a
+      symbolic link to a file or directory outside, also through a chain of relative links) is not delivered, also if
+      the entry is replaced by such a link after it was listed; such an entry, and one that cannot be resolved (a
+      dangling link that leads outside, a loop of links), is left out and reported with the \c "log_info" closure
+      (the logger of a data provider) when a poll first leaves it out; a directory and a dangling link that leads
+      under the directory are left out without a report, as before
+    - symbolic links that stay under the directory are delivered as before: the event's \c filepath is the path of
+      the link in the directory, its \c link the target of the link, and its status the status of the file that the
+      link refers to
+    - the mask is matched against the name of the entry in the directory (the name of a link, not of its target)
+    - a hard link names its file by another path, so a hard link in the directory to a file elsewhere is delivered;
+      the directory must not hold hard links to files that the handlers may not reach
+    - the confinement covers what the poller itself does; a handler that reads, moves or deletes the file of an event
+      later can find the path replaced meanwhile by a link that leads outside of the directory: to be sure to reach
+      only a file under the directory, it does so with
+      @ref FilePoller::FilePoller::callConfined() "FilePoller::callConfined()" (or
+      @ref FilePoller::FilePollerDataProviderBase::callConfined() "FilePollerDataProviderBase::callConfined()" for an
+      observer of a data provider)
+    - the directory is changed only by code that may use the file system:
+      @ref FilePoller::FilePoller::setPath() "FilePoller::setPath()" and
+      @ref FilePoller::FilePollerDataProviderBase::updateConnectionObjects()
+      "FilePollerDataProviderBase::updateConnectionObjects()" raise \c PERMISSION-DENIED for code restricted from the
+      file system, and the latter also for code that the file-system policy of a sandbox governs, as the handlers of
+      the files act with the access of the poller's creator
+    - on Windows, a path is checked by its name before it is used, without the pinning of the file reached against a
+      concurrent change of the path
+
     @section filepollersandbox FilePoller Module in Sandboxed Programs
 
     The @ref FilePoller::FilePoller "FilePoller" class includes support for running in sandboxed Program objects with
@@ -129,6 +163,14 @@ module FilePoller {
     @section file_poller_relnotes FilePoller Release Notes
 
     @subsection file_poller_2_1 FilePoller v2.1
+    - security fix: a poller delivers only the files under its directory by their real paths: a symbolic link that
+      leads outside of the directory is left out and reported, also if an entry is replaced by one after it was
+      listed; added @ref FilePoller::FilePoller::callConfined() "FilePoller::callConfined()" and
+      @ref FilePoller::FilePollerDataProviderBase::callConfined() "FilePollerDataProviderBase::callConfined()" for
+      handlers, and @ref FilePoller::FilePoller::setPath() "FilePoller::setPath()" and
+      @ref FilePoller::FilePollerDataProviderBase::updateConnectionObjects()
+      "FilePollerDataProviderBase::updateConnectionObjects()" refuse code restricted from the file system (see
+      @ref filepoller_confinement; <a href="https://github.com/qoretechnologies/qore/issues/7873">issue 7873</a>)
     - a poller refuses a creator restricted from the file system (\c PERMISSION-DENIED)
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
     - a started poller whose last reference is dropped is destroyed, which stops its polling thread: the thread holds
@@ -372,6 +414,9 @@ public class FilePoller {
 
         #! optional sleep closure
         *code<nothing(int)> sleep;
+
+        #! the entries left out by the last poll, with the reason (see @ref filepoller_confinement)
+        *hash<string, string> last_skipped;
     }
 
     #! creates the object
@@ -491,24 +536,148 @@ public class FilePoller {
     }
 
     #! Changes the polling path
+    /** @param path the new directory to poll, which is then the directory that the poller is confined to (see
+        @ref filepoller_confinement)
+
+        @throw PERMISSION-DENIED the calling code is restricted from the @ref Qore::DOM_FILESYSTEM "FILESYSTEM"
+        functional domain (see @ref Util::check_caller_file_access() "check_caller_file_access()")
+    */
     setPath(string path) {
+        # the directory is the caller's input (qore#7873)
+        check_caller_file_access("the path of a file poller");
         self.path = path;
     }
 
+    #! Calls the given code with its file-system access confined to the polled directory
+    /** The code can reach only the files under the real path of the polled directory, with the access given, as
+        @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()" confines it:
+        an event handler that reads or changes the file of an event uses it to be sure to reach a file under the
+        polled directory also if the file is replaced by a symbolic link that leads outside of it after the poll
+        (see @ref filepoller_confinement)
+
+        @param access_modes the @ref sandbox_fs_access "QSEC_*" access allowed under the polled directory (ex:
+        @ref Qore::QSEC_READ "QSEC_READ" to read the file only)
+        @param call the code to call
+        @param call_args optional arguments for \a call
+
+        @return the return value of \a call
+
+        @throw FILESYSTEM-ACCESS-DENIED (raised by the code called) a path is outside of the polled directory or the
+        access is not in \a access_modes
+
+        @par Example:
+        @code{.py}
+singleFileEvent(hash<FilePollerFileEventInfo> event) {
+    binary data = callConfined(QSEC_READ, \ReadOnlyFile::readBinaryFile(), event.filepath);
+    # ...
+}
+        @endcode
+
+        @since FilePoller 2.1
+    */
+    auto callConfined(int access_modes, code call, *softlist<auto> call_args) {
+        # also for the root directory of the file system, so that the access modes apply
+        return SandboxManager::callWithFilesystemRoot(realpath(path), access_modes, call, call_args);
+    }
+
+    #! Returns the matching files (not directories) under the polled directory by their real paths (qore#7873)
+    /** The entries are listed by name, without following symbolic links, and the status of each one is read with the
+        file-system access confined to the real path of the directory, so that an entry whose real path is outside
+        of the directory is left out, also if it is replaced after it was listed; such an entry is reported with
+        \c "log_info" after the confined call, so that the log closure is not confined
+    */
+    private:internal list<hash<FilePollerFileEventInfo>> getConfinedFiles() {
+        # the path can be changed by setPath() concurrently
+        string dir = path;
+        Dir d();
+        d.chdir(dir);
+        list<string> names = d.list(mask, reopt);
+        if (!names) {
+            return ();
+        }
+        # the directory's real path is the root that the poll is confined to
+        string real_root = realpath(dir);
+        list<hash<FilePollerFileEventInfo>> rv = ();
+        # the entries left out, with the reason
+        hash<string, string> skipped = {};
+        code stat_entries = sub () {
+            foreach string name in (names) {
+                *hash<FilePollerFileEventInfo> h = FilePoller::statEntry(dir, real_root, name, \skipped);
+                if (h) {
+                    rv += h;
+                }
+            }
+        };
+        # every path is under the root directory of the file system
+        if (real_root == DirSep) {
+            stat_entries();
+        } else {
+            SandboxManager::callWithFilesystemRoot(real_root, QSEC_READ, stat_entries);
+        }
+        # an entry is reported when it is first left out, not on every poll
+        *hash<string, string> last = last_skipped;
+        last_skipped = skipped;
+        foreach hash<auto> i in (skipped.pairIterator()) {
+            if (last{i.key} == i.value) {
+                continue;
+            }
+            logInfo("%y is not polled: the file that it refers to is not under the polled directory %y or cannot be "
+                "resolved: %s", i.key, dir, i.value);
+        }
+        return rv;
+    }
+
+    #! Returns the event hash for an entry of the polled directory if it is a file (not a directory) under it
+    /** Called in the confinement of getConfinedFiles(): the status of a file outside of the real path of the directory
+        is refused by it (FILESYSTEM-ACCESS-DENIED), as is one that cannot be resolved; such an entry is added to
+        \a skipped
+    */
+    private:internal static *hash<FilePollerFileEventInfo> statEntry(string dir, string real_root, string name,
+            reference<hash<string, string>> skipped) {
+        string real_path = (real_root == DirSep ? "" : real_root) + DirSep + name;
+        hash<StatInfo> info;
+        *string link;
+        try {
+            if (hlstat(real_path).type == "SYMBOLIC-LINK") {
+                link = readlink(real_path);
+            }
+            # the status of the file that the entry refers to, pinned in the confinement
+            *hash<StatInfo> h = hstat(real_path);
+            # the entry no longer exists, it is a dangling link that leads under the directory, or a directory (left
+            # out as before)
+            if (!h || h.type == "DIRECTORY") {
+                return;
+            }
+            # the status of a link itself: the entry was replaced by a link after the confinement checked it
+            if (h.type == "SYMBOLIC-LINK") {
+                skipped{name} = "the entry was replaced by a symbolic link while it was checked";
+                return;
+            }
+            info = h;
+        } catch (hash<ExceptionInfo> ex) {
+            # fail closed: an entry that cannot be checked is not delivered
+            skipped{name} = sprintf("%s: %s", ex.err, ex.desc);
+            return;
+        }
+        return cast<hash<FilePollerFileEventInfo>>(info + {
+            "name": name,
+            "filepath": dir + DirSep + name,
+            "link": link,
+        });
+    }
+
     #! returns a list of regular file hashes matching any file name mask set for the object
-    /** @param sort the sort option for the list returned
+    /** Only the files under the polled directory by their real paths are returned; see
+        @ref filepoller_confinement
+
+        @param sort the sort option for the list returned
         @param order the ordering of sorted data returned
 
         @return a list of @ref FilePollerFileEventInfo hashes for each matched file
     */
     list<hash<FilePollerFileEventInfo>> getFiles(int sort = FilePoller::SortNone, int order = FilePoller::OrderAsc) {
-        Dir d();
-        d.chdir(path);
-
-        # file of file hashes
-        list<hash<FilePollerFileEventInfo>> ret =
-            map cast<hash<FilePollerFileEventInfo>>($1 + ("filepath": path + DirSep + $1.name)),
-                d.listFileInfo(regex: mask, regex_options: reopt);
+        # only the files under the directory by their real paths (qore#7873)
+        list<hash<FilePollerFileEventInfo>> ret = getConfinedFiles();
 
         # remove all files that aren't old enough
         if (minage) {
@@ -1067,16 +1236,57 @@ public class FilePollerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new AbstractConnection object
-        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
+    /** Sets the directory to poll to the directory of the given @ref Qore::Dir "Dir" object, which is then the
+        directory that the poller is confined to (see @ref filepoller_confinement)
+
+        @param conn the new AbstractConnection object
+        @param connobj the new connection object itself: a @ref Qore::Dir "Dir" object for the directory to poll
+
+        @throw UPDATE-CONNECTION-ERROR \a connobj is not a @ref Qore::Dir "Dir" object
+        @throw PERMISSION-DENIED the calling code (or, in a method of a lent object, the code that it was lent to) is
+        restricted from the @ref Qore::DOM_FILESYSTEM "FILESYSTEM" functional domain (see
+        @ref Util::check_caller_file_access() "check_caller_file_access()")
+        @throw PERMISSION-DENIED the calling code is governed by the file-system policy of a sandbox: the handlers of
+        the files found act with the access of the poller's creator
     */
     updateConnectionObjects(object conn, object connobj) {
         if (!(connobj instanceof Dir)) {
             throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"Dir\" object; got "
                 "%y instead", self.className(), connobj.className());
         }
+        # the new directory is the calling code's input: only code that may use the file system can change it
+        # (qore#7873)
+        check_caller_file_access("the directory of a file poller connection update");
         Dir dir = cast<Dir>(connobj);
-        poller.setPath(dir.path() ?? "/");
+        string new_path = dir.path() ?? "/";
+        # the handlers of the files that the poller finds in the new directory move or delete them with the access
+        # of the poller's creator, not of the caller: code that a sandbox's file-system policy governs cannot change
+        # the directory
+        if (SandboxManager::isGoverned()) {
+            throw "PERMISSION-DENIED", "the directory of a file poller connection update cannot be used: the calling "
+                "code is governed by a sandbox file-system policy";
+        }
+        poller.setPath(new_path);
+    }
+
+    #! Calls the given code with its file-system access confined to the polled directory
+    /** See @ref FilePoller::FilePoller::callConfined() "FilePoller::callConfined()"; an observer that reads or changes
+        the file of an event uses it to be sure to reach a file under the polled directory (see
+        @ref filepoller_confinement)
+
+        @param access_modes the @ref sandbox_fs_access "QSEC_*" access allowed under the polled directory
+        @param call the code to call
+        @param call_args optional arguments for \a call
+
+        @return the return value of \a call
+
+        @throw FILESYSTEM-ACCESS-DENIED (raised by the code called) a path is outside of the polled directory or the
+        access is not in \a access_modes
+
+        @since FilePoller 2.1
+    */
+    auto callConfined(int access_modes, code call, *softlist<auto> call_args) {
+        return poller.callConfined(access_modes, call, call_args);
     }
 
     #! Returns a hash of all supported event types
