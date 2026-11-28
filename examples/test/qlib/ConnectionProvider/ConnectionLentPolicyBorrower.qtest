@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 client connections over TCP, used by code that a sandbox restricts
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestClient
+%requires ConnectionProvider
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class ConnectionLentPolicyBorrowerTest
+
+#! A connection that the host lent to code that a sandbox policy restricts, but that has the NETWORK domain, creates a
+#! client or manager of the host's for it, as for code restricted from the NETWORK domain (qore#7862)
+/** The borrower must never become the owner of what the connection of the host creates for it: it cannot take the proxy
+    credentials or the cookie jar of the manager, and the manager connects only to the target of the connection's
+    creator; its requests with the connection still send and store the cookies.  Code that a sandbox restricts and that
+    created the connection itself uses it as its own.
+*/
+
+const ProxyUrl = "http://puser:psecret@127.0.0.1:1";
+
+#! the code of the borrower
+const BorrowerCode = "%modern
+%requires HttpClientIo
+%requires RestClientIo
+%requires ConnectionProvider
+#! the manager that the connection's async object is or uses
+HttpClientConnectionManager sub managerOf(object o) {
+    return o instanceof HttpClientConnectionManager
+        ? cast<HttpClientConnectionManager>(o)
+        : cast<RestClientIo::RestClientIo>(o).getConnectionManager();
+}
+#! gets the async object of a connection and asks for the secrets of its manager; returns what happened
+string sub secrets(AbstractConnection conn) {
+    try {
+        HttpClientConnectionManager mgr = managerOf(conn.getAsync(False));
+        mgr.getProxyAuthenticator();
+        mgr.getCookieJar();
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! makes two requests with a connection that the host lent; returns the body of the second response, or what happened
+string sub twice(AbstractConnection conn) {
+    try {
+        object o = conn.getAsync(False);
+        if (o instanceof HttpClientConnectionManager) {
+            HttpClientConnectionManager m = cast<HttpClientConnectionManager>(o);
+            m.requestAsync(conn.url, \"GET\", \"/first\").get(20s);
+            return m.requestAsync(conn.url, \"GET\", \"/second\").get(20s).body;
+        }
+        call_object_method(o, \"restGetAsync\", \"/first\").get(20s);
+        return call_object_method(o, \"restGetAsync\", \"/second\").get(20s).body;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+#! points the lent connection at another address that the sandbox allows and makes a request; returns what happened
+string sub retarget(AbstractConnection conn, string url) {
+    try {
+        conn.url = url;
+        object o = conn.getAsync(False);
+        if (o instanceof HttpClientConnectionManager) {
+            cast<HttpClientConnectionManager>(o).requestAsync(url, \"GET\", \"/x\").get(20s);
+        } else {
+            call_object_method(o, \"restGetAsync\", \"/x\").get(20s);
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! a connection that the borrower created itself is its own; returns what happened
+string sub own(string url) {
+    try {
+        ConnectionProvider::HttpConnection conn(\"own-conn\", \"\", url, {}, {\"proxy\": \"" + ProxyUrl + "\"});
+        HttpClientConnectionManager mgr = managerOf(conn.getAsync(False));
+        mgr.getProxyAuthenticator();
+        mgr.getCookieJar();
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+#! sets a cookie with every response and sends back the Cookie header of the request
+class CookieHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": "text/plain", "Set-Cookie": "sid=abc; Path=/"},
+            "body": "cookie=" + (hdr.cookie ?? ""),
+        };
+    }
+}
+
+class ConnectionLentPolicyBorrowerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("lent connection: a policy-restricted borrower never owns the connection's client",
+            "1.0", \ARGV) {
+        addTestCase("the secrets of the manager of a lent connection are refused", \secretsTest());
+        addTestCase("the requests of the borrower send and store the cookies", \requestTest());
+        addTestCase("the manager connects only to the creator's target", \targetTest());
+        addTestCase("a connection that the borrower created is its own", \ownTest());
+        set_return_value(main());
+    }
+
+    #! returns a server, and its URL
+    private hash<auto> startServer() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("cookie", new CookieHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "port": port,
+            "url": sprintf("http://127.0.0.1:%d", port),
+        };
+    }
+
+    #! a borrower that a sandbox policy restricts and that has the NETWORK domain
+    private Program getBorrower() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        p.setSandboxManager(sm);
+        p.parse(BorrowerCode, "borrower");
+        return p;
+    }
+
+    #! the connections of the host: with the credentials of a proxy
+    private list<AbstractConnection> getConnections(string url) {
+        return (
+            new ConnectionProvider::HttpConnection("http-conn", "", url, {}, {"proxy": ProxyUrl}),
+            new RestClient::RestConnection("rest-conn", "", url, {}, {"proxy": ProxyUrl, "data": "text"}),
+        );
+    }
+
+    secretsTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        Program p = getBorrower();
+        foreach AbstractConnection conn in (getConnections(srv.url)) {
+            assertEq("PERMISSION-DENIED", p.callFunction("secrets", conn), conn.name);
+        }
+    }
+
+    requestTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        Program p = getBorrower();
+        # no proxy: the requests are made
+        ConnectionProvider::HttpConnection http("http-conn", "", srv.url);
+        assertEq("cookie=sid=abc", p.callFunction("twice", http), "an HTTP connection");
+        RestClient::RestConnection rest("rest-conn", "", srv.url, {}, {"data": "text"});
+        assertEq("cookie=sid=abc", p.callFunction("twice", rest), "a REST connection");
+    }
+
+    targetTest() {
+        hash<auto> srv = startServer();
+        hash<auto> other = startServer();
+        on_exit srv.server.stop();
+        on_exit other.server.stop();
+        Program p = getBorrower();
+        foreach AbstractConnection conn in ((new ConnectionProvider::HttpConnection("http-conn", "", srv.url),
+                new RestClient::RestConnection("rest-conn", "", srv.url, {}, {"data": "text"}))) {
+            assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, other.url), conn.name);
+        }
+    }
+
+    ownTest() {
+        hash<auto> srv = startServer();
+        on_exit srv.server.stop();
+        assertEq("done", getBorrower().callFunction("own", srv.url), "the borrower's own connection");
+    }
+}
