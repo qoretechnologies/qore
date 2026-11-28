@@ -1291,14 +1291,15 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     }
 
     #! Raises an exception if sandboxed code changes a type that code that no sandbox governs created
-    /** A type that a module creates outside a sandbox (in its initialization, or in code that it runs with the
-        system policy) may be shared by every Program of the process, so it cannot be changed by code that a sandbox
-        governs; a type that sandboxed code creates can be changed by it (qore#6843)
+    /** A type that trusted code creates (Qore::SandboxManager::createsSharedObjects(): also code that a trusted,
+        governed, sandbox governs) may be shared by every Program of the process, so it cannot be changed by code that
+        is restricted or acts for restricted code; trusted code changes it, and a type that restricted code creates
+        can be changed by it (qore#6843, qore#7737, qore#7879)
 
         @param what what is changed, for the error message
 
-        @throw SANDBOX-REGISTRATION-ERROR the type was created outside a sandbox, and sandboxed code changes it (see
-        Qore::SandboxManager::checkProcessWideRegistration())
+        @throw SANDBOX-REGISTRATION-ERROR the type is shared, and code that is restricted or acts for restricted code
+        changes it
 
         @since DataProvider 3.12
     */
@@ -1414,9 +1415,12 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         @since DataProvider 3.12
     */
     checkChange(string what) {
-        if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
-            SandboxManager::checkProcessWideRegistration(sprintf("change the %s of data type %y, which is shared "
-                "by every Program of the process", what, getName()));
+        # the classification that makes the type shared (qore#7737): code that creates shared objects (trusted code,
+        # also where a trusted, governed, sandbox governs it) changes them; restricted code and code acting for it do
+        # not (fails closed) (qore#7879)
+        if (shared_object && !SandboxManager::createsSharedObjects()) {
+            throw "SANDBOX-REGISTRATION-ERROR", sprintf("code that is restricted or acts for restricted code cannot "
+                "change the %s of data type %y, which is shared by every Program of the process", what, getName());
         }
     }
 
