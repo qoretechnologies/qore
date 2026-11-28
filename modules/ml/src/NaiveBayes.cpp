@@ -290,6 +290,14 @@ QoreNaiveBayes* QoreNaiveBayes::deserializeState(const uint8_t* data,
     if (*xsink) { return nullptr; }
     int ncl = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that fit() establishes (qore#7844); the counts are checked before they
+    // size anything: each class has one class value (8 bytes) and its statistics (at least 20 bytes)
+    using namespace MLSerialization;
+    if (checkRange(nc, 1, remaining / 28, "NaiveBayes", "the number of classes", xsink)
+        || checkSize(ncl, nc, "NaiveBayes", "the number of class values", xsink)) {
+        return nullptr;
+    }
     std::vector<double> cls(ncl);
     for (int i = 0; i < ncl; ++i) {
         cls[i] = MLSerialization::readScalar(ptr, remaining, xsink);
@@ -310,6 +318,36 @@ QoreNaiveBayes* QoreNaiveBayes::deserializeState(const uint8_t* data,
     if (*xsink) { return nullptr; }
     std::string tf = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    if (checkEnd(remaining, "NaiveBayes", xsink)
+        || checkRange(nf, 1, INT32_MAX, "NaiveBayes", "the number of features", xsink)
+        || checkRange(ts, 1, INT32_MAX, "NaiveBayes", "the number of training samples", xsink)) {
+        return nullptr;
+    }
+    int64_t count_sum = 0;
+    for (int i = 0; i < nc; ++i) {
+        // class values are unique and sorted, as fit() takes them from a set, and are returned as integers
+        if (checkValueRange(cls[i], -9.0e18, 9.0e18, "NaiveBayes", "a class value", xsink)) {
+            return nullptr;
+        }
+        if (i && !(cls[i - 1] < cls[i])) {
+            stateError(xsink, "NaiveBayes", "the class values must be unique and in ascending order");
+            return nullptr;
+        }
+        const ClassStats& cs = stats[i];
+        if (checkSize(cs.mean.size(), nf, "NaiveBayes", "the size of a class mean vector", xsink)
+            || checkSize(cs.var.size(), nf, "NaiveBayes", "the size of a class variance vector", xsink)
+            || checkRange(cs.count, 1, ts, "NaiveBayes", "a class sample count", xsink)) {
+            return nullptr;
+        }
+        count_sum += cs.count;
+    }
+    // update() counts every row in the total but only the rows of known classes in the classes
+    if (count_sum > ts) {
+        stateError(xsink, "NaiveBayes", "the class sample counts sum to " QLLD " but must not exceed the number of "
+            "training samples (%d)", (int64)count_sum, ts);
+        return nullptr;
+    }
 
     auto* nb = new QoreNaiveBayes(vs);
     nb->n_features = nf;

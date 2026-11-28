@@ -353,11 +353,11 @@ hashdecl Qore::ML::GMMResult {
 /** Result of KNN classification prediction
 */
 hashdecl Qore::ML::KNNClassificationResult {
-    //! predicted class label
+    //! predicted class label; a tied vote gives the smallest of the tied labels
     int predicted_class;
     //! confidence (proportion of voting weight for the predicted class)
     float confidence;
-    //! list of k nearest neighbor details (index, distance, label)
+    //! list of k nearest neighbor details (index, distance, label), ordered by distance, then by training index
     list<hash<auto>> neighbors;
 }
 
@@ -367,7 +367,7 @@ hashdecl Qore::ML::KNNClassificationResult {
 hashdecl Qore::ML::KNNRegressionResult {
     //! predicted target value (weighted mean of k nearest neighbors)
     float prediction;
-    //! list of k nearest neighbor details (index, distance, label)
+    //! list of k nearest neighbor details (index, distance, label), ordered by distance, then by training index
     list<hash<auto>> neighbors;
 }
 
@@ -794,7 +794,7 @@ hashdecl Qore::ML::FeatureImportanceInfo {
     @ref RandomForest::predictClassificationMatrix().
 */
 hashdecl Qore::ML::RandomForestClassificationResult {
-    //! predicted class label
+    //! predicted class label; a tied vote gives the smallest of the tied labels
     int predicted_class;
     //! probability of the predicted class
     float max_probability;
@@ -1337,6 +1337,12 @@ AbstractMLModel ml_deserialize(binary data) [dom=DEFAULT] {
 
     AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
     if (*xsink || !priv) {
+        if (priv) {
+            priv->deref(xsink);
+        } else if (!*xsink) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR", "the state of algorithm '%s' could not be restored",
+                header.algorithm.c_str());
+        }
         return QoreValue();
     }
 
@@ -1436,6 +1442,12 @@ AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
 
     AbstractPrivateData* priv = deserializer(header.model_data, header.model_data_len, xsink);
     if (*xsink || !priv) {
+        if (priv) {
+            priv->deref(xsink);
+        } else if (!*xsink) {
+            xsink->raiseException("ML-DESERIALIZE-ERROR", "the state of algorithm '%s' could not be restored",
+                header.algorithm.c_str());
+        }
         return QoreValue();
     }
 

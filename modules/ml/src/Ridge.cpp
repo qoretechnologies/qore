@@ -450,6 +450,26 @@ QoreRidge* QoreRidge::deserializeState(const uint8_t* data, size_t len,
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "Ridge", xsink)
+        || (alpha < 0.0 && stateError(xsink, "Ridge", "alpha must be >= 0"))
+        || checkRange(n_features, 1, INT32_MAX, "Ridge", "the number of features", xsink)
+        || checkSize(coefficients.size(), n_features, "Ridge", "the number of coefficients", xsink)
+        || checkSize(feature_stds.size(), feature_means.size(), "Ridge",
+            "the number of feature standard deviations", xsink)
+        || (!do_normalize && checkSize(feature_means.size(), 0, "Ridge",
+            "the number of feature means without normalization", xsink))) {
+        return nullptr;
+    }
+    for (Eigen::Index i = 0; i < feature_stds.size(); ++i) {
+        // a standard deviation is positive (a constant feature has 1)
+        if (!(feature_stds(i) > 0.0)) {
+            stateError(xsink, "Ridge", "a feature standard deviation must be positive");
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreRidge> obj(new QoreRidge(alpha, fit_intercept, do_normalize));
     obj->n_features = n_features;
     obj->coefficients = std::move(coefficients);

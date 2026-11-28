@@ -560,6 +560,30 @@ QoreElasticNet* QoreElasticNet::deserializeState(const uint8_t* data, size_t len
         if (*xsink) { return nullptr; }
     }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "ElasticNet", xsink)
+        || (alpha < 0.0 && stateError(xsink, "ElasticNet", "alpha must be >= 0"))
+        || ((l1_ratio < 0.0 || l1_ratio > 1.0) && stateError(xsink, "ElasticNet", "l1_ratio must be between 0 and 1"))
+        || checkRange(max_iter, 1, INT32_MAX, "ElasticNet", "max_iter", xsink)
+        || (tol <= 0.0 && stateError(xsink, "ElasticNet", "tol must be > 0"))
+        || checkRange(n_features, 1, INT32_MAX, "ElasticNet", "the number of features", xsink)
+        || checkRange(iterations_run, 0, max_iter, "ElasticNet", "the number of iterations run", xsink)
+        || checkSize(coefficients.size(), n_features, "ElasticNet", "the number of coefficients", xsink)
+        || checkSize(feature_stds.size(), feature_means.size(), "ElasticNet",
+            "the number of feature standard deviations", xsink)
+        || (!do_normalize && checkSize(feature_means.size(), 0, "ElasticNet",
+            "the number of feature means without normalization", xsink))) {
+        return nullptr;
+    }
+    for (Eigen::Index i = 0; i < feature_stds.size(); ++i) {
+        // a standard deviation is positive (a constant feature has 1)
+        if (!(feature_stds(i) > 0.0)) {
+            stateError(xsink, "ElasticNet", "a feature standard deviation must be positive");
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreElasticNet> obj(new QoreElasticNet(alpha, l1_ratio, fit_intercept,
         do_normalize, max_iter, tol, warm_start));
     obj->n_features = n_features;

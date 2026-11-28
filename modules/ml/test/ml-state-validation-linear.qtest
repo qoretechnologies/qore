@@ -1,0 +1,467 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationLinearTest
+
+#! Restored states of the linear models are checked against the invariants of a trained model
+/** (qore#7844) LinearRegression, Ridge, Lasso, ElasticNet, LogisticRegression and SVM: a state that breaks one is
+    refused with ML-DESERIALIZE-ERROR, and no model is restored.
+*/
+class MlStateValidationLinearTest inherits QUnit::Test {
+    #! the regression models that share the layout of their fitted state
+    const Regressors = ("LinearRegression", "Ridge", "Lasso", "ElasticNet");
+
+    constructor() : QUnit::Test("ml restored state validation: linear models", "1.0", \ARGV) {
+        addTestCase("well-formed regression model states are restored", \regressionValidTest());
+        addTestCase("a regression model state whose coefficient count differs from its features is refused",
+            \regressionCoefficientCountTest());
+        addTestCase("a regression model state whose feature count is out of range is refused",
+            \regressionFeatureCountTest());
+        addTestCase("a regression model state with invalid feature scaling is refused", \regressionScalingTest());
+        addTestCase("a regression model state with data after its end is refused", \regressionTrailingTest());
+        addTestCase("a Ridge state with an invalid alpha is refused", \ridgeOptionTest());
+        addTestCase("a Lasso or ElasticNet state with an invalid option is refused", \coordinateDescentOptionTest());
+        addTestCase("a Lasso or ElasticNet state whose iteration count is out of range is refused",
+            \coordinateDescentIterationsTest());
+        addTestCase("an ElasticNet state with an invalid l1_ratio is refused", \elasticNetOptionTest());
+
+        addTestCase("well-formed LogisticRegression states are restored", \logisticValidTest());
+        addTestCase("a LogisticRegression state with an invalid option is refused", \logisticOptionTest());
+        addTestCase("a LogisticRegression state with invalid classes is refused", \logisticClassesTest());
+        addTestCase("a LogisticRegression state whose weight or intercept sizes differ from its classes and "
+            "features is refused", \logisticSizeTest());
+        addTestCase("a LogisticRegression state with data after its end is refused", \logisticTrailingTest());
+
+        addTestCase("well-formed SVM states are restored", \svmValidTest());
+        addTestCase("an SVM state with an invalid option is refused", \svmOptionTest());
+        addTestCase("an SVM state whose class count is invalid is refused", \svmClassCountTest());
+        addTestCase("an SVM state with invalid class labels is refused", \svmClassesTest());
+        addTestCase("an SVM state whose binary model count differs from its class pairs is refused",
+            \svmModelCountTest());
+        addTestCase("an SVM state with a binary model that does not match its class pair is refused",
+            \svmModelTest());
+        addTestCase("an SVM state with data after its end is refused", \svmTrailingTest());
+        addTestCase("a two-class SVM state with a large class label predicts it", \svmLargeLabelTest());
+
+        addTestCase("states with option values that the constructors accept are restored", \acceptedOptionTest());
+        addTestCase("models fitted on records with null values are restored", \nullRoundTripTest());
+        addTestCase("models fitted on records and then on a matrix of another width are restored",
+            \refitRoundTripTest());
+        set_return_value(main());
+    }
+
+    #! the fitted part of a regression model state, from its coefficients: 2 features, coefficients 1 and 2,
+    #! intercept 0.5
+    static binary regressionFit(*hash<auto> opt) {
+        return (opt.coefficients ?? vec(("1", "2"))) + f64("0.5") + f64("1")
+            + (opt.feature_means ?? vec(())) + (opt.feature_stds ?? vec(()))
+            + (opt.field_names ?? strv(())) + str("");
+    }
+
+    #! the state of a LinearRegression model, with the given fields replaced
+    static binary linearRegressionState(*hash<auto> opt) {
+        return b8(True) + b8(opt.normalize ?? False) + i32(opt.n_features ?? 2) + regressionFit(opt)
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a Ridge model, with the given fields replaced
+    static binary ridgeState(*hash<auto> opt) {
+        return f64(opt.alpha ?? "1") + b8(True) + b8(opt.normalize ?? False) + i32(opt.n_features ?? 2)
+            + regressionFit(opt) + (opt.tail ?? binary());
+    }
+
+    #! the state of a Lasso model, with the given fields replaced
+    static binary lassoState(*hash<auto> opt) {
+        return f64(opt.alpha ?? "0.25") + b8(True) + b8(opt.normalize ?? False) + i32(opt.max_iter ?? 100)
+            + f64(opt.tol ?? "0.25") + i32(opt.n_features ?? 2) + i32(opt.iterations_run ?? 3)
+            + regressionFit(opt) + (opt.warm_start ?? b8(False)) + (opt.tail ?? binary());
+    }
+
+    #! the state of an ElasticNet model, with the given fields replaced
+    static binary elasticNetState(*hash<auto> opt) {
+        return f64(opt.alpha ?? "0.25") + f64(opt.l1_ratio ?? "0.5") + b8(True) + b8(opt.normalize ?? False)
+            + i32(opt.max_iter ?? 100) + f64(opt.tol ?? "0.25") + i32(opt.n_features ?? 2)
+            + i32(opt.iterations_run ?? 3) + regressionFit(opt) + (opt.warm_start ?? b8(False))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of the regression model @p model, with the given fields replaced
+    static binary regressionState(string model, *hash<auto> opt) {
+        switch (model) {
+            case "LinearRegression": return linearRegressionState(opt);
+            case "Ridge": return ridgeState(opt);
+            case "Lasso": return lassoState(opt);
+            case "ElasticNet": return elasticNetState(opt);
+        }
+        throw "ML-STATE-TEST-ERROR", sprintf("unknown model %y", model);
+    }
+
+    #! the state of a binary LogisticRegression classifier over 2 features, with the given fields replaced
+    static binary logisticRegressionState(*hash<auto> opt) {
+        return f64(opt.learning_rate ?? "0.5") + i32(opt.max_iterations ?? 100) + f64(opt.tolerance ?? "0")
+            + f64(opt.regularization ?? "1") + str(opt.penalty ?? "l2") + b8(True)
+            + (opt.weights ?? mat(1, 2, ("1", "1"))) + (opt.intercepts ?? vec(("0",)))
+            + (opt.classes ?? dblv(("0", "1"))) + b8(opt.is_binary ?? True) + i32(opt.n_features ?? 2)
+            + (opt.field_names ?? strv(())) + str("") + (opt.tail ?? binary());
+    }
+
+    #! one binary model of an SVM state: one support vector (1, 1) of label 1 and weight 1 separating class 1
+    #! (positive) from class 0, with the given fields replaced
+    static binary svmModel(*hash<auto> opt) {
+        return f64(opt.b ?? "0") + f64(opt.class_pos ?? "1") + f64(opt.class_neg ?? "0")
+            + (opt.support_X ?? mat(1, 2, ("1", "1"))) + (opt.support_y ?? vec(("1",)))
+            + (opt.support_alpha ?? vec(("1",)));
+    }
+
+    #! the state of a binary linear SVM over 2 features, with the given fields replaced
+    static binary svmState(*hash<auto> opt) {
+        list<softstring> classes = opt.classes ?? ("0", "1");
+        list<binary> models = opt.models ?? (svmModel(),);
+        binary rv = f64(opt.C ?? "1") + str(opt.kernel ?? "linear") + f64(opt.gamma ?? "0.5") + i32(3)
+            + f64("0.25") + i32(100) + i32(opt.n_features ?? 2) + i32(opt.n_classes ?? classes.size())
+            + (opt.class_data ?? vec(classes)) + (opt.field_names ?? strv(())) + str("")
+            + (opt.model_data ?? i32(models.size()));
+        foreach binary m in (models) {
+            rv += m;
+        }
+        return rv + (opt.tail ?? binary());
+    }
+
+    refused(string model, binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), (model, state), model + ": " + what);
+    }
+
+    regressionValidTest() {
+        foreach string model in (Regressors) {
+            auto m = restore(model, regressionState(model));
+            assertEq(3.5, m.predictMatrix(((1.0, 1.0),))[0].prediction, model);
+            m = restore(model, regressionState(model, {"field_names": strv(("a", "b"))}));
+            assertEq(3.5, m.predict({"a": 1.0, "b": 1.0}).prediction, model + " with field names");
+            # a normalized model fitted with dense or with sparse data
+            m = restore(model, regressionState(model, {"normalize": True, "feature_means": vec(("0", "1")),
+                "feature_stds": vec(("1", "2"))}));
+            assertEq(3.5, m.predictMatrix(((1.0, 1.0),))[0].prediction, model + " normalized");
+            m = restore(model, regressionState(model, {"normalize": True}));
+            assertEq(3.5, m.predictMatrix(((1.0, 1.0),))[0].prediction, model + " normalized without scaling");
+        }
+        # a state of the format without warm_start
+        foreach string model in (("Lasso", "ElasticNet")) {
+            auto m = restore(model, regressionState(model, {"warm_start": binary()}));
+            assertEq(3, m.getIterationsRun(), model);
+        }
+    }
+
+    regressionCoefficientCountTest() {
+        foreach string model in (Regressors) {
+            refused(model, regressionState(model, {"coefficients": vec(("1",))}), "fewer coefficients than features");
+            refused(model, regressionState(model, {"coefficients": vec(("1", "2", "3"))}),
+                "more coefficients than features");
+        }
+    }
+
+    regressionFeatureCountTest() {
+        foreach string model in (Regressors) {
+            refused(model, regressionState(model, {"n_features": 0, "coefficients": vec(())}), "no features");
+            refused(model, regressionState(model, {"n_features": -1, "coefficients": vec(())}),
+                "a negative feature count");
+        }
+    }
+
+    regressionScalingTest() {
+        foreach string model in (Regressors) {
+            refused(model, regressionState(model, {"normalize": True, "feature_means": vec(("0", "0")),
+                "feature_stds": vec(("1",))}), "fewer standard deviations than means");
+            refused(model, regressionState(model, {"feature_means": vec(("0", "0")),
+                "feature_stds": vec(("1", "1"))}), "feature scaling without normalization");
+            foreach string std in ("0", "-1", "nan") {
+                refused(model, regressionState(model, {"normalize": True, "feature_means": vec(("0", "0")),
+                    "feature_stds": vec(("1", std))}), sprintf("a standard deviation of %s", std));
+            }
+        }
+    }
+
+    regressionTrailingTest() {
+        foreach string model in (Regressors) {
+            refused(model, regressionState(model, {"tail": i32(0)}), "4 bytes after the state");
+        }
+    }
+
+    ridgeOptionTest() {
+        refused("Ridge", ridgeState({"alpha": "-1"}), "a negative alpha");
+    }
+
+    coordinateDescentOptionTest() {
+        foreach string model in (("Lasso", "ElasticNet")) {
+            refused(model, regressionState(model, {"alpha": "-1"}), "a negative alpha");
+            refused(model, regressionState(model, {"max_iter": 0, "iterations_run": 0}), "max_iter = 0");
+            refused(model, regressionState(model, {"tol": "0"}), "tol = 0");
+            refused(model, regressionState(model, {"tol": "-1"}), "a negative tol");
+        }
+    }
+
+    coordinateDescentIterationsTest() {
+        foreach string model in (("Lasso", "ElasticNet")) {
+            refused(model, regressionState(model, {"iterations_run": -1}), "a negative iteration count");
+            refused(model, regressionState(model, {"iterations_run": 101}), "more iterations than max_iter");
+        }
+    }
+
+    elasticNetOptionTest() {
+        refused("ElasticNet", elasticNetState({"l1_ratio": "2"}), "l1_ratio > 1");
+        refused("ElasticNet", elasticNetState({"l1_ratio": "-1"}), "a negative l1_ratio");
+    }
+
+    logisticValidTest() {
+        ML::LogisticRegression lr = cast<ML::LogisticRegression>(restore("LogisticRegression",
+            logisticRegressionState()));
+        list<auto> rv = lr.predictMatrix(((1.0, 1.0), (-1.0, -1.0)));
+        assertEq(1.0, rv[0].predicted_class);
+        assertEq(0.0, rv[1].predicted_class);
+        # 3 classes, one-vs-rest
+        lr = cast<ML::LogisticRegression>(restore("LogisticRegression", logisticRegressionState({
+            "weights": mat(3, 2, ("-1", "0", "0", "0", "1", "0")),
+            "intercepts": vec(("0", "0", "0")),
+            "classes": dblv(("0", "1", "2")),
+            "is_binary": False,
+            "field_names": strv(("a", "b")),
+        })));
+        assertEq(2.0, lr.predict({"a": 1.0, "b": 0.0}).predicted_class);
+        lr = cast<ML::LogisticRegression>(restore("LogisticRegression", logisticRegressionState({
+            "penalty": "none", "regularization": "0"})));
+        assertEq(1.0, lr.predictMatrix(((1.0, 1.0),))[0].predicted_class);
+    }
+
+    logisticOptionTest() {
+        refused("LogisticRegression", logisticRegressionState({"penalty": "other"}), "an unknown penalty");
+        refused("LogisticRegression", logisticRegressionState({"learning_rate": "0"}), "learning_rate = 0");
+        refused("LogisticRegression", logisticRegressionState({"learning_rate": "-1"}),
+            "a negative learning_rate");
+        refused("LogisticRegression", logisticRegressionState({"max_iterations": 0}), "max_iterations = 0");
+        refused("LogisticRegression", logisticRegressionState({"tolerance": "-1"}), "a negative tolerance");
+        refused("LogisticRegression", logisticRegressionState({"regularization": "-1"}),
+            "a negative regularization");
+    }
+
+    logisticClassesTest() {
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("0",))}), "one class");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(())}), "no classes");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("0", "1", "2"))}),
+            "the binary flag with 3 classes");
+        refused("LogisticRegression", logisticRegressionState({"is_binary": False,
+            "weights": mat(2, 2, ("1", "1", "1", "1")), "intercepts": vec(("0", "0"))}),
+            "no binary flag with 2 classes");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("1", "0"))}),
+            "classes in descending order");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("1", "1"))}), "duplicate classes");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("0", "nan"))}), "a NaN class");
+    }
+
+    logisticSizeTest() {
+        refused("LogisticRegression", logisticRegressionState({"weights": mat(2, 2, ("1", "1", "1", "1")),
+            "intercepts": vec(("0", "0"))}), "2 weight rows for a binary model");
+        refused("LogisticRegression", logisticRegressionState({"classes": dblv(("0", "1", "2")),
+            "is_binary": False, "weights": mat(2, 2, ("1", "1", "1", "1")), "intercepts": vec(("0", "0"))}),
+            "2 weight rows for 3 classes");
+        refused("LogisticRegression", logisticRegressionState({"weights": mat(1, 3, ("1", "1", "1"))}),
+            "3 weight columns for 2 features");
+        refused("LogisticRegression", logisticRegressionState({"n_features": 0, "weights": mat(1, 0, ())}),
+            "no features");
+        refused("LogisticRegression", logisticRegressionState({"intercepts": vec(())}), "no intercepts");
+        refused("LogisticRegression", logisticRegressionState({"intercepts": vec(("0", "0"))}),
+            "more intercepts than weight rows");
+    }
+
+    logisticTrailingTest() {
+        refused("LogisticRegression", logisticRegressionState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    svmValidTest() {
+        ML::SVM svm = cast<ML::SVM>(restore("SVM", svmState()));
+        list<auto> rv = svm.predictMatrix(((1.0, 1.0), (-1.0, -1.0)));
+        assertEq(1, rv[0].predicted_class);
+        assertEq(0, rv[1].predicted_class);
+        # 3 classes, one-vs-one, with binary models without support vectors
+        list<binary> models;
+        foreach list<auto> pair in ((("0", "1"), ("0", "2"), ("1", "2"))) {
+            models += svmModel({"b": "1", "class_neg": pair[0], "class_pos": pair[1], "support_X": mat(0, 2, ()),
+                "support_y": vec(()), "support_alpha": vec(())});
+        }
+        svm = cast<ML::SVM>(restore("SVM", svmState({"classes": ("0", "1", "2"), "models": models,
+            "kernel": "rbf", "field_names": strv(("a", "b"))})));
+        assertEq(2, svm.predict({"a": 1.0, "b": 1.0}).predicted_class);
+        # a single class
+        svm = cast<ML::SVM>(restore("SVM", svmState({"classes": ("1",), "models": ()})));
+        assertEq(1, svm.predictMatrix(((1.0, 1.0),))[0].predicted_class);
+    }
+
+    svmOptionTest() {
+        refused("SVM", svmState({"kernel": "other"}), "an unknown kernel");
+        refused("SVM", svmState({"C": "0"}), "C = 0");
+        refused("SVM", svmState({"C": "-1"}), "a negative C");
+        refused("SVM", svmState({"gamma": "0"}), "gamma = 0");
+        refused("SVM", svmState({"gamma": "-1"}), "a negative gamma");
+        refused("SVM", svmState({"n_features": 0, "models": (svmModel({"support_X": mat(1, 0, ())}),)}),
+            "no features");
+    }
+
+    svmClassCountTest() {
+        refused("SVM", svmState({"n_classes": 3}), "a class count that differs from its classes");
+        refused("SVM", svmState({"classes": (), "models": ()}), "no classes");
+        # sizes that the data that follows cannot hold
+        refused("SVM", svmState({"class_data": i32(-1)}), "a negative class count");
+        refused("SVM", svmState({"class_data": i32(0x7fffffff)}), "a class count beyond the data");
+    }
+
+    svmClassesTest() {
+        refused("SVM", svmState({"classes": ("1", "0"), "models": (svmModel({"class_pos": "0",
+            "class_neg": "1"}),)}), "classes in descending order");
+        refused("SVM", svmState({"classes": ("1", "1"), "models": (svmModel({"class_neg": "1"}),)}),
+            "duplicate classes");
+        refused("SVM", svmState({"classes": ("0", "nan"), "models": (svmModel({"class_pos": "nan"}),)}),
+            "a NaN class");
+        refused("SVM", svmState({"classes": ("0", "1e300"), "models": (svmModel({"class_pos": "1e300"}),)}),
+            "a class label beyond the integer range");
+    }
+
+    svmModelCountTest() {
+        refused("SVM", svmState({"models": ()}), "no binary model for 2 classes");
+        refused("SVM", svmState({"models": (svmModel(), svmModel())}), "2 binary models for 2 classes");
+        # sizes that the data that follows cannot hold
+        refused("SVM", svmState({"models": (), "model_data": i32(-1)}), "a negative binary model count");
+        refused("SVM", svmState({"models": (), "model_data": i32(0x7fffffff)}),
+            "a binary model count beyond the data");
+    }
+
+    svmModelTest() {
+        refused("SVM", svmState({"models": (svmModel({"class_pos": "0", "class_neg": "1"}),)}),
+            "the classes of a binary model swapped");
+        refused("SVM", svmState({"models": (svmModel({"class_pos": "2"}),)}),
+            "a binary model of an unknown class");
+        refused("SVM", svmState({"models": (svmModel({"support_X": mat(1, 3, ("1", "1", "1"))}),)}),
+            "3 support vector columns for 2 features");
+        refused("SVM", svmState({"models": (svmModel({"support_y": vec(())}),)}),
+            "fewer support vector labels than support vectors");
+        refused("SVM", svmState({"models": (svmModel({"support_alpha": vec(("1", "1"))}),)}),
+            "more support vector weights than support vectors");
+    }
+
+    svmTrailingTest() {
+        refused("SVM", svmState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    svmLargeLabelTest() {
+        ML::SVM svm = cast<ML::SVM>(restore("SVM", svmState({"classes": ("0", "1e10"),
+            "models": (svmModel({"class_pos": "1e10"}),)})));
+        list<auto> rv = svm.predictMatrix(((1.0, 1.0), (-1.0, -1.0)));
+        assertEq(10000000000, rv[0].predicted_class);
+        assertEq(0, rv[1].predicted_class);
+    }
+
+    acceptedOptionTest() {
+        # the constructors accept NaN for these options, and fit() keeps it
+        restore("Ridge", ridgeState({"alpha": "nan"}));
+        foreach string model in (("Lasso", "ElasticNet")) {
+            restore(model, regressionState(model, {"alpha": "nan", "tol": "nan"}));
+            restore(model, regressionState(model, {"alpha": "inf", "tol": "inf"}));
+        }
+        restore("ElasticNet", elasticNetState({"l1_ratio": "nan"}));
+        restore("LogisticRegression", logisticRegressionState({"learning_rate": "nan", "tolerance": "nan",
+            "regularization": "nan"}));
+        restore("SVM", svmState({"C": "nan", "gamma": "nan"}));
+        restore("SVM", svmState({"C": "inf", "gamma": "inf"}));
+        # field names that do not match the features (a hash fit followed by a matrix fit of another width)
+        foreach string model in (Regressors) {
+            restore(model, regressionState(model, {"field_names": strv(("a",))}));
+        }
+        restore("LogisticRegression", logisticRegressionState({"field_names": strv(("a", "b", "c"))}));
+        restore("SVM", svmState({"field_names": strv(("a",))}));
+        assertTrue(True);
+    }
+
+    #! asserts that @p m is restored by ml_deserialize() and predicts as before
+    roundTrip(object m, list<list<float>> x, string key, string what) {
+        object r = ML::ml_deserialize(ML::ml_serialize(m));
+        assertEq((map $1{key}, m.predictMatrix(x)), (map $1{key}, r.predictMatrix(x)), what);
+    }
+
+    #! a regression or classification model of @p name
+    static object newModel(string name) {
+        switch (name) {
+            case "LinearRegression": return new ML::LinearRegression();
+            case "Ridge": return new ML::Ridge();
+            case "Lasso": return new ML::Lasso({"alpha": 0.01});
+            case "ElasticNet": return new ML::ElasticNet({"alpha": 0.01});
+            case "LogisticRegression": return new ML::LogisticRegression();
+            case "SVM": return new ML::SVM({"seed": 1});
+        }
+        throw "ML-STATE-TEST-ERROR", sprintf("unknown model %y", name);
+    }
+
+    nullRoundTripTest() {
+        # a null value in a record after the first
+        list<hash<auto>> reg = (
+            {"x1": 1.0, "x2": 2.0, "y": 5.0},
+            {"x1": 2.0, "x2": NULL, "y": 4.0},
+            {"x1": 3.0, "x2": 1.0, "y": 6.0},
+            {"x1": 4.0, "x2": 3.0, "y": 11.0},
+        );
+        foreach string model in (Regressors) {
+            object m = newModel(model);
+            m.fit(reg, "y");
+            roundTrip(m, ((1.0, 1.0), (2.0, 3.0)), "prediction", model);
+        }
+        list<hash<auto>> cls = (
+            {"a": 0.0, "b": 0.0, "t": 0},
+            {"a": 0.5, "b": NULL, "t": 0},
+            {"a": 5.0, "b": 5.0, "t": 1},
+            {"a": 5.5, "b": 4.5, "t": 1},
+        );
+        foreach string model in (("LogisticRegression", "SVM")) {
+            object m = newModel(model);
+            m.fit(cls, "t");
+            roundTrip(m, ((0.0, 0.0), (5.0, 5.0)), "predicted_class", model);
+        }
+        # a null value in a matrix
+        foreach string model in (("LogisticRegression", "SVM")) {
+            object m = newModel(model);
+            m.fitMatrix(((0.0, 0.0), (0.5, NULL), (5.0, 5.0), (5.5, 4.5)), (0, 0, 1, 1));
+            roundTrip(m, ((0.0, 0.0), (5.0, 5.0)), "predicted_class", model + " matrix");
+        }
+    }
+
+    refitRoundTripTest() {
+        list<hash<auto>> reg = (
+            {"x1": 1.0, "x2": 2.0, "y": 5.0},
+            {"x1": 2.0, "x2": 0.0, "y": 4.0},
+            {"x1": 3.0, "x2": 1.0, "y": 6.0},
+            {"x1": 4.0, "x2": 3.0, "y": 11.0},
+        );
+        foreach string model in (Regressors) {
+            object m = newModel(model);
+            m.fit(reg, "y");
+            m.fitMatrix(((1.0,), (2.0,), (3.0,)), (2.0, 4.0, 6.0));
+            roundTrip(m, ((1.0,), (4.0,)), "prediction", model);
+        }
+        list<hash<auto>> cls = (
+            {"a": 0.0, "b": 0.0, "t": 0},
+            {"a": 0.5, "b": 0.5, "t": 0},
+            {"a": 5.0, "b": 5.0, "t": 1},
+            {"a": 5.5, "b": 4.5, "t": 1},
+        );
+        foreach string model in (("LogisticRegression", "SVM")) {
+            object m = newModel(model);
+            m.fit(cls, "t");
+            m.fitMatrix(((0.0,), (0.5,), (5.0,), (5.5,)), (0, 0, 1, 1));
+            roundTrip(m, ((0.0,), (5.0,)), "predicted_class", model);
+        }
+    }
+}
