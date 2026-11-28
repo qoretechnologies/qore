@@ -26081,6 +26081,17 @@ static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params,
     return QoreValue();
 }
 
+DLLLOCAL QoreListNode* qore_dbg_http_send_bound_steps(int64 stall_ms, int64 min_rate, int64 window_ms,
+    const QoreListNode* steps, ExceptionSink* xsink);
+
+//! Debug-only: runs the checks of an HTTP/1 response send bound over the given steps without a socket or a clock
+//! (qore#7835); see qore_dbg_http_send_bound_steps()
+static QoreValue f_dbg_http_send_bound_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_http_send_bound_steps(get_param_value(params, 0).getAsBigInt(),
+        get_param_value(params, 1).getAsBigInt(), get_param_value(params, 2).getAsBigInt(),
+        get_param_value(params, 3).get<const QoreListNode>(), xsink);
+}
+
 //! Debug-only: makes the next given number of callback worker starts of the async I/O controller fail
 //! (THREAD-CREATION-FAILURE), as a thread or stack limit does; with the second argument True, only the starts made when
 //! work is queued fail, not those of the retries when a worker may start again; the third argument is the number of
@@ -40318,6 +40329,10 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_fail_next_timer_hold", f_dbg_async_io_fail_next_timer_hold,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_send_bound_steps", f_dbg_http_send_bound_steps,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stall_ms",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "min_rate", bigIntTypeInfo, QORE_PARAM_NO_ARG, "window_ms",
+        listTypeInfo, QORE_PARAM_NO_ARG, "steps");
     qns.addBuiltinVariant("dbg_async_io_fail_callback_worker_starts", f_dbg_async_io_fail_callback_worker_starts,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         boolTypeInfo, QoreValue(false), "enqueue_only", bigIntTypeInfo, QoreValue((int64)0), "after");
