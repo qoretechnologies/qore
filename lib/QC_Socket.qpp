@@ -3057,7 +3057,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     // Compute the idle deadline in milliseconds
     // Note: the 'timeout' parameter type provides values in milliseconds
     // on the monotonic clock, which a step of the system clock does not move (#6150)
-    int64 now_ms = q_get_monotonic_us() / 1000;
+    int64 now_ms = qore_http_idle_clock_ms();
     int64 deadline_ms = now_ms + idle_timeout;
 
     // Create the fused poll operation
@@ -3142,7 +3142,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
 
     // Compute the idle deadline in milliseconds
     // on the monotonic clock, which a step of the system clock does not move (#6150)
-    int64 now_ms = q_get_monotonic_us() / 1000;
+    int64 now_ms = qore_http_idle_clock_ms();
     int64 deadline_ms = now_ms + idle_timeout;
 
     // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
@@ -3242,7 +3242,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     result->append(hdr_str.c_str(), hdr_str.size());
 
     // on the monotonic clock, which a step of the system clock does not move (#6150)
-    int64 now_ms = q_get_monotonic_us() / 1000;
+    int64 now_ms = qore_http_idle_clock_ms();
     int64 deadline_ms = now_ms + idle_timeout;
 
     // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
@@ -7252,7 +7252,7 @@ AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_
     SimpleRefHolder<BinaryNode> nothing_to_send(new BinaryNode);
 
     // on the monotonic clock, which a step of the system clock does not move (#6150)
-    int64 deadline_ms = q_get_monotonic_us() / 1000 + idle_timeout;
+    int64 deadline_ms = qore_http_idle_clock_ms() + idle_timeout;
 
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
