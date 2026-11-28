@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-loop-invariant-hash-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -113,8 +123,7 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     removedLocalProjection(4));
 ";
 
-string root = "/tmp/qore-loop-invariant-hash-projection-"
-    + string(getpid());
+string root = tmp.path + "/invariant-hash-projection";
 string source_path = root + ".qr";
 string exe = root + ".aot";
 on_exit {
@@ -135,14 +144,14 @@ string sub runMode(string mode, string extra_env = "") {
 string ast = runMode("ast");
 if (ast != "5:0:0:2:2:0:0:4:0\n") {
     printf("unexpected AST output:\n%s", ast);
-    exit(2);
+    test_exit(2);
 }
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != ast) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, ast, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -151,13 +160,13 @@ string compile_out = backquote(sprintf(
     libqore_dir, qcc_bin, exe, source_path));
 if (!is_file(exe)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 string aot = run_executable(sprintf(
     "LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 if (aot != ast) {
     printf("AOT mismatch:\nexpected:\n%sactual:\n%s", ast, aot);
-    exit(2);
+    test_exit(2);
 }
 
 string stats = runMode("ir", "QORE_IR_OPT_STATS=1");
@@ -167,7 +176,7 @@ if (stats !~ /IR-OPT: invariantProjection:.*hoisted=([3-9]|[1-9][0-9]+)/
         || stats !~ /IR-OPT: removedLocalProjection:.*hoisted=0/
         || stats !~ /5:0:0:2:2:0:0:4:0/) {
     printf("missing hash projection LICM selection:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 string disabled_stats = runMode("ir",
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_HASH_PROJECTION_LICM=1");
@@ -176,5 +185,5 @@ if (disabled_stats !~ /IR-OPT: invariantProjection:.*hoisted=0/
         || disabled_stats !~ /5:0:0:2:2:0:0:4:0/) {
     printf("unexpected disabled hash projection LICM selection:\n%s",
         disabled_stats);
-    exit(2);
+    test_exit(2);
 }

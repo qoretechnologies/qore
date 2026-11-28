@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-late-native-remaining-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -309,7 +319,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-late-native-remaining-" + string(getpid());
+string root = tmp.path + "/late-native-remaining";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -344,7 +354,7 @@ if (!expected.contains("cmp:1:1:1:NAN-COMPARE-ERROR\n")
         || !expected.contains("unary:15:-12:8.0:-7.5\n")
         || !expected.contains("compound:78:4.5:0:0:-9223372036854775808:-1:16:1:11\n")) {
     printf("unexpected AST baseline:\n%s", expected);
-    exit(2);
+    test_exit(2);
 }
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = ExecModeHarness::run(sprintf(
@@ -352,7 +362,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
         libqore_dir, qore_bin, mode, combined_path));
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -362,7 +372,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 unlink(provider_path);
 
@@ -372,7 +382,7 @@ string sub compileConsumer(string output_dir, string env) {
         env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
     if (!is_file(output_dir + "/consumer.qo")) {
         printf("consumer compile failed:\n%s", output);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -410,7 +420,7 @@ foreach string function in (specialization_counts.keys()) {
             function, count))) {
         printf("missing late native specialization for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -418,7 +428,7 @@ if (enabled_compile
         || disabled_compile =~ /native-specializations=[1-9]/) {
     printf("unsafe or disabled late specialization:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string sub link(string output, string consumer_qo) {
@@ -427,7 +437,7 @@ string sub link(string output, string consumer_qo) {
         libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
     if (!is_file(output)) {
         printf("link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -442,7 +452,7 @@ foreach string path in ((enabled_exe, disabled_exe)) {
     if (actual != expected) {
         printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

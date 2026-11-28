@@ -4,9 +4,20 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
 %requires json
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-int-expression-summary-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -583,7 +594,7 @@ string sub consumerCode() {
 ";
 }
 
-string root = "/tmp/qore-aot-int-expression-summary-" + string(getpid());
+string root = tmp.path + "/int-expression-summary";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -618,7 +629,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
@@ -627,7 +638,7 @@ try {
     provider_index_data = parse_json(provider_index);
 } catch (hash<ExceptionInfo> ex) {
     printf("cannot parse the integer expression metadata: %s: %s\n%s", ex.err, ex.desc, provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 #! returns the fast-entry record of the function at \a path, or adds an error to \a errors if it has not exactly one
@@ -791,7 +802,7 @@ check_summary(provider_index_data, "side_effect_bool_expr(int)", "int", False, \
 check_summary(provider_index_data, "too_large(int)", "int", False, \metadata_errors);
 if (metadata_errors) {
     printf("unexpected integer expression metadata:\n%s\n%s", metadata_errors.join("\n"), provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -807,7 +818,7 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
@@ -821,7 +832,7 @@ if (enabled_undefined !~ /qore_rt_hash_key_access_int_prehashed/
         || disabled_undefined =~ /qore_rt_hash_keys_string_measure_prehashed/) {
     printf("hash projection import mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -834,7 +845,7 @@ string disabled_link = backquote(sprintf(
     libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, enabled_exe));
@@ -842,5 +853,5 @@ string disabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, d
 if (ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

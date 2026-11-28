@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-loop-invariant-read-only-query-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -125,8 +135,7 @@ string sub runMode(string script_path, string mode,
         extra_env, libqore_dir, qore_bin, mode, script_path));
 }
 
-string root = "/tmp/qore-loop-invariant-read-only-query-"
-    + string(getpid());
+string root = tmp.path + "/invariant-read-only-query";
 string script_path = root + ".qr";
 string exe = root + ".aot";
 on_exit {
@@ -141,14 +150,14 @@ script.close();
 string ast = runMode(script_path, "ast");
 if (ast != "72:0:10:-2:9:5:6:0\n") {
     printf("unexpected AST output:\n%s", ast);
-    exit(2);
+    test_exit(2);
 }
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(script_path, mode);
     if (actual != ast) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, ast, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -157,20 +166,20 @@ string compile_out = backquote(sprintf(
     libqore_dir, qcc_bin, exe, script_path));
 if (!is_file(exe)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 string aot = run_executable(sprintf(
     "LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 if (aot != ast) {
     printf("AOT mismatch:\nexpected:\n%sactual:\n%s", ast, aot);
-    exit(2);
+    test_exit(2);
 }
 
 string stats = runMode(script_path, "ir", "QORE_IR_OPT_STATS=1");
 if (stats !~ /IR-OPT: invariantQueries:.*hoisted=([89]|[1-9][0-9]+)/
         || stats !~ /72:0:10:-2:9:5:6:0/) {
     printf("missing read-only query LICM selection:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 string disabled_stats = runMode(script_path, "ir",
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_QUERY_LICM=1");
@@ -178,5 +187,5 @@ if (disabled_stats !~ /IR-OPT: invariantQueries:.*hoisted=0/
         || disabled_stats !~ /72:0:10:-2:9:5:6:0/) {
     printf("unexpected disabled read-only query LICM selection:\n%s",
         disabled_stats);
-    exit(2);
+    test_exit(2);
 }

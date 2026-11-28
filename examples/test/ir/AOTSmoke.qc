@@ -442,7 +442,7 @@ class AOTSmokeBase inherits QUnit::Test {
     #! Write code to a temp .qr file and return {src_path, out_path}
     private hash<auto> writeTempScript(string code) {
         # .qr implies %modern for standalone scripts.
-        string base = sprintf("/tmp/aot_test_%d_%d", getpid(), rand());
+        string base = sprintf("%s/aot_test_%d_%d", tmp_location(), getpid(), rand());
         string src_path = base + ".qr";
         string out_path = base;
 
@@ -4236,7 +4236,7 @@ switch (s) {
         no-flag control, so neither "the flag is accepted" nor "the flag does anything" can regress alone.
     */
     testQoBatchParseOptionEnableDebug() {
-        string tmp_dir = sprintf("/tmp/aot_enable_debug_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_enable_debug_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -4311,7 +4311,7 @@ sub enable_debug_other() {
     }
 
     testQoDebuggerRegexExtractGlobal() {
-        string tmp_dir = sprintf("/tmp/aot_regex_global_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_regex_global_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -4810,7 +4810,7 @@ exit(0);
         # slots must not resolve a static overload from a nullable parse-time
         # argument type such as *hash<auto>.  Runtime dispatch must see the
         # actual hash value and select the hash overload, not the auto fallback.
-        string tmp_dir = sprintf("/tmp/aot_qmod_nullable_static_overload_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_qmod_nullable_static_overload_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -5584,7 +5584,7 @@ printf(\"sum: %d\\n\", sum);
 
     #! Write a .qm module file to temp and return the path
     private string writeTempModule(string code) {
-        string path = sprintf("/tmp/aot_test_mod_%d_%d.qm", getpid(), rand());
+        string path = sprintf("%s/aot_test_mod_%d_%d.qm", tmp_location(), getpid(), rand());
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(code);
@@ -5628,7 +5628,7 @@ printf(\"sum: %d\\n\", sum);
     }
 
     testAOTModuleBuiltinFeaturesNotDependencies() {
-        string tmp_dir = sprintf("/tmp/aot_builtin_feature_deps_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_builtin_feature_deps_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -5721,7 +5721,7 @@ public namespace ExplicitDebugFeatureDepTest {
     }
 
     testAOTModuleNestedNamespacePaths() {
-        string tmp_dir = sprintf("/tmp/aot_nested_ns_path_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_nested_ns_path_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -5787,7 +5787,7 @@ foreach auto c in (Reflection::Class::forName(\"Outer::Inner::Derived\").getClas
     }
 
     testAOTModuleSsoAvoidsNumericFastPaths() {
-        string tmp_dir = sprintf("/tmp/aot_sso_fastpath_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_sso_fastpath_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -5890,7 +5890,7 @@ printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quote
     }
 
     testAOTModuleIrOnlyLocalOwnsInvokeResult() {
-        string tmp_dir = sprintf("/tmp/aot_ir_only_local_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_ir_only_local_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -5938,7 +5938,7 @@ public class AOTLocalTempCleanup {
     }
 
     testAOTModuleWeakDiagnosticHashesReleaseObjects() {
-        string tmp_dir = sprintf("/tmp/aot_weak_diag_mod_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_weak_diag_mod_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6096,7 +6096,7 @@ printf(\"after=%d action=%y context=%y\\n\", AOTWeakDiagnosticLeak::getDestroyed
         # The AOT function-table entry's `name` field stays unqualified
         # so the runtime register path's variant-key reconstruction
         # keeps working.
-        string tmp_dir = sprintf("/tmp/aot_xmod_name_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_xmod_name_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6184,7 +6184,7 @@ printf(\"%s\\n\", ModB::shared_fn(\"y\"));
     }
 
     testQccStubExternalConstants() {
-        string tmp_dir = sprintf("/tmp/aot_stub_const_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_stub_const_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6277,7 +6277,7 @@ sub main() {
     }
 
     testQccScriptDefineExcludesInactiveBranches() {
-        string tmp_dir = sprintf("/tmp/aot_qcc_define_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_qcc_define_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6321,7 +6321,7 @@ sub main() {
             libqore_dir, qore_bin));
         bool jni_available = jni_check.regex("EXIT=0");
 
-        string tmp_dir = sprintf("/tmp/aot_module_cmd_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_module_cmd_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -6383,7 +6383,7 @@ sub main() {
         string suffix = sprintf("%d_%d", getpid(), rand());
         string dep_name = "AOTDepPath" + suffix;
         string consumer_name = "AOTConsumerPath" + suffix;
-        string tmp_dir = sprintf("/tmp/aot_mod_path_%s", suffix);
+        string tmp_dir = sprintf("%s/aot_mod_path_%s", tmp_location(), suffix);
         string preferred_dir = tmp_dir + "/preferred";
         string fallback_dir = tmp_dir + "/fallback";
         mkdir(tmp_dir);
@@ -6470,7 +6470,7 @@ printf(\"dep=%%s\\n\", mh.%s.filename);
 
     testAOTModuleTryModuleDependencyMetadata() {
         string suffix = sprintf("%d_%d", getpid(), rand());
-        string tmp_dir = sprintf("/tmp/aot_try_dep_%s", suffix);
+        string tmp_dir = sprintf("%s/aot_try_dep_%s", tmp_location(), suffix);
         string missing_dir = tmp_dir + "/MissingTry" + suffix;
         string loaded_dir = tmp_dir + "/LoadedTry" + suffix;
         string qlib_dir = get_script_dir() + "/../../../qlib";
@@ -6552,7 +6552,7 @@ public int sub ok() {
 
     testAOTModuleCompile() {
         # Use a temp directory so we can control module naming
-        string tmp_dir = sprintf("/tmp/aot_mod_test_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_mod_test_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             # Clean up the entire temp directory
@@ -6635,7 +6635,7 @@ printf(\"%d\\n\", AOTTestMod::factorial(10));
     }
 
     testAOTModuleVariantParseOptions() {
-        string tmp_dir = sprintf("/tmp/aot_variant_po_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_variant_po_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6718,7 +6718,7 @@ printf(\"%%s\\n\", AOTVariantParseOptionsMod::Loader::test(\"%s\"));
     }
 
     testAOTModuleNoNarrowMemberTypes() {
-        string tmp_dir = sprintf("/tmp/aot_no_narrow_member_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_no_narrow_member_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6792,7 +6792,7 @@ printf(\"%s\", AOTNoNarrowMember::run());
     }
 
     testAOTModuleNoNarrowReferenceSignatures() {
-        string tmp_dir = sprintf("/tmp/aot_no_narrow_ref_sig_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_no_narrow_ref_sig_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6862,7 +6862,7 @@ public namespace AOTNoNarrowRefSig {
     # params that are mutated while shared (e.g. constructor-initializer calls
     # like QorusSystemRestHelperIo::resolveClientOpts()).
     testAOTModuleNoNarrowParamCowStore() {
-        string tmp_dir = sprintf("/tmp/aot_no_narrow_cow_store_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_no_narrow_cow_store_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -6980,7 +6980,7 @@ printf(\"list: %y\\n\", AOTNoNarrowCowStore::putSharedList(cast<list<auto!>>((1,
     }
 
     testAOTModuleScalarLocalCoercion() {
-        string tmp_dir = sprintf("/tmp/aot_scalar_local_coerce_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_scalar_local_coerce_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7036,7 +7036,7 @@ printf(\"value=%d\\n\", AOTScalarLocalCoerce::runCase());
     }
 
     testAOTModulePointerNullCoalescing() {
-        string tmp_dir = sprintf("/tmp/aot_pointer_null_coalesce_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_pointer_null_coalesce_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7092,7 +7092,7 @@ printf(\"value=%y\\n\", AOTPointerNullCoalesce::runCase(row));
     }
 
     testAOTModuleHashdeclMemberCompoundLValue() {
-        string tmp_dir = sprintf("/tmp/aot_hashdecl_member_compound_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_hashdecl_member_compound_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7163,7 +7163,7 @@ printf(\"%s\", AOTHashdeclMemberCompound::run());
     }
 
     testAOTModuleHashdeclClassConstants() {
-        string tmp_dir = sprintf("/tmp/aot_hashdecl_class_const_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_hashdecl_class_const_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7237,7 +7237,7 @@ printf(\"%s\", read_schema());
     }
 
     testAOTModuleNestedClassConstantRefs() {
-        string tmp_dir = sprintf("/tmp/aot_nested_class_const_ref_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_nested_class_const_ref_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7321,7 +7321,7 @@ printf(\"%s:%s:%s:%s:%s\\n\", h.Accept, a.prompt, s[0], s[1], l.\"X-Later\");
     }
 
     testAOTModuleNamespaceConstantRefs() {
-        string tmp_dir = sprintf("/tmp/aot_namespace_const_ref_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_namespace_const_ref_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7381,7 +7381,7 @@ printf(\"%s:%s:%s\\n\", h.base.alpha, h.merged.alpha, h.merged.beta);
     }
 
     testAOTModuleBcaHashdeclClassConstants() {
-        string tmp_dir = sprintf("/tmp/aot_bca_hashdecl_const_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_bca_hashdecl_const_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7464,7 +7464,7 @@ printf(\"%s\", AOTBcaHashdeclConst::run());
     }
 
     testAOTModuleComputedMemberDefaults() {
-        string tmp_dir = sprintf("/tmp/aot_member_default_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_member_default_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7523,7 +7523,7 @@ printf(\"%s\\n\", AOTComputedMemberDefault::run());
     }
 
     testAOTModuleUnaryMinusHashdeclInit() {
-        string tmp_dir = sprintf("/tmp/aot_unary_minus_hashdecl_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_unary_minus_hashdecl_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7618,7 +7618,7 @@ printf(\"%s\\n\", AOTUnaryMinusHashdecl::run());
     }
 
     testAOTModuleClosureCapturedLoopCondition() {
-        string tmp_dir = sprintf("/tmp/aot_closure_loop_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_closure_loop_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7690,7 +7690,7 @@ printf(\"%y\\n\", AOTClosureLoop::run());
     }
 
     testAOTModuleRecursiveClosureLocalFrameIsolation() {
-        string tmp_dir = sprintf("/tmp/aot_recursive_closure_frame_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_recursive_closure_frame_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7805,7 +7805,7 @@ public namespace AOTTestOut {
 }
 ";
         string qm_path = writeTempModule(mod_code);
-        string custom_path = sprintf("/tmp/aot_custom_out_%d.qmod", getpid());
+        string custom_path = sprintf("%s/aot_custom_out_%d.qmod", tmp_location(), getpid());
         on_exit {
             unlink(qm_path);
             unlink(custom_path);
@@ -7844,7 +7844,7 @@ public namespace AOTOptMod {
 
         # Test each optimization level
         for (int level = 0; level <= 3; ++level) {
-            string qmod_path = sprintf("/tmp/aot_opt%d_%d.qmod", level, getpid());
+            string qmod_path = sprintf("%s/aot_opt%d_%d.qmod", tmp_location(), level, getpid());
             on_exit {
                 unlink(qmod_path);
             }
@@ -7877,7 +7877,7 @@ printf(\"not a module\\n\");
     }
 
     testAOTModuleDefaultObjectArgs() {
-        string tmp_dir = sprintf("/tmp/aot_default_object_arg_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_default_object_arg_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -7969,7 +7969,7 @@ printf(\"%d\\n\", h.getValue());
     #! The directory name must match the module name for split module compilation
     private hash<auto> createSplitModuleDir(string mod_name, string qm_code, *hash<string, string> component_files) {
         # Create a unique parent dir, then create the module dir inside it with the correct name
-        string parent_dir = sprintf("/tmp/aot_split_test_%d_%d", getpid(), rand());
+        string parent_dir = sprintf("%s/aot_split_test_%d_%d", tmp_location(), getpid(), rand());
         mkdir(parent_dir);
         string mod_dir = parent_dir + "/" + mod_name;
         mkdir(mod_dir);
@@ -8291,7 +8291,7 @@ printf(\"%d\\n\", AOTSplitQmOnly::get_value());
 
     testAOTSplitModuleMissingQm() {
         # Test error case: directory without matching .qm file
-        string tmp_dir = sprintf("/tmp/aot_split_missing_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_split_missing_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -8610,7 +8610,7 @@ exit(0);
 
     #! Compile a module with --strip-source and return info
     private hash<auto> compileStripSourceModule(string mod_code, string mod_name) {
-        string tmp_dir = sprintf("/tmp/aot_strip_mod_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_strip_mod_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
 
         string qm_path = tmp_dir + "/" + mod_name + ".qm";
@@ -9859,7 +9859,7 @@ printf(\"%d %d\\n\", h.x, h.y);
         # A checkout or a rebase rewrites a source file with unchanged content and a new modification time, and a
         # build compiles it again; the module it produces must be byte for byte the one it replaces, so that
         # anything that identifies a module by its content (an installer, a cache, a provider index) sees no change.
-        string tmp_dir = sprintf("/tmp/aot_mtime_test_%d", getpid());
+        string tmp_dir = sprintf("%s/aot_mtime_test_%d", tmp_location(), getpid());
         mkdir(tmp_dir);
         on_exit {
             system(sprintf("rm -rf %s", tmp_dir));
@@ -10198,7 +10198,7 @@ exit(0);
     }
 
     testQccOneShotMultiSourceExecutable() {
-        string tmp_dir = sprintf("/tmp/aot_qcc_one_shot_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_qcc_one_shot_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -10302,7 +10302,7 @@ printf(\"%d\\n\", FastEntryProbe::add(20, 22));
         # qcc batch mode parses all sources in one program, but emits one `.qo`
         # per source. A fragment must not serialize an earlier constant's value
         # through a later sibling fragment's constant path.
-        string tmp_dir = sprintf("/tmp/aot_batch_const_order_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_batch_const_order_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -10389,7 +10389,7 @@ sub main() {
         # necessarily source parse order.  Member defaults and class constants
         # must therefore defer nested const-ref materialization until all
         # sibling-fragment constant shells are registered.
-        string tmp_dir = sprintf("/tmp/aot_batch_deferred_consts_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_batch_deferred_consts_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -10512,7 +10512,7 @@ sub main() {
         # `.qo` per source.  Each fragment must serialize only its own
         # statement-location metadata; otherwise small fragments grow with the
         # whole context and spend seconds registering irrelevant slot maps.
-        string tmp_dir = sprintf("/tmp/aot_batch_stmt_locs_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_batch_stmt_locs_%d_%d", tmp_location(), getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
         mkdir(tmp_dir);
         mkdir(qo_dir);
@@ -12147,7 +12147,7 @@ exit(0);
         the ordinary way, which is the same assertion.
     */
     testCorruptQmodSignatureCheck() {
-        string tmp_dir = sprintf("/tmp/aot_sigcheck_qmod_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_sigcheck_qmod_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));
@@ -12230,7 +12230,7 @@ public namespace SigCheckQmodTest {
     }
 
     testCorruptQmodLoadNoDeadlock() {
-        string tmp_dir = sprintf("/tmp/aot_corrupt_qmod_%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("%s/aot_corrupt_qmod_%d_%d", tmp_location(), getpid(), rand());
         mkdir(tmp_dir);
         on_exit {
             backquote(sprintf("rm -rf %s", tmp_dir));

@@ -37,6 +37,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-local-list-push-linear-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -171,7 +181,7 @@ printf(\"%d:%d|%s:%d|%s:%y:%d|%d:%d|%y|%y|%s|%y|%y\\n\", direct_alias.size(), di
     nested_alias, functionCases(), copied, copied_again);
 ";
 
-string base_path = "/tmp/qore-ir-local-list-push-linear-" + string(getpid());
+string base_path = tmp.path + "/local-list-push-linear";
 string script_path = base_path + ".qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -243,5 +253,5 @@ if (!is_file(base_path)) {
 }
 
 if (failures) {
-    exit(2);
+    test_exit(2);
 }

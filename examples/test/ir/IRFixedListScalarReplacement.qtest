@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-fixed-list-scalar-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -150,7 +160,7 @@ printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d\\n\", sca
     crossBlockMutation(True), crossBlockMutation(False), cyclicMutation(3));
 ";
 
-string script_path = "/tmp/qore-ir-fixed-list-scalar-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/fixed-list-scalar.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -162,14 +172,14 @@ string sub runMode(string mode) {
 }
 
 string sub runAot(bool disabled) {
-    string exe = "/tmp/qore-ir-fixed-list-scalar-" + string(getpid())
+    string exe = tmp.path + "/fixed-list-scalar"
         + (disabled ? "-disabled" : "");
     string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         disabled ? "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 " : "",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -179,7 +189,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 string aot = runAot(False);
@@ -187,7 +197,7 @@ string disabled_aot = runAot(True);
 if (aot != expected || disabled_aot != expected) {
     printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
         expected, aot, disabled_aot);
-    exit(2);
+    test_exit(2);
 }
 
 string stats = ExecModeHarness::run(sprintf(
@@ -204,7 +214,7 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
         || stats !~ /IR-OPT: crossBlockMutation:.*scalar-lists=1/
         || stats !~ /IR-OPT: cyclicMutation:.*scalar-lists=1/) {
     printf("missing fixed-list scalar replacement:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
         || stats !~ /IR-OPT: reassignedDynamicIndex:.*scalar-lists=0/
@@ -214,5 +224,5 @@ if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-lists=0/
         || stats !~ /IR-OPT: conditionalAssignment:.*scalar-lists=0/) {
     printf("unsafe fixed-list scalar replacement:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }

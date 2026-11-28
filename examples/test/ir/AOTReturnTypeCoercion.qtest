@@ -9,6 +9,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-return-type-coercion-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -29,7 +39,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-return-type-coercion-" + string(getpid());
+string root = tmp.path + "/return-type-coercion";
 mkdir(root);
 string source_path = root + "/conversions.qr";
 string aot_path = root + "/conversions";
@@ -466,7 +476,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -475,7 +485,7 @@ string compile_output = backquote(sprintf(
     libqore_dir, qcc_bin, aot_path, source_path));
 if (!is_file(aot_path)) {
     printf("AOT compile failed:\n%s", compile_output);
-    exit(2);
+    test_exit(2);
 }
 
 string aot_output = run_executable(sprintf(
@@ -483,13 +493,13 @@ string aot_output = run_executable(sprintf(
 if (aot_output != expected) {
     printf("AOT mismatch:\nexpected:\n%sactual:\n%s",
         expected, aot_output);
-    exit(2);
+    test_exit(2);
 }
 
 string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", aot_path));
 if (!(undefined_symbols =~ /qore_rt_coerce_return_by_type_path_aot/)) {
     printf("AOT conversion helper is not imported:\n%s", undefined_symbols);
-    exit(2);
+    test_exit(2);
 }
 
 string exact_source_path = root + "/exact.qr";
@@ -519,14 +529,14 @@ string exact_compile_output = backquote(sprintf(
     libqore_dir, qcc_bin, exact_aot_path, exact_source_path));
 if (!is_file(exact_aot_path)) {
     printf("exact-return AOT compile failed:\n%s", exact_compile_output);
-    exit(2);
+    test_exit(2);
 }
 
 string exact_output = run_executable(sprintf(
     "LD_LIBRARY_PATH=%s %s", libqore_dir, exact_aot_path));
 if (exact_output != "42:ok\n") {
     printf("exact-return AOT mismatch:\n%s", exact_output);
-    exit(2);
+    test_exit(2);
 }
 
 string exact_undefined_symbols = backquote(sprintf(
@@ -535,5 +545,5 @@ if (exact_undefined_symbols
         =~ /qore_rt_coerce_return_by_type_path_aot/) {
     printf("exact return unexpectedly imports conversion helper:\n%s",
         exact_undefined_symbols);
-    exit(2);
+    test_exit(2);
 }

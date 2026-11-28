@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-llvm23-terminator-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -25,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-llvm23-terminator-" + string(getpid());
+string root = tmp.path + "/llvm23-terminator";
 mkdir(root);
 string source_path = root + "/case.qr";
 string executable_path = root + "/case";
@@ -85,13 +96,13 @@ string compile_out = backquote(sprintf(
     env, qcc_bin, executable_path, source_path));
 if (!is_file(executable_path)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 string actual = run_executable(sprintf("%s %s", env, executable_path));
 if (expected != "created:created:True:False\n" || actual != expected) {
     printf("execution mismatch:\nAST:\n%sAOT:\n%s", expected, actual);
-    exit(2);
+    test_exit(2);
 }
 
 unlink(executable_path);

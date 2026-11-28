@@ -22,6 +22,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires FsUtil
 %requires ../ExecModeHarness.qm
 
 %exec-class JitCompileThreadStackTest
@@ -46,12 +47,15 @@ class JitCompileThreadStackTest inherits QUnit::Test {
         string qore_bin;
         string libqore_dir;
         string script_path;
+        #! the files of the test, removed when the test object is destroyed (qore#7817)
+        TmpDir tmp;
     }
 
     constructor() : QUnit::Test("JitCompileThreadStackTest", "1.0", \ARGV) {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        script_path = "/tmp/qore-jit-compile-thread-stack-" + string(getpid()) + ".qr";
+        tmp = new TmpDir("qore-jit-compile-thread-stack-");
+        script_path = tmp.path + "/jit-compile-thread-stack.qr";
         addTestCase("deeply chained induction variables compile on the background thread",
             \testDeepScalarEvolutionRecursion());
         addTestCase("the natively compiled function returns the interpreted result",

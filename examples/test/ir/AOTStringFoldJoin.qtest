@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-fold-join-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -126,7 +136,7 @@ printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|\"
     select_sparse_result, map_select_result);
 ";
 
-string script_path = "/tmp/qore-aot-string-fold-join-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/string-fold-join.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -138,12 +148,12 @@ string sub runMode(string mode) {
 }
 
 string sub runAot(string suffix, string env) {
-    string exe = "/tmp/qore-aot-string-fold-join-" + string(getpid()) + suffix;
+    string exe = tmp.path + "/string-fold-join" + suffix;
     string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
         env, libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed (%s):\n%s", suffix, compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -158,7 +168,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -166,11 +176,11 @@ string ir_dump = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-m
     libqore_dir, qore_bin, script_path));
 if (ir_dump !~ /foldl\.string\.join/) {
     printf("specialized foldl string join opcode missing from IR dump:\n%s", ir_dump);
-    exit(2);
+    test_exit(2);
 }
 if (ir_dump !~ /string\.join\.start/ || ir_dump !~ /string\.join\.append/) {
     printf("fused map string join opcodes missing from IR dump:\n%s", ir_dump);
-    exit(2);
+    test_exit(2);
 }
 
 hash<string, string> aot_modes = {
@@ -182,6 +192,6 @@ foreach string suffix in (keys aot_modes) {
     string actual = runAot(suffix, aot_modes{suffix});
     if (actual != expected) {
         printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

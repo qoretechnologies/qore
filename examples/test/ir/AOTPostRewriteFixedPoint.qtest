@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-post-rewrite-fixed-point-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -84,7 +95,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-post-rewrite-fixed-point-" + string(getpid());
+string root = tmp.path + "/post-rewrite-fixed-point";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string single_round_dir = root + "/single-round";
@@ -92,9 +103,6 @@ mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(single_round_dir);
-on_exit {
-    backquote(sprintf("rm -rf %s", root));
-}
 
 string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
@@ -113,7 +121,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 unlink(provider_path);
 
@@ -124,7 +132,7 @@ string sub compileConsumer(string output_dir, string env) {
         consumer_path));
     if (!is_file(output_dir + "/consumer.qo")) {
         printf("consumer compile failed:\n%s", output);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -138,7 +146,7 @@ if (!(enabled_compile =~ /IR-OPT-AOT-EFFECTS: threeHopStringOps[^:]*:.*post-rewr
         || single_round_compile =~ /IR-OPT-AOT-EFFECTS: (threeHopStringOps|threeHopStringKernel)[^:]*:.*boxed-specializations=[1-9]/) {
     printf("unexpected post-rewrite fixed-point stats:\nenabled:\n%ssingle round:\n%s",
         enabled_compile, single_round_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string sub link(string output, string consumer_qo) {
@@ -147,7 +155,7 @@ string sub link(string output, string consumer_qo) {
         libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
     if (!is_file(output)) {
         printf("link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -161,8 +169,8 @@ foreach string path in ((link(root + "/enabled-exe",
     if (actual != expected) {
         printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
-exit(0);
+test_exit(0);
