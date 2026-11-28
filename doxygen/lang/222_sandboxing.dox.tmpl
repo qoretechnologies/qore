@@ -1050,7 +1050,10 @@ authenticate();
     \c SERIALIZATION-ERROR if a non-public member has a value, as for the non-public state of the classes that trusted
     code declared (see @ref sandbox_serialization); the \c serializeMembers() method of a class is not called for such
     code, whose serialization has the automatic members only (a transient member is not serialized), and the
-    serializers of builtin classes, whose state is their own, are not affected.  The trusted serialization APIs
+    serializers of builtin classes, whose state is their own, are not affected.  For these reads of the whole object,
+    the owner decides: trusted code reads an object that a sandbox owns only for that sandbox, and an object that no
+    sandbox owns, also one that it created while it served sandboxed code, as before (the code of the object's class
+    serializes it, for example).  The trusted serialization APIs
     (@ref Qore::Program::serialize() "Program::serialize()", @ref Qore::Program::serializeToData()
     "Program::serializeToData()" and the trusted forms of @ref Qore::Serializable "Serializable", see
     @ref sandbox_trusted_serialization) are exempt: they give the non-public members of any object, as only trusted

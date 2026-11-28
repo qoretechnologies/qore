@@ -39899,6 +39899,15 @@ static QoreValue f_dbg_sandbox_fail_next_resolutions(const QoreListNode* params,
     qore_dbg_fail_next_sandbox_resolutions(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
+//! Makes the next count owner contexts of objects that trusted class code creates in a method of an object that a
+//! sandbox owns fail as if no memory could be allocated
+/** Tests that such an object is then refused to every sandboxed caller and to trusted code that serves one (qore#7921)
+*/
+static QoreValue f_dbg_sandbox_fail_next_owned_creations(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_owned_creation_contexts(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
 #endif
 
 #ifdef DEBUG
@@ -40580,6 +40589,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_resolutions", f_dbg_sandbox_fail_next_resolutions,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_owned_creations", f_dbg_sandbox_fail_next_owned_creations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,

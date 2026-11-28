@@ -1123,8 +1123,9 @@ public:
 
     //! Returns true if the calling code may read the non-public members of the object as a whole (qore#7033)
     /** For the reads of the whole object that do not depend on a class context (formatting with \c %%y,
-        serialization): trusted code, and sandboxed code whose sandbox created the object; a load and a branch while
-        no code in the process is sandboxed.  Must be called without the object's lock
+        serialization): trusted code (an object that a sandbox owns only for that sandbox), and sandboxed code whose
+        sandbox created the object; a load and a branch while no code in the process is sandboxed.  Must be called
+        without the object's lock
     */
     DLLLOCAL bool callerReadsNonPublicMembers() const {
         return !qore_sandboxed_code_active() || callerReadsNonPublicMembersIntern();
@@ -1132,9 +1133,6 @@ public:
 
     //! see callerReadsNonPublicMembers()
     DLLLOCAL bool callerReadsNonPublicMembersIntern() const;
-
-    //! Returns true if a sandbox governed the creation of the object (its provenance names a sandbox manager)
-    DLLLOCAL bool hasSandboxProvenance() const;
 
     //! Returns a copy of the members of the object that the calling code may read as a whole (qore#7033)
     /** As copyData(), but with the public members only if callerReadsNonPublicMembers() is false
