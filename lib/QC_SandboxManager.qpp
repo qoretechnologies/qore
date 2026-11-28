@@ -3167,6 +3167,9 @@ static bool SandboxManager::callerMayReceiveHostSecrets() [flags=RET_VALUE_ONLY]
     - the method's own caller is the code of a library module (a module that restricted code loaded itself is not
       library code): the module acts for its caller
 
+    An owner that calls the method through a class that it declared itself (a subclass of the library class) is
+    refused, as code that a class of restricted code or of a tenant runs: the owner calls it through the library class.
+
     The method's own caller is decided from the call stack, never from file names: it is the code that called the
     method that called this method, on the thread's call stack (a call through call_object_method() or a call
     reference or closure of the borrower is the borrower's code, so it is refused).

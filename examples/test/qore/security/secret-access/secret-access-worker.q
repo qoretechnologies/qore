@@ -48,6 +48,10 @@ string sub callback(SalProvider p, SalHolder h) {
 string sub ownHolder() {
     return run(string sub () { SalHolder h(); return h.getSecret(); });
 }
+#! the code of another tenant calls the method: two isolation domains govern the code together
+string sub viaOtherTenant(Program other, SalHolder h) {
+    return other.callFunction(\"direct\", h);
+}
 ";
 
 const PathModuleCode = "%modern
@@ -66,12 +70,12 @@ string sub viaPathModule(SalHolder h) {
 ";
 
 #! a Program that a sandbox restricts; tenant: it has an isolation domain and may use uncontrolled APIs
-Program sub getBorrower(string code, bool tenant = False) {
+Program sub getBorrower(string code, bool tenant = False, string domain = "tenant-a") {
     Program p(PO_NO_CHILD_PO_RESTRICTIONS);
     SandboxManager sm();
     if (tenant) {
         sm.setUncontrolledApiPolicy(True);
-        sm.setIsolationDomain("tenant-a");
+        sm.setIsolationDomain(domain);
     }
     # the borrower may read the module that it loads by its path
     sm.addFilesystemAllowedPath(path: get_script_dir(), access_modes: QSEC_READ);
@@ -109,6 +113,12 @@ sub run_cases() {
         report(pfx + "callback", p.callFunction("callback", provider, holder));
         report(pfx + "own-holder", p.callFunction("ownHolder"));
         string mod = tenant ? "SecretAccessPathT" : "SecretAccessPath";
+        if (tenant) {
+            # the code of one tenant calls the code of another one, which calls the method: it belongs to no tenant,
+            # and is refused (a mixed isolation domain counts as a tenant, as it fails closed)
+            Program other = getBorrower(BorrowerCode, True, "tenant-b");
+            report("mixed-tenants-direct", p.callFunction("viaOtherTenant", other, holder));
+        }
         Program pm = getBorrower(sprintf(PathModuleCode, get_script_dir() + "/" + mod + ".qm",
             tenant ? "SaptUser" : "SapUser"), tenant);
         report(pfx + "path-module", pm.callFunction("viaPathModule", holder));

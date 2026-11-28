@@ -14457,7 +14457,7 @@ template <bool IN_FRAME_RELEASE, typename ExecFn>
 static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
-        QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+        QoreProgram* caller_pgm, const QoreTypeInfo* receiver_type_info = nullptr,
         QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr,
         bool body_call_ctx = false, void* body_call_ctx_td = nullptr) {
     QoreProgram* runtime_pgm = exec_pgm ? exec_pgm : uvb->pgm;
@@ -14503,11 +14503,14 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
     // Program::getCallerCapabilityMask) walks back to the caller's program — matching
     // CEH semantics where the CEH frame captures current_pgm BEFORE any pgm switch.
     // Fast helpers capture caller_pgm before their ProgramThreadCountContextHelper
-    // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
+    // call; every call site passes it (it is a required parameter), and the frame records it as it is: the frame's
+    // Program is the Program of the call site, which SandboxManager::checkSecretAccess() reads to tell library code
+    // from restricted code, so it must never be the callee's (qore#7863).  A call with no Program records nullptr,
+    // which that check refuses.
+    assert(caller_pgm);
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = take_runtime_call_location();
-    frame.emplace(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
-        caller_pgm ? caller_pgm : runtime_pgm);
+    frame.emplace(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(), caller_pgm);
 
     QoreRtReceiverTypeInfoGuard receiver_guard(receiver_type_info);
 
@@ -14649,7 +14652,7 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
 template <bool IN_FRAME_RELEASE = false, typename ExecFn>
 static QORE_INTERN_ALWAYS_INLINE void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
-        QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+        QoreProgram* caller_pgm, const QoreTypeInfo* receiver_type_info = nullptr,
         QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr,
         bool body_call_ctx = false, void* body_call_ctx_td = nullptr) {
     std::optional<QoreJITStackLocation> frame;
