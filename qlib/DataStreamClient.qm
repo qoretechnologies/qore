@@ -79,7 +79,8 @@ module DataStreamClient {
     option:
     - \c "auto" (default) — tries Connect (DataStream 2.0) first, falls back to DataStream v1
     - \c "connect" — forces Connect protocol (DataStream 2.0)
-    - \c "datastream" — forces DataStream v1 chunked protocol
+    - \c "datastream" — forces DataStream v1 chunked protocol, which keeps the boundaries of the items of a stream
+      only over HTTP/1.1 (chunked transfer encoding)
 
     In \c "auto" mode, the client first attempts a Connect request over HTTP/2 (or HTTP/3 if
     configured).  If the server responds with HTTP 415 (Unsupported Media Type) or HTTP 406
@@ -227,10 +228,11 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in request
           method calls
-        - \c http_version: HTTP version to use (\c 'auto', \c '1.0', \c '1.1', \c '2.0', or \c '3.0'; defaults
-          to \c 'auto'); with the default \c protocol (\c 'auto'), the Connect protocol is used with HTTP/2 and HTTP/3,
+        - \c http_version: HTTP version to use (\c 'auto', \c '1.0', \c '1.1', \c '2.0' (or \c '2'), or \c '3.0' (or
+          \c '3'); defaults to \c 'auto'); with the default \c protocol (\c 'auto'), the Connect protocol is used with HTTP/2 and HTTP/3,
           given here or negotiated, as DataStream v1 relies on HTTP/1.1 chunked transfer encoding for the boundaries of
-          the items of a stream, which HTTP/2 and HTTP/3 do not have
+          the items of a stream, which HTTP/2 and HTTP/3 do not have; a server that rejects Connect is then called
+          again with DataStream v1 over HTTP/1.1
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
@@ -1006,14 +1008,16 @@ rest.setContentEncoding("gzip");
         # In auto mode, use Connect if the connection is already HTTP/2 or HTTP/3, or if the HTTP version given is 2
         # or 3, before the connection is made: DataStream v1 has no item boundaries without HTTP/1.1 chunked transfer
         # encoding (qore#7892)
-        if (isHttp2() || effective_http_version == "2.0" || effective_http_version == "3.0") {
+        # the HTTP version as the HTTP client has it ("2" is "2.0"), also after a fallback set it to 1.1
+        string http_version = getHTTPVersion();
+        if (isHttp2() || http_version == "2.0" || http_version == "3.0") {
             return DataStreamProtocol::Connect;
         }
         # If not yet connected but using HTTPS with "auto" HTTP version, prefer Connect
         # because ALPN will negotiate h2; if the server rejects Connect, the fallback
         # to DataStream v1 handles it. DataStream v1 does not work over HTTP/2 because
         # HTTP/2 has no chunked transfer encoding.
-        if (effective_http_version == "auto" && getURL() =~ /^https/i) {
+        if (http_version == "auto" && getURL() =~ /^https/i) {
             return DataStreamProtocol::Connect;
         }
         return DataStreamProtocol::DataStream;

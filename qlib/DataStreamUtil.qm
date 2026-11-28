@@ -1795,8 +1795,9 @@ public hash<auto> sub ds_process_opts(*hash<auto> opts) {
     hash<auto> local_opts = opts ?? {};
     # No HTTP version cap — Qore's HTTPClient transparently handles streaming
     # over HTTP/2 (DATA frames) and HTTP/3 (QUIC DATA) as well as HTTP/1.1
-    # (chunked transfer encoding). DataStream v1 and Connect both work over
-    # any HTTP version.
+    # (chunked transfer encoding); DataStream v1 keeps the boundaries of the items
+    # of a stream only with HTTP/1.1 chunked transfer encoding, so DataStreamClient
+    # uses Connect with HTTP/2 and HTTP/3 (qore#7892)
     return local_opts;
 }
 
