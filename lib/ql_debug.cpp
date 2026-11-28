@@ -25668,6 +25668,13 @@ static QoreValue f_dbg_http_send_bound_steps(const QoreListNode* params, Runtime
         get_param_value(params, 3).get<const QoreListNode>(), xsink);
 }
 
+//! Debug-only: sets the offset that the clock of the keep-alive idle deadlines of HTTP/1 connections adds to the
+//! monotonic clock, so that a test can let the idle time pass without waiting (qore#7855)
+static QoreValue f_dbg_http_idle_clock_offset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_set_http_idle_clock_offset(get_param_value(params, 0).getAsBigInt());
+    return QoreValue();
+}
+
 //! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
 static QoreValue f_dbg_async_io_fail_next_timer_hold(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -39847,6 +39854,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stall_ms",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "min_rate", bigIntTypeInfo, QORE_PARAM_NO_ARG, "window_ms",
         listTypeInfo, QORE_PARAM_NO_ARG, "steps");
+    qns.addBuiltinVariant("dbg_http_idle_clock_offset", f_dbg_http_idle_clock_offset,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "offset");
     qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",

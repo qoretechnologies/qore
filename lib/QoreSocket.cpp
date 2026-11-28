@@ -22032,6 +22032,24 @@ void SocketReadHttpBodyPollOperation::deref(ExceptionSink* xsink) {
 
 // SocketSendAndReadHeaderPollOperation implementation
 
+#ifdef DEBUG
+//! the offset of the keep-alive idle clock from the monotonic clock in milliseconds (debug builds; qore#7855)
+static std::atomic<int64> qore_dbg_http_idle_clock_offset_ms{0};
+
+void qore_dbg_set_http_idle_clock_offset(int64 offset_ms) {
+    qore_dbg_http_idle_clock_offset_ms.store(offset_ms);
+}
+#endif
+
+int64 qore_http_idle_clock_ms() {
+    // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
+    int64 now_ms = q_get_monotonic_us() / 1000;
+#ifdef DEBUG
+    now_ms += qore_dbg_http_idle_clock_offset_ms.load();
+#endif
+    return now_ms;
+}
+
 //! Adds the time left to an idle deadline to the poll info of an operation that waits for the next request (qore#7488)
 /** The event loop then wakes the operation when the deadline passes, so that a connection that stays idle is closed at
     its TTL, not only when a request comes or when the whole operation times out (as
@@ -22045,7 +22063,7 @@ static QoreHashNode* qore_add_idle_deadline_poll_timeout(QoreHashNode* info, int
     if (info && idle_deadline_ms > 0) {
         // the idle phase closes the connection once the monotonic clock is past the deadline: the wake-up comes 1 ms
         // after it, so that the check at the wake-up sees it passed
-        int64 left_ms = idle_deadline_ms - q_get_monotonic_us() / 1000 + 1;
+        int64 left_ms = idle_deadline_ms - qore_http_idle_clock_ms() + 1;
         // a wake-up before the deadline polls again with the time then left: the controller takes an int
         if (left_ms > INT_MAX) {
             left_ms = INT_MAX;
@@ -22066,7 +22084,7 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
     {
         // the idle timeout is given as a deadline; a request answered by a fast route moves it on
         // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
-        int64 now_ms = q_get_monotonic_us() / 1000;
+        int64 now_ms = qore_http_idle_clock_ms();
         idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
     }
     AutoLocker al(sock->priv->m);
@@ -22159,7 +22177,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
         case Phase::Idle: {
             // Check idle timeout
             // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
-            int64 now_ms = q_get_monotonic_us() / 1000;
+            int64 now_ms = qore_http_idle_clock_ms();
             if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                 phase = Phase::Timeout;
                 sock->priv->clearNonBlock();
@@ -22463,7 +22481,7 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
 QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
     // The peer gets the full keep-alive interval after the last response byte.
     if (idle_ttl_ms > 0) {
-        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+        idle_timeout_ms = qore_http_idle_clock_ms() + idle_ttl_ms;
     }
     responded = true;
     phase = Phase::Idle;
@@ -22502,7 +22520,7 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           chunked_encoding(chunked),
           fused(fused),
           idle_timeout_ms(idle_timeout_ms),
-          idle_ttl_ms(std::max<int64>(0, idle_timeout_ms - q_get_monotonic_us() / 1000)), header_output(nullptr) {
+          idle_ttl_ms(std::max<int64>(0, idle_timeout_ms - qore_http_idle_clock_ms())), header_output(nullptr) {
 
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
@@ -22563,7 +22581,7 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
     // The peer gets the full keep-alive interval after the last response byte.
     if (idle_ttl_ms > 0) {
-        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+        idle_timeout_ms = qore_http_idle_clock_ms() + idle_ttl_ms;
     }
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
@@ -22832,7 +22850,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
             case Phase::Idle: {
                 // Check idle timeout
                 // a deadline on the monotonic clock, which a step of the system clock does not move (#6150)
-                int64 now_ms = q_get_monotonic_us() / 1000;
+                int64 now_ms = qore_http_idle_clock_ms();
                 if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
                     phase = Phase::Timeout;
                     sock->priv->clearNonBlock();

@@ -59,6 +59,18 @@ class QoreEventNotifier;
 //! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
 constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
 
+//! The clock of the keep-alive idle deadlines of HTTP/1 connections, on the monotonic clock in milliseconds
+/** The deadline of the idle time after a response (\c idle_timeout of the fused send-and-read-header operations) and
+    the checks against it read this clock; a debug build can move it forward with dbg_http_idle_clock_offset(), so
+    that a test can let the idle time pass without waiting (qore#7855)
+*/
+DLLLOCAL int64 qore_http_idle_clock_ms();
+
+#ifdef DEBUG
+//! Debug-only: sets the offset in milliseconds that qore_http_idle_clock_ms() adds to the monotonic clock (qore#7855)
+DLLLOCAL void qore_dbg_set_http_idle_clock_offset(int64 offset_ms);
+#endif
+
 //! Creates the target TLS handshake of an HTTP operation, using credentials private to that operation.
 DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
         QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
