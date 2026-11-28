@@ -1,0 +1,136 @@
+weak int, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak *int, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak *int, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak *int, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak *int, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak string, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got no value (deleted object of class 'WsdObj') instead); value: string ""; copy: string ""; after delete: string ""
+weak string, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got an object of class 'WsdObj' instead); value: string ""; copy: string ""; after delete: string ""
+weak string, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got no value instead); value: string ""; copy: string ""; after delete: string ""
+weak string, int: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got type 'integer' instead); value: string ""; copy: string ""; after delete: string ""
+weak object, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got no value (deleted object of class 'WsdObj') instead); value: object a=0; copy: object a=0; after delete: object a=0
+weak object, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak object, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got no value instead); value: object a=0; copy: object a=0; after delete: object a=0
+weak object, int: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got type 'integer' instead); value: object a=0; copy: object a=0; after delete: object a=0
+weak *object, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak *object, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak *object, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak *object, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak any, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak any, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak any, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak any, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak auto, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak auto, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak auto, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak auto, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak int member, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int member, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int member, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: integer 0; copy: integer 0; after delete: integer 0
+weak int member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak *int member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak *int member, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak *int member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak *int member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak *object member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak *object member, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak *object member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak *object member, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak any member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak any member, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak any member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak any member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak hash<auto> key, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak hash<auto> key, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak hash<auto> key, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak hash<auto> key, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak hash<string, int> key, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak hash<string, int> key, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak hash<string, int> key, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak hash<string, int> key, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak hash<string, *object> key, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak hash<string, *object> key, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak hash<string, *object> key, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak hash<string, *object> key, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak list<auto> element, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak list<auto> element, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+weak list<auto> element, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak list<auto> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak list<int> element, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak list<int> element, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak list<int> element, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+weak list<int> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+weak list<*int> element, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+weak list<*int> element, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+weak list<*int> element, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+weak list<*int> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque int, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque *int, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque *int, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque *int, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque *int, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque string, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got no value (deleted object of class 'WsdObj') instead); value: string ""; copy: string ""; after delete: string ""
+opaque string, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got an object of class 'WsdObj' instead); value: string ""; copy: string ""; after delete: string ""
+opaque string, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got no value instead); value: string ""; copy: string ""; after delete: string ""
+opaque string, int: RUNTIME-TYPE-ERROR (<lvalue> expects type 'string', but got type 'integer' instead); value: string ""; copy: string ""; after delete: string ""
+opaque object, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got no value (deleted object of class 'WsdObj') instead); value: object a=0; copy: object a=0; after delete: object a=0
+opaque object, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque object, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got no value instead); value: object a=0; copy: object a=0; after delete: object a=0
+opaque object, int: RUNTIME-TYPE-ERROR (<lvalue> expects type 'object', but got type 'integer' instead); value: object a=0; copy: object a=0; after delete: object a=0
+opaque *object, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque *object, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque *object, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque *object, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque any, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque any, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque any, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque any, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque auto, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque auto, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque auto, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque auto, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque int member, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int member, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int member, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead); value: integer 0; copy: integer 0; after delete: integer 0
+opaque int member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque *int member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque *int member, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque *int member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque *int member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque *object member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque *object member, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque *object member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque *object member, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque any member, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque any member, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque any member, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque any member, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque hash<auto> key, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque hash<auto> key, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque hash<auto> key, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque hash<auto> key, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque hash<string, int> key, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque hash<string, int> key, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque hash<string, int> key, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead; this type is the declared value type of the hash holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque hash<string, int> key, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque hash<string, *object> key, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque hash<string, *object> key, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque hash<string, *object> key, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque hash<string, *object> key, int: RUNTIME-TYPE-ERROR (<lvalue> expects type '*object', but got type 'integer' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<auto> element, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque list<auto> element, live: ok; value: object a=2; copy: object a=2; after delete: OBJECT-ALREADY-DELETED
+opaque list<auto> element, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<auto> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque list<int> element, deleted: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value (deleted object of class 'WsdObj') instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<int> element, live: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got an object of class 'WsdObj' instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<int> element, NOTHING: RUNTIME-TYPE-ERROR (<lvalue> expects type 'int', but got no value instead; this type is the declared value type of the list holding the target; review the container declaration and the value being assigned); value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<int> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
+opaque list<*int> element, deleted: ok; value: OBJECT-ALREADY-DELETED; copy: OBJECT-ALREADY-DELETED; after delete: OBJECT-ALREADY-DELETED
+opaque list<*int> element, live: RUNTIME-TYPE-ERROR (<lvalue> expects type '*int', but got an object of class 'WsdObj' instead); value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<*int> element, NOTHING: ok; value: nothing null; copy: nothing null; after delete: nothing null
+opaque list<*int> element, int: ok; value: integer 5; copy: integer 5; after delete: integer 5
