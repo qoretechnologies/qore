@@ -291,6 +291,8 @@ sub run_t() {
 
         #! the paths of the host that restricted code must not see
         list<string> host_dirs;
+        #! the source of QUnit in the qlib directory of the tree
+        string qunit_source;
     }
 
     constructor() : QUnit::Test("module paths in exceptions", "1.0") {
@@ -299,6 +301,7 @@ sub run_t() {
         hash<auto> info = get_qore_library_info();
         host_dirs = (mod_dir, tmp.path, info.UserModuleVerDir, info.UserModuleDir, info.BinaryModuleVerDir,
             info.BinaryModuleDir, realpath(get_script_dir() + "/../../../../qlib"), get_script_dir());
+        qunit_source = realpath(get_script_dir() + "/../../../../qlib/QUnit.qm");
         # trailing separators are not part of the directory in a path
         host_dirs = map regex_subst($1, "/+$", ""), host_dirs;
 
@@ -385,10 +388,13 @@ sub run_t() {
             assertEq(dir + mods.throw + ".qm", result.chained.next.file, label + ": chained file");
             assertEq(dir + mods.throw + ".qm", result.cs[0].file, label + ": call stack file");
             assertEq(dir + mods.throw + ".qm", result.pcl.file, label + ": caller location file");
-            # the frames of QUnit name its source with its directory, also when it is loaded from its AOT module,
-            # whose file is then the module's filename
-            assertTrue((map $1.file, result.own_cs).contains(dirname(get_module_hash().QUnit.filename) + DirSep
-                + "QUnit.qm"), label + ": the host's frames in full");
+            # the frames of QUnit name its source, qlib/QUnit.qm, by its full path, also when it is loaded from an
+            # AOT module that is not in qlib: the link qlib/QUnit.qmod is replaced by the module of libqore's own
+            # build when it leads into another build (qoretechnologies/qore#7829); the paths are compared resolved,
+            # as the recorded source and the script directory can name the same file differently (/var and
+            # /private/var on macOS, a symlinked tree)
+            assertTrue((map realpath($1.file), select result.own_cs, absolute_path($1.file) && is_file($1.file))
+                .contains(qunit_source), label + ": the host's frames in full");
             hash<auto> child = result.mh{mods.try_r}."child-modules"{mods.child_r};
             assertContains("from path \"" + dir + mods.child_r + ".qm\"", child.desc, label + ": child desc");
             child = result.mh{mods.try_host}."child-modules"{mods.child_host};

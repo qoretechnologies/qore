@@ -13,6 +13,8 @@
 # synchronous JIT compilation at threshold 1, as each Program's code is then compiled to native code in each mode;
 # the runs are split by the execution mode of the qore process (qore#6359).
 
+%requires ../../../ExecModeHarness.qm
+
 class GenericHashdeclProgramsBase inherits QUnit::Test {
     private {
         string qore = realpath(TestInterpreter::qore_interpreter());
@@ -55,17 +57,24 @@ class GenericHashdeclProgramsBase inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
-    private string run(list<string> args, string prefix = "") {
-        int status;
-        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
-            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
-            + (map quote($1), args).join(" ") + " 2>&1", \status);
-        assertEq(0, status, output);
-        return output;
+    #! runs a command in its default environment, with the given environment prefix, and checks that it succeeds;
+    #! a warning of the module loader on stderr is not its output
+    private hash<ExecModeHarness::ModeRunResult> run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(prefix + "LD_LIBRARY_PATH="
+            + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        return r;
+    }
+
+    #! checks the output of a run of the fixture
+    private checkOutput(hash<ExecModeHarness::ModeRunResult> r, string label) {
+        assertEq(Expected, r.stdout, label);
+        assertEq("", r.stderr, label + ": stderr");
     }
 
     executionMode(string mode, string control) {
-        assertEq(Expected, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+        checkOutput(run((qore, "--exec-mode=" + mode, source), control), control + mode);
     }
 
     aot() {
@@ -73,7 +82,7 @@ class GenericHashdeclProgramsBase inherits QUnit::Test {
         foreach string level in (("-O0", "-O3")) {
             string executable = dir.path + "/fixture";
             run((qcc, level, "-o", executable, source));
-            assertEq(Expected, run((executable,)), level);
+            checkOutput(run((executable,)), level);
         }
     }
 }

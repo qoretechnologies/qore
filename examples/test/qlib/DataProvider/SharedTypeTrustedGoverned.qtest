@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%exec-class SharedTypeTrustedGovernedTest
+
+#! Changes of data types and fields that are shared by every Program of the process follow the classification that
+#! makes them shared (qore#7737, qore#7879): trusted code, also where a trusted (governed) sandbox governs it, changes
+#! them; restricted code and code acting for it cannot
+public class SharedTypeTrustedGovernedTest inherits QUnit::Test {
+    private {
+        const ProbeSource = "
+string sub own_type() {
+    HashDataType h();
+    string rv = sprintf(\"shared=%y; \", SandboxManager::createsSharedObjects());
+    try {
+        h.addField(new QoreDataField(\"input\", \"input field\", AbstractDataProviderType::get(\"string\")));
+        rv += \"addField ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    return rv;
+}
+
+string sub change_type(HashDataType h) {
+    try {
+        h.addField(new QoreDataField(\"other\", \"other field\", AbstractDataProviderType::get(\"string\")));
+        return \"addField ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub change_field(QoreDataField f) {
+    try {
+        f.setDefaultValue(\"x\");
+        return \"setDefaultValue ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    constructor() : Test("SharedTypeTrustedGovernedTest", "1.0") {
+        addTestCase("trusted governed code changes the types it builds", \trustedGovernedOwnTest());
+        addTestCase("trusted governed code changes shared types and fields", \trustedGovernedSharedTest());
+        addTestCase("restricted code cannot change shared types and fields", \restrictedSharedTest());
+        addTestCase("restricted code changes the types it builds", \restrictedOwnTest());
+        set_return_value(main());
+    }
+
+    #! a Program governed by a manager that trusts its code (qore#7737)
+    private Program getProgram(bool trusting) {
+        SandboxManager mgr();
+        mgr.setFilesystemDefaultPolicy(True);
+        mgr.setNetworkDefaultPolicy(True);
+        if (trusting) {
+            mgr.setUncontrolledApiPolicy(True);
+        }
+        Program p(PO_NEW_STYLE);
+        p.loadModule("DataProvider");
+        p.setSandboxManager(mgr);
+        p.parse(ProbeSource, "probe");
+        return p;
+    }
+
+    trustedGovernedOwnTest() {
+        # the regression: the type is shared (trusted code creates shared objects), and adding a field to it was
+        # refused because the change check counted any sandbox manager
+        assertEq("shared=True; addField ok", getProgram(True).callFunction("own_type"));
+    }
+
+    trustedGovernedSharedTest() {
+        Program p = getProgram(True);
+        HashDataType h();
+        assertEq("addField ok", p.callFunction("change_type", h));
+        QoreDataField f("f", "a field", AbstractDataProviderType::get("string"));
+        assertEq("setDefaultValue ok", p.callFunction("change_field", f));
+    }
+
+    restrictedSharedTest() {
+        Program p = getProgram(False);
+        HashDataType h();
+        assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("change_type", h));
+        assertEq(0, h.getFields().size());
+        QoreDataField f("f", "a field", AbstractDataProviderType::get("string"));
+        assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("change_field", f));
+        assertNothing(f.getDefaultValue());
+    }
+
+    restrictedOwnTest() {
+        # a type that restricted code creates is not shared, and it changes it
+        assertEq("shared=False; addField ok", getProgram(False).callFunction("own_type"));
+    }
+}

@@ -207,8 +207,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
         #   --exec-mode
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
-        # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
-        #   and in qcc executables
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -221,6 +219,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   reapers it inspects
         # - unhandled-exception-report: its checks run in child processes without an execution mode, whose threads
         #   raise unhandled exceptions at the same time
+        # - asyncio_callback_worker_start_failure (#7834): its checks run in child processes without an execution mode,
+        #   whose callback workers are only those they start and whose output the test checks
         # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
         #   whose standard output and error output it reads
         # - asyncio_poll_complete_notify (#6804): its checks run in child processes without an execution mode, whose
@@ -267,8 +267,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
         #   child processes that set their own --exec-mode and as qcc executables
-        # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
-        #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         # - AOTModuleBuiltinApiIdentity (#7183): its checks compile modules and load them in child processes of its own
         #   binary started without an execution mode
         # - AOTGuardedMethodEntryReturnKind (#6860): its checks run qcc in child processes started without an execution
@@ -324,6 +322,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_callback_worker_start_failure.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
@@ -333,8 +332,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
-                                 "examples/test/qore/misc/declaration-initializer-scope.qtest",
-                                 "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/qore/vars/timezone-spelling-casefold.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",

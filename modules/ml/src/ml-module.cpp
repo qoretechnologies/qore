@@ -26,6 +26,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "ml_serialization.h"
 #include "QC_AbstractMLModel.h"
@@ -316,6 +317,11 @@ static QoreValue f_ml_dbg_onnx_auto_provider_failure_info(const QoreListNode* ar
 #endif
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    // the hash tables of the module that are keyed by data use the keyed hash of the process; its key is created
+    // here, where a failure is reported, so that constructing such a table later cannot fail (qore#7750)
+    if (qore_intern_hash_process_key_check(&xsink)) {
+        return;
+    }
     if (qore_ml_onnx_register_fork_handlers(&xsink)) {
         return;
     }

@@ -1,0 +1,11 @@
+# The tests that still leave files in their temporary directory (TMPDIR) when run_tests.sh gives each test one of its
+# own (QORE_TEST_TMP_LEAKS, qore#7817, qore#7823): their leaks are reported, but do not fail them with
+# QORE_TEST_TMP_LEAKS=fail (CI).  One test per line, as a path from the root of the source tree; remove a test when it
+# no longer leaves anything (examples/test/runner/test_tmp_leak_known.py checks the list).
+examples/test/qlib/ConnectionProvider/ConnectionProvider.qtest
+examples/test/qlib/DataProvider/ProviderIndexFactoryInfo.qtest
+examples/test/qlib/DataProviderML/ExtractionAction.qtest
+examples/test/qlib/HttpServer/HttpServerAsyncHttp2Streaming.qtest
+examples/test/qlib/HttpServer/HttpServerAsyncStreamingResponse.qtest
+examples/test/qlib/WebSocketClient/WebSocketClient.qtest
+examples/test/qore/classes/SQLStatement/SQLStatement.qtest

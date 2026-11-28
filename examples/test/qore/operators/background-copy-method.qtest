@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - runs Programs of every execution mode in its own process, and programs compiled with qcc
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -9,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
 %requires FsUtil
 
 %exec-class BackgroundCopyMethodTest
@@ -535,7 +537,12 @@ public class BackgroundCopyMethodTest inherits QUnit::Test {
             string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt,
                 shellQuote(program), shellQuote(src)));
             assertTrue(is_file(program), sprintf("-O%d: compiled: %s", opt, output));
-            assertEq(expected, backquote(shellQuote(program) + " 2>&1"), sprintf("qcc -O%d", opt));
+            # the program runs in its default environment; a warning of the module loader on stderr is not its output
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+                "QORE_JIT_TIMING=1");
+            assertEq(0, r.rc, sprintf("qcc -O%d", opt) + ": exit status: " + r.out);
+            assertEq(expected, r.stdout, sprintf("qcc -O%d", opt));
+            assertEq("", r.stderr, sprintf("qcc -O%d", opt) + ": stderr");
         }
     }
 

@@ -1399,6 +1399,12 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
 
     Takes effect when the dispatcher or submitTask() pool is next created.
 
+    A worker is started when the callbacks queued and running reach the number of workers running.  If a worker
+    cannot be started (a thread or stack limit), the failure is logged (with the controller's or the async I/O logger,
+    or else on the standard error output) and the callback stays queued: a running worker takes it when it is free; if
+    none runs, a worker is started for it when one may start again: when the next callback is queued, when a thread
+    has ended, or when the default thread stack size changes (since %Qore 3.0)
+
     @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency() * 4,
     capped at 512, fallback 4)
 

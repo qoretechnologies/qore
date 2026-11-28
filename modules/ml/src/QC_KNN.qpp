@@ -38,6 +38,12 @@ extern const TypedHashDecl* hashdeclKNNRegressionResult;
     weighted by distance). For regression, it computes the (optionally weighted) mean of the
     k nearest neighbors' target values.
 
+    Neighbors at the same distance from the query are taken in the order of the training data, and a tie between
+    classes in the (weighted) vote goes to the smallest class label, so that the same model and input give the same
+    prediction on every run and platform.  A NaN distance (from a NaN or infinite feature value) is infinite: such a
+    neighbor is the farthest, equal to any other at an infinite distance, its distance is reported as \c inf, and
+    its weight with \c "distance" weighting is 0.
+
     Supports three distance metrics: Euclidean, Manhattan, and cosine distance.
 
     @par Example:

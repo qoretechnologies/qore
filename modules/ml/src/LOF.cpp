@@ -263,8 +263,22 @@ QoreLOF* QoreLOF::deserializeState(const uint8_t* data, size_t len, ExceptionSin
     std::vector<double> ref_lrds = MLSerialization::readDoubleVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844): fit() keeps the
+    // k nearest neighbors of every reference row, and needs more rows than k
+    using namespace MLSerialization;
+    int64_t rows = ref_data.rows();
+    if (checkRange(rows, 2, INT32_MAX, "LOF", "the number of reference rows", xsink)
+        || checkRange(k, 1, rows - 1, "LOF", "k", xsink)) {
+        return nullptr;
+    }
+
     uint32_t knn_count = MLSerialization::readUint32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    // each neighbor list takes at least 4 bytes
+    if (checkSize(knn_count, rows, "LOF", "the number of neighbor lists", xsink)
+        || checkRange(knn_count, 1, remaining / 4, "LOF", "the number of neighbor lists", xsink)) {
+        return nullptr;
+    }
     std::vector<std::vector<int>> ref_knn_indices;
     ref_knn_indices.reserve(knn_count);
     for (uint32_t i = 0; i < knn_count; ++i) {
@@ -274,6 +288,29 @@ QoreLOF* QoreLOF::deserializeState(const uint8_t* data, size_t len, ExceptionSin
 
     std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    if (checkEnd(remaining, "LOF", xsink)
+        || checkRange(ref_data.cols(), 1, INT32_MAX, "LOF", "the number of reference columns", xsink)
+        || checkSize(n_features, ref_data.cols(), "LOF", "the number of features", xsink)
+        || checkSize(ref_k_distances.size(), rows, "LOF", "the number of k-distances", xsink)
+        || checkSize(ref_lrds.size(), rows, "LOF", "the number of local reachability densities", xsink)) {
+        return nullptr;
+    }
+    // the constructor requires a positive threshold
+    if (threshold <= 0.0) {
+        stateError(xsink, "LOF", "threshold is %g but must be positive", threshold);
+        return nullptr;
+    }
+    for (int64_t i = 0; i < rows; ++i) {
+        if (checkSize(ref_knn_indices[i].size(), k, "LOF", "the size of a neighbor list", xsink)) {
+            return nullptr;
+        }
+        for (int idx : ref_knn_indices[i]) {
+            if (checkRange(idx, 0, rows - 1, "LOF", "a neighbor index", xsink)) {
+                return nullptr;
+            }
+        }
+    }
 
     std::unique_ptr<QoreLOF> obj(new QoreLOF(k, threshold));
     obj->n_features = n_features;

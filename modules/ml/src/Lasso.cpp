@@ -551,6 +551,29 @@ QoreLasso* QoreLasso::deserializeState(const uint8_t* data, size_t len,
         if (*xsink) { return nullptr; }
     }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "Lasso", xsink)
+        || (alpha < 0.0 && stateError(xsink, "Lasso", "alpha must be >= 0"))
+        || checkRange(max_iter, 1, INT32_MAX, "Lasso", "max_iter", xsink)
+        || (tol <= 0.0 && stateError(xsink, "Lasso", "tol must be > 0"))
+        || checkRange(n_features, 1, INT32_MAX, "Lasso", "the number of features", xsink)
+        || checkRange(iterations_run, 0, max_iter, "Lasso", "the number of iterations run", xsink)
+        || checkSize(coefficients.size(), n_features, "Lasso", "the number of coefficients", xsink)
+        || checkSize(feature_stds.size(), feature_means.size(), "Lasso",
+            "the number of feature standard deviations", xsink)
+        || (!do_normalize && checkSize(feature_means.size(), 0, "Lasso",
+            "the number of feature means without normalization", xsink))) {
+        return nullptr;
+    }
+    for (Eigen::Index i = 0; i < feature_stds.size(); ++i) {
+        // a standard deviation is positive (a constant feature has 1)
+        if (!(feature_stds(i) > 0.0)) {
+            stateError(xsink, "Lasso", "a feature standard deviation must be positive");
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreLasso> obj(new QoreLasso(alpha, fit_intercept, do_normalize,
         max_iter, tol, warm_start));
     obj->n_features = n_features;

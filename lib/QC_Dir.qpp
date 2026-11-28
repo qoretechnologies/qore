@@ -36,6 +36,7 @@
 #include "qore/intern/qore_qd_private.h"
 #include "qore/intern/qore_qf_private.h"
 #include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <cerrno>
 #include <memory>
@@ -85,6 +86,74 @@ static qore_offset_t dir_entry_readlink(DIR* dptr, const char* name, const QoreS
     return readlink(fname.getBuffer(), buf, size);
 #endif
 }
+
+#ifndef _Q_WINDOWS
+// gets the status of an entry of a directory listed under a file-system policy, for a listing that reports it: the
+// status of the entry is read relative to the directory opened, which the policy checked, and the policy decides for
+// the entry's canonical path in that directory (the directory's canonical path and the entry's name), which is not
+// resolved again; the status of the target of a link is that of the target that the link's text names, read with the
+// policy's decision in one step (q_sandbox_pinned_stat(), qore#7518), so that a link replaced meanwhile does not make
+// the listing report the status of a file outside of the policy (qore#7833), and it is reported only if it is the file
+// that the link reaches from the directory opened; an entry of /dev/fd where it is not a link is decided for the file
+// of its descriptor instead
+// buf: the status of the entry, following a link; link_text: the text of the link if the entry is a link; returns 0
+// for OK, -1 if the entry is left out: the policy does not allow it or the target of its link to be read, its status
+// cannot be read, or it changed while it was read
+static int dir_entry_policy_status(QoreSandboxManager& sm, DIR* dptr, const char* name, const QoreString& fname,
+        const QoreString& cname, const std::string& check_dir, struct stat& buf, std::string& link_text) {
+    ExceptionSink denied;
+    // an entry of /dev/fd where it is not a link (macOS, the BSDs) is not a link either, but reaches the file of a
+    // descriptor, whatever its path: the policy decides for that file, and its status is read through the descriptor
+    // (q_sandbox_pinned_stat())
+    if (!strncmp(cname.c_str(), "/dev/fd/", 8)) {
+        int rc = q_sandbox_pinned_stat(sm, cname.c_str(), true, buf, &denied);
+        denied.clear();
+        return rc ? -1 : 0;
+    }
+    struct stat lbuf;
+    if (fstatat(dirfd(dptr), name, &lbuf, AT_SYMLINK_NOFOLLOW)) {
+        return -1;
+    }
+    bool allowed = QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, cname.c_str(), fname.c_str(), QSEC_READ,
+        &denied);
+    denied.clear();
+    if (!allowed) {
+        return -1;
+    }
+    if (!S_ISLNK(lbuf.st_mode)) {
+        buf = lbuf;
+        return 0;
+    }
+#ifdef DEBUG
+    // test hook: the link replaced between the policy's decision for the entry and the read of the link (qore#7833)
+    q_dbg_fs_swap_point(fname.c_str());
+#endif
+    char tbuf[QORE_PATH_MAX + 1];
+    ssize_t len = readlinkat(dirfd(dptr), name, tbuf, QORE_PATH_MAX);
+    // a link replaced by an entry that is not a link is left out, as is a link whose text may have been cut short
+    if (len < 0 || len == QORE_PATH_MAX) {
+        return -1;
+    }
+    tbuf[len] = '\0';
+    // the target that the text names, relative to the directory of the link
+    std::string target = tbuf[0] == '/' ? std::string(tbuf) : (check_dir == "/" ? check_dir : check_dir
+        + QORE_DIR_SEP_STR) + tbuf;
+    int rc = q_sandbox_pinned_stat(sm, target.c_str(), true, buf, &denied);
+    denied.clear();
+    if (rc) {
+        return -1;
+    }
+    // the target that the text names must be the file that the link reaches from the directory opened: a link whose
+    // text names another file (a procfs link to a removed file, "/x (deleted)") or a directory renamed since it was
+    // opened (relative text) is left out; the status read here only identifies the file and is not reported
+    struct stat fbuf;
+    if (fstatat(dirfd(dptr), name, &fbuf, 0) || fbuf.st_dev != buf.st_dev || fbuf.st_ino != buf.st_ino) {
+        return -1;
+    }
+    link_text = tbuf;
+    return 0;
+}
+#endif
 
 QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const QoreString *regex, int regex_options,
         bool full, bool omit_unreadable) const {
@@ -167,21 +236,32 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
         }
 
         QoreString fname;
+        // the path of the entry in the directory opened, which the policy checks
+        QoreString cname;
         if (sm || full || stat_filter != -1) {
             fname.concat(dirname);
             fname.concat(QORE_DIR_SEP);
             fname.concat(de->d_name);
-            // an entry that the sandbox does not allow to be read is left out
             if (sm) {
-                QoreString cname(check_dir);
-                cname.concat(QORE_DIR_SEP);
+                cname.concat(check_dir);
+                // the canonical path of an entry of the root directory has one separator
+                if (check_dir != QORE_DIR_SEP_STR) {
+                    cname.concat(QORE_DIR_SEP);
+                }
                 cname.concat(de->d_name);
-                if (!dir_entry_readable(sm, cname)) {
+                // an entry that the sandbox does not allow to be read is left out; for a listing that reports the
+                // status of the entries, the policy decides with the status (dir_entry_policy_status(), qore#7833)
+#ifndef _Q_WINDOWS
+                bool decided_with_status = full || stat_filter != -1;
+#else
+                bool decided_with_status = false;
+#endif
+                if (!decided_with_status && !dir_entry_readable(sm, cname)) {
                     continue;
                 }
             }
 #ifdef DEBUG
-            // test hook: the directory replaced between the check of an entry and the read of its status
+            // test hook: the directory replaced between the check of an entry and the read of its status (qore#7498)
             if (sm) {
                 q_dbg_fs_swap_point(dirname.c_str());
             }
@@ -190,54 +270,69 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
 
         // if we are filtering out directories, then we have to stat the file
         if (full || stat_filter != -1) {
+            // the status of the entry, following a link
             struct stat buf;
+            SimpleRefHolder<QoreStringNode> lpath;
+#ifndef _Q_WINDOWS
+            if (sm) {
+                std::string link_text;
+                if (dir_entry_policy_status(*sm, dptr, de->d_name, fname, cname, check_dir, buf, link_text)) {
+                    continue;
+                }
+#ifdef HAVE_LSTAT
+                if (full && !link_text.empty()) {
+                    lpath = new QoreStringNode(link_text);
+                }
+#endif
+            } else
+#endif
             if (!full) {
                 if (dir_entry_stat(dptr, de->d_name, fname, true, buf)) {
                     // ignore the file if we cannot stat it, instead of returning
                     continue;
                 }
-
-                if (!(buf.st_mode & stat_filter))
-                  continue;
-
-                lst->push(new QoreStringNode(de->d_name, enc), xsink);
-                continue;
-            }
+            } else {
 #ifdef HAVE_LSTAT
-            if (dir_entry_stat(dptr, de->d_name, fname, false, buf)) {
-                // ignore the file if we cannot stat it, instead of returning
-                continue;
-            }
-
-            SimpleRefHolder<QoreStringNode> lpath;
-
-            if (S_ISLNK(buf.st_mode)) {
-                {
-                    char lbuf[QORE_PATH_MAX + 1];
-                    qore_offset_t len = dir_entry_readlink(dptr, de->d_name, fname, lbuf, QORE_PATH_MAX);
-                    if (len < 0) {
-                        xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "readlink('%s') failed",
-                            qore_msg_path(fname.getBuffer()).c_str());
-                        return 0;
-                    }
-                    assert(len <= QORE_PATH_MAX);
-                    lbuf[len] = '\0';
-                    lpath = new QoreStringNode(lbuf);
+                if (dir_entry_stat(dptr, de->d_name, fname, false, buf)) {
+                    // ignore the file if we cannot stat it, instead of returning
+                    continue;
                 }
 
+                if (S_ISLNK(buf.st_mode)) {
+                    {
+                        char lbuf[QORE_PATH_MAX + 1];
+                        qore_offset_t len = dir_entry_readlink(dptr, de->d_name, fname, lbuf, QORE_PATH_MAX);
+                        if (len < 0) {
+                            xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "readlink('%s') failed",
+                                qore_msg_path(fname.getBuffer()).c_str());
+                            return 0;
+                        }
+                        assert(len <= QORE_PATH_MAX);
+                        lbuf[len] = '\0';
+                        lpath = new QoreStringNode(lbuf);
+                    }
+
+                    if (dir_entry_stat(dptr, de->d_name, fname, true, buf)) {
+                        // ignore the file if we cannot stat it, instead of returning
+                        continue;
+                    }
+                }
+#else
                 if (dir_entry_stat(dptr, de->d_name, fname, true, buf)) {
                     // ignore the file if we cannot stat it, instead of returning
                     continue;
                 }
-            }
-#else
-            if (dir_entry_stat(dptr, de->d_name, fname, true, buf)) {
-                // ignore the file if we cannot stat it, instead of returning
-                continue;
-            }
 #endif
+            }
+
             if (stat_filter != -1 && !(buf.st_mode & stat_filter))
                 continue;
+
+            if (!full) {
+                lst->push(new QoreStringNode(de->d_name, enc), xsink);
+                continue;
+            }
+
             QoreHashNode* h = stat_to_hash(buf, hashdeclDirStatInfo);
             qore_hash_private::get(*h)->setKeyValueIntern("name", new QoreStringNode(de->d_name, enc));
 #ifdef HAVE_LSTAT

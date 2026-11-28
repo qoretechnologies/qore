@@ -2571,7 +2571,7 @@ namespace jsonschema {
             evaluation_results& results, 
             error_reporter<Json>& reporter, 
             jsoncons::optional<Json>& patch,
-            std::unordered_set<std::string>& allowed_properties) const 
+            property_name_set& allowed_properties) const 
         {
             //std::cout << "properties_validator begin[" << context.eval_path().string() << "," << this->schema_location().string() << "]\n";
             if (!instance.is_object())
@@ -2647,7 +2647,7 @@ namespace jsonschema {
         walk_state walk(const eval_context<Json>& context, const Json& instance, 
             const jsonpointer::json_pointer& instance_location, walk_reporter<Json>& reporter,
             jsoncons::optional<Json>& patch,
-            std::unordered_set<std::string>& allowed_properties) const
+            property_name_set& allowed_properties) const
         {
             if (!instance.is_object())
             {
@@ -2686,14 +2686,14 @@ namespace jsonschema {
             error_reporter<Json>& reporter, 
             jsoncons::optional<Json>& patch) const final
         {
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
             return validate(context, instance, instance_location, results, reporter, patch, allowed_properties);
         }
 
         walk_state do_walk(const eval_context<Json>& context, const Json& instance, 
             const jsonpointer::json_pointer& instance_location, walk_reporter<Json>& reporter, jsoncons::optional<Json>& patch) const final 
         {
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
             return walk(context, instance, instance_location, reporter, patch, allowed_properties);
         }
 
@@ -2731,7 +2731,7 @@ namespace jsonschema {
             evaluation_results& results, 
             error_reporter<Json>& reporter, 
             jsoncons::optional<Json>& patch,
-            std::unordered_set<std::string>& allowed_properties) const 
+            property_name_set& allowed_properties) const 
         {
             (void)context;
             (void)instance;
@@ -2780,7 +2780,7 @@ namespace jsonschema {
         walk_state walk(const eval_context<Json>& context, const Json& instance,
             const jsonpointer::json_pointer& instance_location, 
             walk_reporter<Json>& reporter, jsoncons::optional<Json>& patch,
-            std::unordered_set<std::string>& allowed_properties) const
+            property_name_set& allowed_properties) const
         {
             if (!instance.is_object())
             {
@@ -2825,14 +2825,14 @@ namespace jsonschema {
             error_reporter<Json>& reporter, 
             jsoncons::optional<Json>& patch) const final
         {
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
             return validate(context, instance, instance_location, results, reporter, patch, allowed_properties);
         }
 
         walk_state do_walk(const eval_context<Json>& context, const Json& instance,
             const jsonpointer::json_pointer& instance_location, walk_reporter<Json>& reporter, jsoncons::optional<Json>& patch) const final
         {
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
             return walk(context,instance, instance_location, reporter, patch, allowed_properties);
         }
     };
@@ -2876,7 +2876,7 @@ namespace jsonschema {
                 return walk_state::advance;
             }
 
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
 
             if (properties_)
             {
@@ -2996,7 +2996,7 @@ namespace jsonschema {
                 return result;
             }
 
-            std::unordered_set<std::string> allowed_properties;
+            property_name_set allowed_properties;
             if (properties_)
             {
                 result = properties_->walk(context, instance, instance_location, 

@@ -95,7 +95,8 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
     #! Creates a new REPL WebSocket handler
     /** @param auth Optional HTTP authenticator
         @param opts Handler options:
-        - \c auth_callback: A callback code(hash cx, hash hdr) returns bool for custom authentication
+        - \c auth_callback: A callback code(hash cx, hash hdr) returns bool for custom authentication; see
+          setAuthCallback() for the request that it gets
         - \c repl_options: Options hash to pass to QoreRepl constructor for each connection
         - \c max_connections: Maximum concurrent connections (0 = unlimited, default: 0)
         - Plus all options from WebSocketHandler (heartbeat, heartbeat_msg, logger, send_timeout)
@@ -165,9 +166,9 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         }
 
         # Custom authentication callback
-        if (auth_callback) {
+        if (*code callback = auth_callback) {
             try {
-                if (!auth_callback(cx, hdr)) {
+                if (!callAuthCallback(callback, cx, hdr)) {
                     decrementConnectionCount();
                     return {
                         "code": 401,
@@ -191,6 +192,18 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
             decrementConnectionCount();
         }
         return result;
+    }
+
+    #! Calls the authentication callback; the callback of a restricted %Program gets the request without its
+    #! credentials (qore#7303)
+    /** See @ref HttpServer::AbstractHttpRequestHandler::filterRequestForCode() "filterRequestForCode()"
+    */
+    private:internal bool callAuthCallback(code callback, hash<auto> cx, hash<auto> hdr) {
+        if (AbstractHttpRequestHandler::codeIsRestricted(callback)) {
+            hash<HttpFilteredRequestInfo> filtered = filterRequestForCode(cx, hdr);
+            return callback(filtered.cx, filtered.hdr) ? True : False;
+        }
+        return callback(cx, hdr) ? True : False;
     }
 
     #! Decrements the connection count (thread-safe)
@@ -236,6 +249,17 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
 
         The callback receives the HTTP context and headers, and should return
         True to allow the connection or False to reject it.
+
+        The callback of a %Program that a sandbox that does not trust its code governs gets the request without its
+        credentials, also when trusted code set it (see @ref httpserverutil_request_credentials): the keys of the
+        request that the request filter gives (the user, the address of the client, the URL and the header fields
+        other than the credentials, such as an API key field), but not the \c Proxy-Authorization, \c Cookie and
+        \c Set-Cookie fields, the raw \c Authorization value (\c auth), the objects of the server or the handler's
+        state; it gets the \c Authorization field only when the handler has no authenticator of the platform and
+        trusted code opts in to it with
+        @ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"
+        (the opt-in is the handler's: it gives the field to every code of a restricted %Program that the handler calls
+        with the request, not only to this callback)
 
         @par Example
         @code{.py}

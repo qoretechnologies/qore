@@ -1992,9 +1992,11 @@ public namespace RestSchemaValidator {
         */
         replaceType(AbstractDataProviderType t) {
             # a schema that may be shared by every Program cannot be changed by sandboxed code (qore#6843)
-            if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
-                SandboxManager::checkProcessWideRegistration("replace a data type of a REST schema that is shared by "
-                    "every Program of the process");
+            # the classification that makes the schema shared (qore#7737): code that creates shared objects changes
+            # them; restricted code and code acting for it do not (fails closed) (qore#7879)
+            if (shared_object && !SandboxManager::createsSharedObjects()) {
+                throw "SANDBOX-REGISTRATION-ERROR", "code that is restricted or acts for restricted code cannot "
+                    "replace a data type of a REST schema that is shared by every Program of the process";
             }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             if (schema && !schema.isTypeBuildActive()) {

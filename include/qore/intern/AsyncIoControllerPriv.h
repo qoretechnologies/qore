@@ -199,6 +199,10 @@ struct AsyncIoDeferredRelease {
     //! Returns the program the released objects belong to, if known
     DLLLOCAL QoreProgram* getProgram() const;
 
+    //! Returns the Program of the timer's user data (a callback or an object), whose end releases it, or nullptr
+    //! (qore#7842)
+    DLLLOCAL QoreProgram* getUdataProgram() const;
+
     //! Releases all references in order and clears them
     DLLLOCAL void release(ExceptionSink* xsink);
 };
@@ -496,6 +500,23 @@ public:
 
     //! Destructor — does NOT stop workers; call stop() first
     DLLLOCAL ~QoreCallDispatcher();
+
+#ifdef DEBUG
+    //! Debug-only: makes the next @p count starts of callback workers fail, only those made when work is queued if
+    //! @p enqueue_only, after @p after starts that succeed (dbg_async_io_fail_callback_worker_starts(); qore#7834)
+    DLLLOCAL static void dbgFailCallbackWorkerStarts(int count, bool enqueue_only = false, int after = 0);
+#endif
+
+    //! Starts a callback worker for the queued work if none runs for it; called on the controller's I/O thread when a
+    //! worker may be started again after a start failed (IoCommand::RetryWorkerStart; qore#7834)
+    DLLLOCAL void retryWorkerStart();
+
+private:
+    //! Starts a callback worker with the lock held; on failure, \a error gets the exception's text, and the exception
+    //! is not raised (qore#7834)
+    DLLLOCAL bool startWorkerLocked(std::string& error, bool retry = false);
+
+public:
 
     //! Dispatch an abort() call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -1564,6 +1585,9 @@ private:
         //! Cancel the operation of a poll operation without a C++ poll operation (one implemented in Qore) whose Qore
         //! object was deleted (see qoreOpObjectDeleted(); qore#6531)
         CancelDeletedObj,
+        //! Starts a callback worker for the work that its dispatcher queued when none could be started, now that one
+        //! may (qore_async_io_worker_start_possible(); qore#7834)
+        RetryWorkerStart,
     };
 
     //! What a submission finds under its key on the other I/O threads (qore#7624)
@@ -3826,6 +3850,21 @@ private:
         enabled for the level counts as taking it
     */
     DLLLOCAL bool log(int level, const char* fmt, ...) const;
+
+
+public:
+    //! Asks the I/O thread to start a callback worker for the work queued when none could be started (qore#7834)
+    /** Called by qore_async_io_worker_start_possible() with the controller pinned (worker_start_retry_pins), in a thread
+        that can have no Qore thread data (the reaper): it takes the controller's lock, starts no thread and never
+        raises an exception; nothing is asked if no I/O thread reads commands (the next item queued starts a worker)
+    */
+    DLLLOCAL void requestWorkerStartRetry() noexcept;
+
+    //! The number of qore_async_io_worker_start_possible() calls that use the controller outside the lock of the
+    //! registry of the controllers that want a callback worker; their unregistration waits until it is 0 (qore#7834)
+    std::atomic<int> worker_start_retry_pins{0};
+
+private:
 
     //! Logs a message as @ref log() does; an exception that the logger raises is added to @a logger_xsink
     DLLLOCAL bool logWithSink(ExceptionSink* logger_xsink, int level, const char* fmt, ...) const;

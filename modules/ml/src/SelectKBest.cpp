@@ -309,15 +309,36 @@ QoreSelectKBest* QoreSelectKBest::deserializeState(const uint8_t* data,
     if (*xsink) { return nullptr; }
     VectorXd sc = MLSerialization::readVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int nsup = MLSerialization::readInt32(ptr, remaining, xsink);
+    // the support mask is written as a 32-bit count and one 32-bit flag per feature
+    std::vector<int> sup_flags = MLSerialization::readIntVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    std::vector<bool> sup(nsup);
-    for (int i = 0; i < nsup; ++i) {
-        sup[i] = MLSerialization::readInt32(ptr, remaining, xsink) != 0;
-        if (*xsink) { return nullptr; }
-    }
     auto fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    if (checkEnd(remaining, "SelectKBest", xsink)
+        || checkRange(kval, 1, INT32_MAX, "SelectKBest", "k", xsink)
+        || checkOneOf(sf, {"f_classif", "mutual_info"}, "SelectKBest", "score_func", xsink)
+        || checkRange(nf, 1, INT32_MAX, "SelectKBest", "the number of features", xsink)
+        || checkSize(sc.size(), nf, "SelectKBest", "the number of scores", xsink)
+        || checkSize(sup_flags.size(), nf, "SelectKBest", "the size of the support mask", xsink)) {
+        return nullptr;
+    }
+    std::vector<bool> sup(nf);
+    int n_supported = 0;
+    for (int i = 0; i < nf; ++i) {
+        if (checkRange(sup_flags[i], 0, 1, "SelectKBest", "a support flag", xsink)) {
+            return nullptr;
+        }
+        sup[i] = sup_flags[i] != 0;
+        n_supported += sup_flags[i];
+    }
+    // fit() selects the k features with the highest scores, or all features if there are fewer
+    if (checkSize(n_supported, std::min(kval, nf), "SelectKBest", "the number of supported features", xsink)
+        || checkSize(ns, n_supported, "SelectKBest", "the number of selected features", xsink)) {
+        return nullptr;
+    }
 
     auto* skb = new QoreSelectKBest(kval, sf);
     skb->n_features = nf;

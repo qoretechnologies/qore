@@ -1245,7 +1245,13 @@ int set_default_thread_stack_size(int stack_size) [flags=NAMED_ARGS;dom=THREAD_C
         return QoreValue();
     }
 #ifdef QORE_MANAGE_STACK
-    return q_thread_set_stack_size((size_t)stack_size, xsink);
+    int rv = q_thread_set_stack_size((size_t)stack_size, xsink);
+    if (!*xsink) {
+        // a callback worker of the async I/O controller that could not be started with the old size may be now
+        // (qore#7834)
+        qore_async_io_worker_start_possible();
+    }
+    return rv;
 #else
     return xsink->raiseException("MISSING-FEATURE-ERROR", "this version of the Qore library was built without "
         "support for stack management; check Qore::Option::HAVE_MANAGE_STACK before calling");

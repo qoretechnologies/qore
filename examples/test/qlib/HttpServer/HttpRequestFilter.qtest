@@ -195,6 +195,23 @@ class AddingRestHandler inherits RestHandler {
     }
 }
 
+#! a REST handler that adds keys with code for its REST classes (qore#7303)
+class CodeAddingRestHandler inherits RestHandler {
+    constructor() {
+        setRestContextKeys(("added", "added_code", "added_ref", "added_nested"));
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data b) {
+        Mutex m();
+        cx.added = "by the handler";
+        cx.added_code = sub () {};
+        cx.added_ref = \m.lock();
+        cx.added_nested = {"a": (1, sub () {})};
+        return RestHandler::handleRequest(listener, s, cx, hdr, b);
+    }
+}
+
 #! a trusted authenticator that declares the keys of the platform's authorization context
 class TrustedAuth inherits AbstractAuthenticator {
     *list<string> getPlatformContextKeys() {
@@ -556,6 +573,23 @@ AbstractRestClass sub rest_class() {
     return new TenantRestClass();
 }
 
+# a REST class of the tenant that reports which of the keys that the handler adds it gets
+class TenantKeysRestClass inherits AbstractRestClass {
+    string name() {
+        return 'tenantkeys';
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {
+            'keys': (map $1, ('added', 'added_code', 'added_ref', 'added_nested'), cx.hasKey($1)) ?? (),
+        });
+    }
+}
+
+AbstractRestClass sub rest_keys_class() {
+    return new TenantKeysRestClass();
+}
+
 string sub set_credentials(AbstractHttpRequestHandler h) {
     return attempt(sub () { h.setRequestCredentialHeaders('authorization'); });
 }
@@ -666,6 +700,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the dispatch of a request that is not filtered reads no option of the filter",
             \lazyTrailerKeepTest());
         addTestCase("a router that opts in hands its request to a handler that does not", \nestedTrailerKeepTest());
+        addTestCase("values that are objects or code", \objectValuesTest());
+        addTestCase("the keys of a REST handler that hold code", \restKeysCodeTest());
         set_return_value(main());
     }
 
@@ -706,6 +742,25 @@ l50Xb2GWQesIt9k5jF5IOw==
             "content-length": "5",
             "headers": {"Authorization": "Basic dGVzdDp0ZXN0", "Cookie": "session=secret"},
         };
+    }
+
+    #! The filter gives no value that is an object or code, or holds one, also of the keys of the request and of the
+    #! platform's authorization context (qore#7303)
+    objectValuesTest() {
+        Mutex m();
+        hash<auto> cx = {
+            "user": m,
+            "ssl": sub () {},
+            "handler_name": ("h", \m.lock()),
+            "id": 1,
+            "platform_object": {"a": m},
+            "platform_code": sub () {},
+            "platform_data": {"a": 1},
+        };
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(cx, {}, <HttpRequestFilterOptions>{
+            "platform_context_keys": ("platform_object", "platform_code", "platform_data"),
+        });
+        assertEq({"id": 1, "platform_data": {"a": 1}}, f.cx, "only plain data is given");
     }
 
     filterTest() {
@@ -889,6 +944,19 @@ l50Xb2GWQesIt9k5jF5IOw==
         rv = restCall(rest, "probe");
         assertEq({"code": 200, "authorization": False, "cookie": False, "server objects": (),
             "added": "by the handler"}, rv);
+    }
+
+    #! The keys that a REST handler names for its REST classes are given to a REST class of restricted code only when
+    #! they hold no object or code (qore#7303)
+    restKeysCodeTest() {
+        Program p(TenantOpts);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(Tenant, "tenant");
+        CodeAddingRestHandler rest();
+        rest.addClass(p.callFunction("rest_keys_class"));
+        hash<auto> rv = restCall(rest, "tenantkeys");
+        assertEq(200, rv.code);
+        assertEq(("added",), rv.keys, "only the key of plain data");
     }
 
     chunkedTest() {

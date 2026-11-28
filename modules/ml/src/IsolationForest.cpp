@@ -336,51 +336,100 @@ std::vector<uint8_t> QoreIsolationForest::serializeState() const {
     return buf;
 }
 
+// the smallest number of bytes that serializeState() writes for a node
+static constexpr size_t ITREE_NODE_MIN_SIZE = 4 * sizeof(int32_t) + sizeof(double);
+
 QoreIsolationForest* QoreIsolationForest::deserializeState(const uint8_t* data, size_t len,
     ExceptionSink* xsink) {
+    using namespace MLSerialization;
+    static const char* model = "IsolationForest";
     const uint8_t* ptr = data;
     size_t remaining = len;
 
-    int32_t n_trees = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t n_trees = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int32_t sample_size = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t sample_size = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int32_t max_depth = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t max_depth = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double threshold = MLSerialization::readScalar(ptr, remaining, xsink);
+    double threshold = readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int32_t n_features = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t n_features = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    int32_t actual_sample_size = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t actual_sample_size = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    int32_t tree_count = MLSerialization::readInt32(ptr, remaining, xsink);
+    int32_t tree_count = readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    if (checkRange(n_trees, 1, INT32_MAX, model, "n_trees", xsink)
+        || checkRange(sample_size, 2, INT32_MAX, model, "sample_size", xsink)
+        || checkRange(n_features, 1, INT32_MAX, model, "the number of features", xsink)
+        || checkRange(actual_sample_size, 1, sample_size, model, "the number of samples of a tree", xsink)
+        || checkSize(tree_count, n_trees, model, "the number of trees", xsink)
+        // each tree is written in a 32-bit node count and its nodes
+        || checkRange(tree_count, 0, (int64_t)(remaining / sizeof(int32_t)), model, "the number of trees", xsink)) {
+        return nullptr;
+    }
+
+    // the same comparison as the constructor
+    if (threshold < 0.0 || threshold > 1.0) {
+        stateError(xsink, model, "threshold is %g but must be between 0.0 and 1.0", threshold);
+        return nullptr;
+    }
 
     std::vector<IsolationTree> trees;
     trees.reserve(tree_count);
     for (int32_t t = 0; t < tree_count; ++t) {
-        int32_t node_count = MLSerialization::readInt32(ptr, remaining, xsink);
+        int32_t node_count = readInt32(ptr, remaining, xsink);
         if (*xsink) { return nullptr; }
+        if (checkRange(node_count, 1, (int64_t)std::min(remaining / ITREE_NODE_MIN_SIZE, (size_t)INT32_MAX), model,
+                "the number of nodes of a tree", xsink)) {
+            return nullptr;
+        }
         IsolationTree tree;
         tree.nodes.resize(node_count);
         for (int32_t n = 0; n < node_count; ++n) {
-            tree.nodes[n].feature = MLSerialization::readInt32(ptr, remaining, xsink);
+            ITreeNode& node = tree.nodes[n];
+            node.feature = readInt32(ptr, remaining, xsink);
             if (*xsink) { return nullptr; }
-            tree.nodes[n].split_value = MLSerialization::readScalar(ptr, remaining, xsink);
+            node.split_value = readScalar(ptr, remaining, xsink);
             if (*xsink) { return nullptr; }
-            tree.nodes[n].left = MLSerialization::readInt32(ptr, remaining, xsink);
+            node.left = readInt32(ptr, remaining, xsink);
             if (*xsink) { return nullptr; }
-            tree.nodes[n].right = MLSerialization::readInt32(ptr, remaining, xsink);
+            node.right = readInt32(ptr, remaining, xsink);
             if (*xsink) { return nullptr; }
-            tree.nodes[n].size = MLSerialization::readInt32(ptr, remaining, xsink);
+            node.size = readInt32(ptr, remaining, xsink);
             if (*xsink) { return nullptr; }
+
+            if (checkRange(node.size, 0, actual_sample_size, model, "the number of samples of a node", xsink)) {
+                return nullptr;
+            }
+            if (node.feature == -1) {
+                // an external node has no children
+                if (node.left != -1 || node.right != -1) {
+                    stateError(xsink, model, "external node %d must have no children", (int)n);
+                    return nullptr;
+                }
+            } else if (checkRange(node.feature, 0, n_features - 1, model, "the feature index of a node", xsink)
+                // the children of an internal node follow it in the node array
+                || checkRange(node.left, n + 1, node_count - 1, model, "the left child index of a node", xsink)
+                || checkRange(node.right, n + 1, node_count - 1, model, "the right child index of a node", xsink)) {
+                return nullptr;
+            } else if (node.left == node.right) {
+                stateError(xsink, model, "internal node %d must have two different children", (int)n);
+                return nullptr;
+            }
         }
         trees.push_back(std::move(tree));
     }
 
-    std::vector<std::string> field_names = MLSerialization::readStringVector(ptr, remaining, xsink);
+    std::vector<std::string> field_names = readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    if (checkEnd(remaining, model, xsink)) {
+        return nullptr;
+    }
 
     std::unique_ptr<QoreIsolationForest> obj(new QoreIsolationForest(
         n_trees, sample_size, max_depth, threshold, 1));

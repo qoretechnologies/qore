@@ -580,6 +580,33 @@ QoreLogisticRegression* QoreLogisticRegression::deserializeState(const uint8_t* 
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // the state must satisfy the invariants that the constructor and fit() establish (qore#7844)
+    using namespace MLSerialization;
+    const char* model = "LogisticRegression";
+    int64_t n_classes = classes.size();
+    if (checkEnd(remaining, model, xsink)
+        || (learning_rate <= 0.0 && stateError(xsink, model, "learning_rate must be > 0"))
+        || checkRange(max_iterations, 1, INT32_MAX, model, "max_iterations", xsink)
+        || (tolerance < 0.0 && stateError(xsink, model, "tolerance must be >= 0"))
+        || (regularization < 0.0 && stateError(xsink, model, "regularization must be >= 0"))
+        || checkOneOf(penalty, {"l2", "none"}, model, "penalty", xsink)
+        || checkRange(n_features, 1, INT32_MAX, model, "the number of features", xsink)
+        || checkRange(n_classes, 2, INT32_MAX, model, "the number of classes", xsink)
+        || (is_binary != (n_classes == 2)
+            && stateError(xsink, model, "the binary flag must be set exactly when there are 2 classes"))
+        || checkSize(weights.rows(), is_binary ? 1 : n_classes, model, "the number of weight rows", xsink)
+        || checkSize(weights.cols(), n_features, model, "the number of weight columns", xsink)
+        || checkSize(intercepts.size(), weights.rows(), model, "the number of intercepts", xsink)) {
+        return nullptr;
+    }
+    for (int64_t i = 1; i < n_classes; ++i) {
+        // the classes are the distinct labels in ascending order
+        if (!(classes[i - 1] < classes[i])) {
+            stateError(xsink, model, "the classes must be distinct and in ascending order");
+            return nullptr;
+        }
+    }
+
     std::unique_ptr<QoreLogisticRegression> obj(new QoreLogisticRegression(
         learning_rate, max_iterations, tolerance, regularization, penalty, fit_intercept));
     obj->weights = std::move(weights);

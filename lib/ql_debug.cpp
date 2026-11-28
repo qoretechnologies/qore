@@ -26322,6 +26322,28 @@ static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params,
     return QoreValue();
 }
 
+DLLLOCAL QoreListNode* qore_dbg_http_send_bound_steps(int64 stall_ms, int64 min_rate, int64 window_ms,
+    const QoreListNode* steps, ExceptionSink* xsink);
+
+//! Debug-only: runs the checks of an HTTP/1 response send bound over the given steps without a socket or a clock
+//! (qore#7835); see qore_dbg_http_send_bound_steps()
+static QoreValue f_dbg_http_send_bound_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_http_send_bound_steps(get_param_value(params, 0).getAsBigInt(),
+        get_param_value(params, 1).getAsBigInt(), get_param_value(params, 2).getAsBigInt(),
+        get_param_value(params, 3).get<const QoreListNode>(), xsink);
+}
+
+//! Debug-only: makes the next given number of callback worker starts of the async I/O controller fail
+//! (THREAD-CREATION-FAILURE), as a thread or stack limit does; with the second argument True, only the starts made when
+//! work is queued fail, not those of the retries when a worker may start again; the third argument is the number of
+//! starts that succeed before the failures begin (qore#7834)
+static QoreValue f_dbg_async_io_fail_callback_worker_starts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreCallDispatcher::dbgFailCallbackWorkerStarts(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBool(), static_cast<int>(get_param_value(params, 2).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
 static QoreValue f_dbg_async_io_fail_next_timer_hold(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -27380,6 +27402,24 @@ static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* p
         ExceptionSink* xsink) {
     qore_dbg_h2_client_hold_stream_registrations(get_param_value(params, 0).getAsBool());
     return QoreValue();
+}
+
+//! Debug-only: holds the next stream queue drain of an HTTP/2 client connection at the check of a stream's end
+/** Tests use this to abort a connection after the I/O thread took the data of a stream with a listener and before it
+    checks whether the stream has ended, deterministically: the held drain goes on when an abort() of an HTTP/2
+    client operation has closed its connection, or when the hook is disarmed.  A test must disarm it (also when it
+    fails).
+ */
+static QoreValue f_dbg_h2_client_hold_drain_stream_end(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_h2_client_hold_drain_stream_end(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a drain is held by dbg_h2_client_hold_drain_stream_end(); returns false on timeout
+static QoreValue f_dbg_h2_client_wait_drain_stream_end_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_h2_client_wait_drain_stream_end_held(get_param_value(params, 0).getAsBigInt());
 }
 
 //! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, or lets them go on
@@ -40568,6 +40608,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_h2_client_hold_drain_stream_end", f_dbg_h2_client_hold_drain_stream_end,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_h2_client_wait_drain_stream_end_held", f_dbg_h2_client_wait_drain_stream_end_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_program_cache_hold_reads", f_dbg_program_cache_hold_reads,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
@@ -40583,6 +40629,13 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_fail_next_timer_hold", f_dbg_async_io_fail_next_timer_hold,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_send_bound_steps", f_dbg_http_send_bound_steps,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stall_ms",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "min_rate", bigIntTypeInfo, QORE_PARAM_NO_ARG, "window_ms",
+        listTypeInfo, QORE_PARAM_NO_ARG, "steps");
+    qns.addBuiltinVariant("dbg_async_io_fail_callback_worker_starts", f_dbg_async_io_fail_callback_worker_starts,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        boolTypeInfo, QoreValue(false), "enqueue_only", bigIntTypeInfo, QoreValue((int64)0), "after");
     qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",

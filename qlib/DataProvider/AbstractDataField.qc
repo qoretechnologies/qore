@@ -390,12 +390,14 @@ public class AbstractDataField inherits Qore::Serializable {
         return getType().getSupportedOptions();
     }
 
-    #! Raises an exception if sandboxed code changes a field that code that no sandbox governs created
-    /** A field that a module creates outside a sandbox may be shared by every Program of the process, so it cannot be
-        changed by code that a sandbox governs; a field that sandboxed code creates can be changed by it (qore#6843)
+    #! Raises an exception if restricted code changes a field that is shared by every Program of the process
+    /** A field that trusted code creates (Qore::SandboxManager::createsSharedObjects(): also code that a trusted,
+        governed, sandbox governs) may be shared by every Program of the process, so it cannot be changed by code that
+        is restricted or acts for restricted code; trusted code changes it, and a field that restricted code creates
+        can be changed by it (qore#6843, qore#7737, qore#7879)
 
-        @throw SANDBOX-REGISTRATION-ERROR the field was created outside a sandbox, and sandboxed code changes it (see
-        Qore::SandboxManager::checkProcessWideRegistration())
+        @throw SANDBOX-REGISTRATION-ERROR the field is shared, and code that is restricted or acts for restricted code
+        changes it
 
         @since DataProvider 3.12
     */
@@ -445,9 +447,11 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     private checkChange() {
-        if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
-            SandboxManager::checkProcessWideRegistration(sprintf("change data field %y, which is shared by every "
-                "Program of the process", getName()));
+        # the classification that makes the field shared (qore#7737): code that creates shared objects changes them;
+        # restricted code and code acting for it do not (fails closed) (qore#7879)
+        if (shared_object && !SandboxManager::createsSharedObjects()) {
+            throw "SANDBOX-REGISTRATION-ERROR", sprintf("code that is restricted or acts for restricted code cannot "
+                "change data field %y, which is shared by every Program of the process", getName());
         }
     }
 

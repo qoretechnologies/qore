@@ -1,0 +1,585 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ml
+%requires ./MlStateTestUtil.qm
+
+%exec-class MlStateValidationTreesTest
+
+#! Restored states of the tree models are checked against the invariants of a trained model
+/** (qore#7844) The DecisionTree, RandomForest, GradientBoostedTrees and IsolationForest states, and the decision trees
+    that the first three hold, are checked; a state that breaks an invariant is refused with ML-DESERIALIZE-ERROR, and
+    no model is restored.
+*/
+class MlStateValidationTreesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml restored state validation: tree models", "1.0", \ARGV) {
+        addTestCase("a well-formed DecisionTree state is restored", \dtValidTest());
+        addTestCase("a DecisionTree state whose tree has a child index out of range is refused", \dtChildTest());
+        addTestCase("a DecisionTree state whose tree has a feature index out of range is refused", \dtFeatureTest());
+        addTestCase("a DecisionTree state whose tree has a leaf with children is refused", \dtLeafTest());
+        addTestCase("a DecisionTree state whose tree has class probabilities that do not match its classes is refused",
+            \dtProbsTest());
+        addTestCase("a DecisionTree state whose tree has invalid class labels is refused", \dtClassesTest());
+        addTestCase("a DecisionTree state whose tree has invalid sample counts is refused", \dtSamplesTest());
+        addTestCase("a DecisionTree state whose tree has no nodes or more nodes than its data is refused",
+            \dtNodeCountTest());
+        addTestCase("a DecisionTree state whose tree does not match the model is refused", \dtTreeModelTest());
+        addTestCase("a DecisionTree state with an invalid option is refused", \dtOptionTest());
+        addTestCase("a DecisionTree fitted on data with null cells or after a fit of another width is restored",
+            \dtRoundTripTest());
+        addTestCase("a DecisionTree state with data after its end is refused", \dtTrailingTest());
+
+        addTestCase("a well-formed RandomForest state is restored", \rfValidTest());
+        addTestCase("a RandomForest state whose tree count differs from n_trees is refused", \rfTreeCountTest());
+        addTestCase("a RandomForest state with an invalid option is refused", \rfOptionTest());
+        addTestCase("a RandomForest state with invalid classes is refused", \rfClassesTest());
+        addTestCase("a RandomForest state whose trees do not match the forest is refused", \rfTreeModelTest());
+        addTestCase("a RandomForest state with an invalid tree is refused", \rfInvalidTreeTest());
+        addTestCase("a RandomForest fitted on data with null cells or after a fit of another width is restored",
+            \rfRoundTripTest());
+        addTestCase("a RandomForest state with data after its end is refused", \rfTrailingTest());
+
+        addTestCase("a well-formed GradientBoostedTrees state is restored", \gbtValidTest());
+        addTestCase("a GradientBoostedTrees state with an option value that its constructor accepts is restored",
+            \gbtOptionValidTest());
+        addTestCase("a GradientBoostedTrees state with an invalid option is refused", \gbtOptionTest());
+        addTestCase("a GradientBoostedTrees state whose round count is out of range is refused", \gbtRoundsTest());
+        addTestCase("a GradientBoostedTrees state whose tree count does not match its rounds is refused",
+            \gbtTreeCountTest());
+        addTestCase("a GradientBoostedTrees state with invalid classes is refused", \gbtClassesTest());
+        addTestCase("a GradientBoostedTrees state with invalid initial predictions is refused", \gbtInitTest());
+        addTestCase("a GradientBoostedTrees state whose trees do not match the model is refused",
+            \gbtTreeModelTest());
+        addTestCase("a GradientBoostedTrees fitted on data with null cells or after a fit of another width is restored",
+            \gbtRoundTripTest());
+        addTestCase("a GradientBoostedTrees state with data after its end is refused", \gbtTrailingTest());
+
+        addTestCase("a well-formed IsolationForest state is restored", \ifValidTest());
+        addTestCase("an IsolationForest state with an option value that its constructor accepts is restored",
+            \ifOptionValidTest());
+        addTestCase("an IsolationForest state with an invalid option is refused", \ifOptionTest());
+        addTestCase("an IsolationForest state whose tree count differs from n_trees is refused", \ifTreeCountTest());
+        addTestCase("an IsolationForest state whose tree has no nodes or more nodes than its data is refused",
+            \ifNodeCountTest());
+        addTestCase("an IsolationForest state whose tree has a feature index out of range is refused",
+            \ifFeatureTest());
+        addTestCase("an IsolationForest state whose tree has a child index out of range is refused", \ifChildTest());
+        addTestCase("an IsolationForest state whose tree has a node size out of range is refused", \ifSizeTest());
+        addTestCase("an IsolationForest fitted after a fit of another width is restored",
+            \ifRoundTripTest());
+        addTestCase("an IsolationForest state with data after its end is refused", \ifTrailingTest());
+        set_return_value(main());
+    }
+
+    #! a node of a decision tree (FlatTree::serialize()); "f" is the feature index (-1 for a leaf)
+    static binary node(hash<auto> n) {
+        binary probs = i32(elements n.probs);
+        foreach softstring p in (n.probs) {
+            probs += f64(p);
+        }
+        return i32(n.f) + f64(n.thr ?? "0") + f64(n.val ?? "0") + probs + i32(n.ns ?? 2) + f64("0")
+            + f64(n.wir ?? "0") + i32(n.l ?? -1) + i32(n.r ?? -1);
+    }
+
+    #! the nodes of a tree that splits feature 0 at 2, with the given fields of each node replaced
+    static binary treeNodes(bool cls, *hash<auto> root, *hash<auto> left, *hash<auto> right) {
+        hash<auto> r = {"f": 0, "thr": "2", "ns": 4, "wir": "0.5", "l": 1, "r": 2} + (root ?? {});
+        hash<auto> a = {"f": -1, "val": cls ? "0" : "1", "probs": cls ? ("1", "0") : ()} + (left ?? {});
+        hash<auto> b = {"f": -1, "val": cls ? "1" : "3", "probs": cls ? ("0", "1") : ()} + (right ?? {});
+        return i32(3) + node(r) + node(a) + node(b);
+    }
+
+    #! a decision tree over 2 features of 4 samples: a classification tree of classes 0 and 1 (leaves 0 and 1), or
+    #! with "regression", a regression tree (leaves 1 and 3), with the given fields replaced
+    static binary flatTree(*hash<auto> opt) {
+        bool cls = !opt.regression;
+        return i32(opt.n_features ?? 2) + i32(opt.n_classes ?? (cls ? 2 : 0)) + i32(opt.total_samples ?? 4)
+            + (opt.classes ?? dblv(cls ? ("0", "1") : ()))
+            + (opt.nodes ?? treeNodes(cls, opt.root, opt.left, opt.right));
+    }
+
+    #! a classification tree with one leaf of the given class
+    static binary leafTree(softstring cls) {
+        return i32(2) + i32(1) + i32(4) + dblv((cls,)) + i32(1)
+            + node({"f": -1, "val": cls, "probs": ("1",), "ns": 4});
+    }
+
+    #! the state of a DecisionTree classifier (or with "regression", a regressor), with the given fields replaced
+    static binary decisionTreeState(*hash<auto> opt) {
+        bool cls = !opt.regression;
+        return i32(opt.max_depth ?? 10) + i32(opt.min_samples_split ?? 2) + i32(opt.min_samples_leaf ?? 1)
+            + str(opt.criterion ?? (cls ? "gini" : "mse")) + str(opt.task ?? (cls ? "classification" : "regression"))
+            + i32(opt.n_features ?? 2) + (opt.field_names ?? strv(())) + str("")
+            + (opt.tree ?? flatTree(cls ? NOTHING : {"regression": True}))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a RandomForest classifier (or with "regression", a regressor) of 2 trees without bootstrap
+    #! samples, with the given fields replaced
+    static binary randomForestState(*hash<auto> opt) {
+        bool cls = !opt.regression;
+        binary tree = flatTree(cls ? NOTHING : {"regression": True});
+        return i32(opt.n_trees ?? 2) + i32(10) + i32(opt.min_samples_split ?? 2) + i32(opt.min_samples_leaf ?? 1)
+            + str("sqrt") + i32(opt.bootstrap ?? 0) + str(cls ? "gini" : "mse")
+            + str(opt.task ?? (cls ? "classification" : "regression")) + i32(opt.n_features ?? 2)
+            + i32(opt.n_classes ?? (cls ? 2 : 0)) + (opt.classes ?? dblv(cls ? ("0", "1") : ()))
+            + (opt.field_names ?? strv(())) + str("") + i32(opt.tree_count ?? 2) + (opt.trees ?? (tree + tree))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a GradientBoostedTrees regressor of 2 rounds with a learning rate of 0.5, with the given fields
+    #! replaced
+    static binary gbtState(*hash<auto> opt) {
+        binary tree = flatTree({"regression": True});
+        return i32(opt.n_estimators ?? 2) + f64(opt.learning_rate ?? "0.5") + i32(3) + i32(2) + i32(1)
+            + f64(opt.subsample ?? "1") + str(opt.task ?? "regression") + f64("0") + i32(5)
+            + f64(opt.init_pred ?? "0") + (opt.init_preds ?? dblv(())) + i32(opt.actual ?? 2)
+            + i32(opt.n_features ?? 2) + i32(opt.n_classes ?? 0) + (opt.classes ?? dblv(()))
+            + (opt.field_names ?? strv(())) + str("") + i32(opt.tree_count ?? 2) + (opt.trees ?? (tree + tree))
+            + (opt.tail ?? binary());
+    }
+
+    #! the state of a binary GradientBoostedTrees classifier of classes 0 and 1, with the given fields replaced
+    static binary gbtBinaryState(*hash<auto> opt) {
+        return gbtState({"task": "classification", "learning_rate": "0.25", "init_pred": "-1", "n_classes": 2,
+            "classes": dblv(("0", "1"))} + (opt ?? {}));
+    }
+
+    #! the state of a GradientBoostedTrees classifier of classes 0, 1 and 2 with one round, with the given fields
+    #! replaced
+    static binary gbtMultiState(*hash<auto> opt) {
+        binary trees = flatTree({"regression": True, "left": {"val": "3"}, "right": {"val": "0"}})
+            + flatTree({"regression": True, "left": {"val": "0"}, "right": {"val": "3"}})
+            + flatTree({"regression": True, "left": {"val": "0"}, "right": {"val": "0"}});
+        return gbtState({"task": "classification", "learning_rate": "1", "n_estimators": 1, "actual": 1,
+            "init_preds": dblv(("0", "0", "0")), "n_classes": 3, "classes": dblv(("0", "1", "2")),
+            "tree_count": 3, "trees": trees} + (opt ?? {}));
+    }
+
+    #! a node of an isolation tree; "f" is the feature index (-1 for an external node)
+    static binary inode(hash<auto> n) {
+        return i32(n.f) + f64(n.split ?? "0") + i32(n.l ?? -1) + i32(n.r ?? -1) + i32(n.size ?? 0);
+    }
+
+    #! an isolation tree that splits feature 0 at 2, with the given fields of each node replaced
+    static binary itree(*hash<auto> root, *hash<auto> left, *hash<auto> right) {
+        return i32(3) + inode({"f": 0, "split": "2", "l": 1, "r": 2} + (root ?? {}))
+            + inode({"f": -1, "size": 2} + (left ?? {})) + inode({"f": -1, "size": 2} + (right ?? {}));
+    }
+
+    #! the state of an IsolationForest of 1 tree over 2 features of 4 samples, with the given fields replaced
+    static binary isolationForestState(*hash<auto> opt) {
+        return i32(opt.n_trees ?? 1) + i32(opt.sample_size ?? 4) + i32(0) + f64(opt.threshold ?? "0.5")
+            + i32(opt.n_features ?? 2) + i32(opt.actual ?? 4) + i32(opt.tree_count ?? 1) + (opt.trees ?? itree())
+            + (opt.field_names ?? strv(())) + (opt.tail ?? binary());
+    }
+
+    refused(string algorithm, binary state, string what) {
+        assertThrows("ML-DESERIALIZE-ERROR", \restore(), (algorithm, state), algorithm + ": " + what);
+    }
+
+    dtRefused(*hash<auto> opt, string what) {
+        refused("DecisionTree", decisionTreeState(opt), what);
+    }
+
+    #! a DecisionTree state with the given tree
+    dtTree(*hash<auto> tree_opt, string what) {
+        dtRefused({"tree": flatTree(tree_opt)}, what);
+    }
+
+    rfRefused(*hash<auto> opt, string what) {
+        refused("RandomForest", randomForestState(opt), what);
+    }
+
+    gbtRefused(binary state, string what) {
+        refused("GradientBoostedTrees", state, what);
+    }
+
+    ifRefused(*hash<auto> opt, string what) {
+        refused("IsolationForest", isolationForestState(opt), what);
+    }
+
+    dtValidTest() {
+        ML::DecisionTree dt = cast<ML::DecisionTree>(restore("DecisionTree", decisionTreeState()));
+        list<hash<auto>> res = dt.predictClassificationMatrix(((1.0, 0.0), (3.0, 0.0)));
+        assertEq((0, 1), map $1.predicted_class, res);
+        assertEq((1.0, 0.0), res[0].probabilities);
+        dt = cast<ML::DecisionTree>(restore("DecisionTree", decisionTreeState({"field_names": strv(("a", "b"))})));
+        assertEq(1, dt.predictClassification({"a": 3.0, "b": 0.0}).predicted_class);
+        dt = cast<ML::DecisionTree>(restore("DecisionTree", decisionTreeState({"regression": True})));
+        assertEq((1.0, 3.0), map $1.prediction, dt.predictRegressionMatrix(((1.0, 0.0), (3.0, 0.0))));
+    }
+
+    dtChildTest() {
+        dtTree({"root": {"l": 3}}, "a left child index after the last node");
+        dtTree({"root": {"r": 0}}, "a right child index before the node");
+        dtTree({"root": {"l": 0}}, "a node that is its own child");
+        dtTree({"root": {"l": -1}}, "a split node without a left child");
+        dtTree({"root": {"l": 1, "r": 1}}, "a split node with the same left and right child");
+    }
+
+    dtFeatureTest() {
+        dtTree({"root": {"f": 2}}, "a feature index equal to the number of features");
+        dtTree({"root": {"f": -2}}, "a negative feature index other than the leaf marker");
+    }
+
+    dtLeafTest() {
+        dtTree({"left": {"l": 2}}, "a leaf with a left child");
+        dtTree({"right": {"r": 1}}, "a leaf with a right child");
+    }
+
+    dtProbsTest() {
+        dtTree({"left": {"probs": ("1",)}}, "fewer class probabilities than classes");
+        dtTree({"left": {"probs": ("1", "0", "0")}}, "more class probabilities than classes");
+        dtTree({"root": {"probs": ("0.5", "0.5")}}, "class probabilities on a split node");
+        dtTree({"left": {"probs": ("nan", "0")}}, "a NaN class probability");
+        dtTree({"left": {"probs": ("2", "0")}}, "a class probability greater than 1");
+        dtTree({"left": {"probs": ("-1", "0")}}, "a negative class probability");
+        dtRefused({"regression": True, "tree": flatTree({"regression": True, "left": {"probs": ("1",)}})},
+            "class probabilities in a regression tree");
+    }
+
+    dtClassesTest() {
+        dtTree({"n_classes": 3}, "a class count that differs from the class labels");
+        dtTree({"classes": dblv(("1", "0"))}, "unsorted class labels");
+        dtTree({"classes": dblv(("0", "0"))}, "duplicate class labels");
+        dtTree({"classes": dblv(("0", "nan"))}, "a NaN class label");
+        dtTree({"left": {"val": "1e300"}}, "a leaf class label beyond the integer range");
+        dtTree({"left": {"val": "nan"}}, "a NaN leaf class label");
+    }
+
+    dtSamplesTest() {
+        dtTree({"total_samples": 0}, "no training samples");
+        dtTree({"root": {"ns": 5}}, "a node with more samples than the tree");
+        dtTree({"left": {"ns": 0}}, "a node without samples");
+    }
+
+    dtNodeCountTest() {
+        dtTree({"nodes": i32(0)}, "no nodes");
+        dtTree({"nodes": i32(-1)}, "a negative node count");
+        dtTree({"nodes": i32(0x7fffffff)}, "a node count beyond the data");
+        dtTree({"classes": i32(0x7fffffff)}, "a class count beyond the data");
+    }
+
+    dtTreeModelTest() {
+        dtTree({"n_features": 3}, "a tree with more features than the model");
+        dtRefused({"n_features": 3}, "a model with more features than its tree");
+        dtRefused({"tree": flatTree({"regression": True})}, "a regression tree in a classification model");
+        dtRefused({"regression": True, "tree": flatTree()}, "a classification tree in a regression model");
+    }
+
+    dtOptionTest() {
+        dtRefused({"task": "other"}, "an unknown task");
+        dtRefused({"criterion": "mse"}, "a regression criterion for classification");
+        dtRefused({"criterion": "other"}, "an unknown criterion");
+        dtRefused({"regression": True, "criterion": "gini"}, "a classification criterion for regression");
+        dtRefused({"min_samples_split": 1}, "min_samples_split = 1");
+        dtRefused({"min_samples_leaf": 0}, "min_samples_leaf = 0");
+        dtRefused({"n_features": 0}, "no features");
+    }
+
+
+    dtTrailingTest() {
+        dtRefused({"tail": i32(0)}, "4 bytes after the state");
+    }
+
+    rfValidTest() {
+        ML::RandomForest rf = cast<ML::RandomForest>(restore("RandomForest", randomForestState()));
+        assertEq((0, 1), map $1.predicted_class, rf.predictClassificationMatrix(((1.0, 0.0), (3.0, 0.0))));
+        # with bootstrap samples, a tree can have some of the classes of the forest
+        rf = cast<ML::RandomForest>(restore("RandomForest", randomForestState({"bootstrap": 1,
+            "trees": flatTree() + leafTree("1"), "field_names": strv(("a", "b"))})));
+        assertEq(1, rf.predictClassification({"a": 3.0, "b": 0.0}).predicted_class);
+        rf = cast<ML::RandomForest>(restore("RandomForest", randomForestState({"regression": True})));
+        assertEq((1.0, 3.0), map $1.prediction, rf.predictRegressionMatrix(((1.0, 0.0), (3.0, 0.0))));
+    }
+
+    rfTreeCountTest() {
+        rfRefused({"n_trees": 3}, "fewer trees than n_trees");
+        rfRefused({"n_trees": 1}, "more trees than n_trees");
+        rfRefused({"n_trees": 0, "tree_count": 0, "trees": binary()}, "no trees");
+        rfRefused({"n_trees": 0x7fffffff, "tree_count": 0x7fffffff}, "a tree count beyond the data");
+    }
+
+    rfOptionTest() {
+        rfRefused({"task": "other"}, "an unknown task");
+        rfRefused({"min_samples_split": 1}, "min_samples_split = 1");
+        rfRefused({"min_samples_leaf": 0}, "min_samples_leaf = 0");
+        rfRefused({"bootstrap": 2}, "a bootstrap flag that is neither 0 nor 1");
+        rfRefused({"n_features": 0}, "no features");
+    }
+
+    rfClassesTest() {
+        rfRefused({"n_classes": 3}, "a class count that differs from the class labels");
+        rfRefused({"n_classes": 0, "classes": dblv(())}, "a classifier without classes");
+        rfRefused({"regression": True, "n_classes": 2, "classes": dblv(("0", "1"))}, "a regressor with classes");
+        rfRefused({"classes": dblv(("1", "0"))}, "unsorted class labels");
+        rfRefused({"classes": dblv(("0", "nan"))}, "a NaN class label");
+        rfRefused({"classes": i32(0x7fffffff)}, "a class count beyond the data");
+    }
+
+    rfTreeModelTest() {
+        binary tree = flatTree();
+        rfRefused({"trees": tree + flatTree({"n_features": 3})}, "a tree with more features than the forest");
+        rfRefused({"trees": tree + leafTree("1")},
+            "a tree with fewer classes than the forest without bootstrap samples");
+        rfRefused({"bootstrap": 1, "trees": tree + leafTree("5")}, "a tree with a class that the forest does not have");
+        rfRefused({"regression": True, "trees": flatTree({"regression": True}) + tree},
+            "a classification tree in a regression forest");
+        rfRefused({"trees": tree + flatTree({"regression": True})}, "a regression tree in a classification forest");
+    }
+
+    rfInvalidTreeTest() {
+        binary tree = flatTree();
+        rfRefused({"trees": tree + flatTree({"root": {"l": 3}})}, "a tree with a child index out of range");
+        rfRefused({"trees": tree + flatTree({"root": {"f": 2}})}, "a tree with a feature index out of range");
+        rfRefused({"trees": tree + flatTree({"nodes": i32(0)})}, "a tree without nodes");
+    }
+
+
+    rfTrailingTest() {
+        rfRefused({"tail": i32(0)}, "4 bytes after the state");
+    }
+
+    gbtValidTest() {
+        ML::GradientBoostedTrees gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees", gbtState()));
+        assertEq((1.0, 3.0), map $1.prediction, gbt.predictRegressionMatrix(((1.0, 0.0), (3.0, 0.0))));
+        gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees", gbtBinaryState()));
+        assertEq((0, 1), map $1.predicted_class, gbt.predictClassificationMatrix(((1.0, 0.0), (3.0, 0.0))));
+        # a binary classifier keeps the initial predictions of an earlier multiclass fit
+        gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees",
+            gbtBinaryState({"init_preds": dblv(("0", "0", "0")), "field_names": strv(("a", "b"))})));
+        assertEq(1, gbt.predictClassification({"a": 3.0, "b": 0.0}).predicted_class);
+        gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees", gbtMultiState()));
+        assertEq((0, 1), map $1.predicted_class, gbt.predictClassificationMatrix(((1.0, 0.0), (3.0, 0.0))));
+        # a classifier fitted on one class has one tree per round
+        gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees", gbtState({"task": "classification",
+            "n_classes": 1, "classes": dblv(("1",)), "init_preds": dblv(("0",))})));
+        assertEq((1, 1), map $1.predicted_class, gbt.predictClassificationMatrix(((1.0, 0.0), (3.0, 0.0))));
+    }
+
+    gbtOptionValidTest() {
+        foreach hash<auto> opt in ({"learning_rate": "nan"}, {"learning_rate": "inf"}, {"subsample": "nan"}) {
+            ML::GradientBoostedTrees gbt = cast<ML::GradientBoostedTrees>(restore("GradientBoostedTrees",
+                gbtState(opt)));
+            assertTrue(gbt.isFitted(), sprintf("%y", opt));
+        }
+    }
+
+    gbtOptionTest() {
+        gbtRefused(gbtState({"task": "other"}), "an unknown task");
+        gbtRefused(gbtState({"n_estimators": 0, "actual": 0, "tree_count": 0, "trees": binary()}), "n_estimators = 0");
+        gbtRefused(gbtState({"learning_rate": "0"}), "a learning rate of 0");
+        gbtRefused(gbtState({"learning_rate": "-1"}), "a negative learning rate");
+        gbtRefused(gbtState({"subsample": "0"}), "a subsample of 0");
+        gbtRefused(gbtState({"subsample": "2"}), "a subsample greater than 1");
+        gbtRefused(gbtState({"n_features": 0}), "no features");
+    }
+
+    gbtRoundsTest() {
+        gbtRefused(gbtState({"actual": 0, "tree_count": 0, "trees": binary()}), "no boosting rounds");
+        binary tree = flatTree({"regression": True});
+        gbtRefused(gbtState({"actual": 3, "tree_count": 3, "trees": tree + tree + tree}),
+            "more boosting rounds than n_estimators");
+    }
+
+    gbtTreeCountTest() {
+        binary tree = flatTree({"regression": True});
+        gbtRefused(gbtState({"tree_count": 1, "trees": tree}), "fewer trees than rounds of a regressor");
+        gbtRefused(gbtState({"tree_count": 3, "trees": tree + tree + tree}), "more trees than rounds of a regressor");
+        gbtRefused(gbtBinaryState({"tree_count": 1, "trees": tree}), "fewer trees than rounds of a binary classifier");
+        gbtRefused(gbtMultiState({"tree_count": 2, "trees": tree + tree}),
+            "fewer trees than classes times rounds of a multiclass classifier");
+        gbtRefused(gbtState({"n_estimators": 0x7fffffff, "actual": 0x7fffffff, "tree_count": 0x7fffffff}),
+            "a tree count beyond the data");
+    }
+
+    gbtClassesTest() {
+        gbtRefused(gbtBinaryState({"n_classes": 0, "classes": dblv(())}), "a classifier without classes");
+        gbtRefused(gbtBinaryState({"n_classes": 3}), "a class count that differs from the class labels");
+        gbtRefused(gbtState({"n_classes": 2, "classes": dblv(("0", "1"))}), "a regressor with classes");
+        gbtRefused(gbtBinaryState({"classes": dblv(("1", "0"))}), "unsorted class labels");
+        gbtRefused(gbtBinaryState({"classes": dblv(("0", "nan"))}), "a NaN class label");
+        gbtRefused(gbtBinaryState({"classes": dblv(("0", "1e300"))}), "a class label beyond the integer range");
+        gbtRefused(gbtBinaryState({"classes": i32(0x7fffffff)}), "a class count beyond the data");
+    }
+
+    gbtInitTest() {
+        gbtRefused(gbtMultiState({"init_preds": dblv(("0", "0"))}), "fewer initial predictions than classes");
+        gbtRefused(gbtMultiState({"init_preds": dblv(("0", "nan", "0"))}), "a NaN initial prediction of a class");
+        gbtRefused(gbtBinaryState({"init_pred": "nan"}), "a NaN initial prediction of a classifier");
+        gbtRefused(gbtState({"init_preds": dblv(("0",))}), "initial predictions of classes in a regressor");
+        gbtRefused(gbtState({"init_preds": i32(0x7fffffff)}), "an initial prediction count beyond the data");
+    }
+
+    gbtTreeModelTest() {
+        binary tree = flatTree({"regression": True});
+        gbtRefused(gbtState({"trees": tree + flatTree({"regression": True, "n_features": 3})}),
+            "a tree with more features than the model");
+        gbtRefused(gbtState({"trees": tree + flatTree()}), "a classification tree");
+        gbtRefused(gbtState({"trees": tree + flatTree({"regression": True, "root": {"l": 3}})}),
+            "a tree with a child index out of range");
+        gbtRefused(gbtState({"trees": tree + flatTree({"regression": True, "nodes": i32(0)})}), "a tree without nodes");
+    }
+
+
+    gbtTrailingTest() {
+        gbtRefused(gbtState({"tail": i32(0)}), "4 bytes after the state");
+    }
+
+    ifValidTest() {
+        ML::IsolationForest iforest = cast<ML::IsolationForest>(restore("IsolationForest", isolationForestState()));
+        assertEq((2.0, 2.0), map $1.average_path_length, iforest.scoreMatrix(((1.0, 0.0), (3.0, 0.0))));
+        iforest = cast<ML::IsolationForest>(restore("IsolationForest",
+            isolationForestState({"field_names": strv(("a", "b"))})));
+        assertEq(2.0, iforest.score({"a": 1.0, "b": 0.0}).average_path_length);
+    }
+
+    ifOptionValidTest() {
+        ML::IsolationForest iforest = cast<ML::IsolationForest>(restore("IsolationForest",
+            isolationForestState({"threshold": "nan"})));
+        assertEq(2.0, iforest.scoreMatrix(((1.0, 0.0),))[0].average_path_length, "a NaN threshold");
+    }
+
+    ifOptionTest() {
+        ifRefused({"n_trees": 0, "tree_count": 0, "trees": binary()}, "n_trees = 0");
+        ifRefused({"sample_size": 1, "actual": 1}, "sample_size = 1");
+        ifRefused({"threshold": "2"}, "a threshold greater than 1");
+        ifRefused({"threshold": "-1"}, "a negative threshold");
+        ifRefused({"n_features": 0}, "no features");
+        ifRefused({"actual": 0}, "a tree sample size of 0");
+        ifRefused({"actual": 5}, "a tree sample size greater than sample_size");
+    }
+
+    ifTreeCountTest() {
+        ifRefused({"n_trees": 2}, "fewer trees than n_trees");
+        ifRefused({"tree_count": 2, "trees": itree() + itree()}, "more trees than n_trees");
+        ifRefused({"n_trees": 0x7fffffff, "tree_count": 0x7fffffff}, "a tree count beyond the data");
+    }
+
+    ifNodeCountTest() {
+        ifRefused({"trees": i32(0)}, "a tree without nodes");
+        ifRefused({"trees": i32(-1)}, "a negative node count");
+        ifRefused({"trees": i32(0x7fffffff)}, "a node count beyond the data");
+    }
+
+    ifFeatureTest() {
+        ifRefused({"trees": itree({"f": 2})}, "a feature index equal to the number of features");
+        ifRefused({"trees": itree({"f": -2})}, "a negative feature index other than the external node marker");
+    }
+
+    ifChildTest() {
+        ifRefused({"trees": itree({"l": 3})}, "a left child index after the last node");
+        ifRefused({"trees": itree({"r": 0})}, "a right child index before the node");
+        ifRefused({"trees": itree({"l": 0})}, "a node that is its own child");
+        ifRefused({"trees": itree({"l": 1, "r": 1})}, "an internal node with the same left and right child");
+        ifRefused({"trees": itree(NOTHING, {"l": 2})}, "an external node with a child");
+    }
+
+    ifSizeTest() {
+        ifRefused({"trees": itree(NOTHING, {"size": -1})}, "a negative node size");
+        ifRefused({"trees": itree(NOTHING, {"size": 5})}, "a node size greater than the tree sample size");
+    }
+
+
+    ifTrailingTest() {
+        ifRefused({"tail": i32(0)}, "4 bytes after the state");
+    }
+
+    #! serializes and restores @p m
+    static ML::AbstractMLModel roundTrip(ML::AbstractMLModel m) {
+        return ML::ml_deserialize(ML::ml_serialize(m));
+    }
+
+    #! feature rows with null cells, and their classes
+    const NullX = ((0.0, 0.0), (NOTHING, 1.0), (1.0, 0.0), (5.0, 5.0), (6.0, NOTHING), (5.0, 6.0));
+    const NullY = (0, 0, 0, 1, 1, 1);
+    #! records with null cells, also in the regression target "t"
+    const NullRecords = (
+        {"a": 0.0, "b": 0.0, "t": 1.0}, {"a": NOTHING, "b": 1.0, "t": NOTHING}, {"a": 1.0, "b": 0.0, "t": 2.0},
+        {"a": 5.0, "b": 5.0, "t": 5.0}, {"a": 6.0, "b": NOTHING, "t": NOTHING}, {"a": 5.0, "b": 6.0, "t": 6.0},
+    );
+    const Points = ((0.0, 0.0), (5.0, 5.0), (NOTHING, 5.0));
+    #! records of 2 features for a fit on hashes before a fit on a matrix of 3 columns
+    const HashRecords = ({"a": 0.0, "b": 0.0, "c": 0}, {"a": 5.0, "b": 5.0, "c": 1});
+    const WideX = ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (5.0, 5.0, 5.0), (6.0, 6.0, 6.0));
+    const WideY = (0, 0, 1, 1);
+    const WidePoints = ((0.0, 0.0, 0.0), (6.0, 6.0, 6.0));
+
+    dtRoundTripTest() {
+        ML::DecisionTree dt({"seed": 1});
+        dt.fitMatrix(NullX, NullY);
+        ML::DecisionTree r = cast<ML::DecisionTree>(roundTrip(dt));
+        assertEq(dt.predictClassificationMatrix(Points), r.predictClassificationMatrix(Points), "null cells");
+
+        ML::DecisionTree reg({"task": "regression", "seed": 1});
+        reg.fit(NullRecords, "t");
+        r = cast<ML::DecisionTree>(roundTrip(reg));
+        assertEq(2, r.getNumFeatures(), "null cells in the target");
+
+        dt.fit(HashRecords, "c");
+        dt.fitMatrix(WideX, WideY);
+        r = cast<ML::DecisionTree>(roundTrip(dt));
+        assertEq((0, 1), map $1.predicted_class, r.predictClassificationMatrix(WidePoints), "another width");
+    }
+
+    rfRoundTripTest() {
+        ML::RandomForest rf({"n_trees": 5, "seed": 1});
+        rf.fitMatrix(NullX, NullY);
+        ML::RandomForest r = cast<ML::RandomForest>(roundTrip(rf));
+        assertEq(rf.predictClassificationMatrix(Points), r.predictClassificationMatrix(Points), "null cells");
+
+        ML::RandomForest reg({"n_trees": 5, "task": "regression", "seed": 1});
+        reg.fit(NullRecords, "t");
+        r = cast<ML::RandomForest>(roundTrip(reg));
+        assertEq(5, r.getNumTrees(), "null cells in the target");
+
+        rf.fit(HashRecords, "c");
+        rf.fitMatrix(WideX, WideY);
+        r = cast<ML::RandomForest>(roundTrip(rf));
+        assertEq(rf.predictClassificationMatrix(WidePoints), r.predictClassificationMatrix(WidePoints),
+            "another width");
+    }
+
+    gbtRoundTripTest() {
+        ML::GradientBoostedTrees gbt({"n_estimators": 5, "seed": 1});
+        gbt.fitMatrix(NullX, NullY);
+        ML::GradientBoostedTrees r = cast<ML::GradientBoostedTrees>(roundTrip(gbt));
+        assertEq(gbt.predictClassificationMatrix(Points), r.predictClassificationMatrix(Points), "null cells");
+
+        ML::GradientBoostedTrees reg({"n_estimators": 5, "task": "regression", "seed": 1});
+        reg.fit(NullRecords, "t");
+        r = cast<ML::GradientBoostedTrees>(roundTrip(reg));
+        assertEq(5, r.getActualEstimators(), "null cells in the target");
+
+        gbt.fit(HashRecords, "c");
+        gbt.fitMatrix(WideX, WideY);
+        r = cast<ML::GradientBoostedTrees>(roundTrip(gbt));
+        assertEq(gbt.predictClassificationMatrix(WidePoints), r.predictClassificationMatrix(WidePoints),
+            "another width");
+
+        # a fit on one class
+        ML::GradientBoostedTrees one({"n_estimators": 3, "seed": 1});
+        one.fitMatrix(((0.0, 0.0), (1.0, 1.0)), (1, 1));
+        r = cast<ML::GradientBoostedTrees>(roundTrip(one));
+        assertEq(1, r.getNumClasses(), "one class");
+        assertEq((1, 1), map $1.predicted_class, r.predictClassificationMatrix(((0.0, 0.0), (1.0, 1.0))),
+            "one class");
+    }
+
+    ifRoundTripTest() {
+        # field names from a fit on hashes, then a fit on a matrix of another width
+        ML::IsolationForest iforest({"n_trees": 5, "sample_size": 4, "seed": 1});
+        iforest.fit(({"a": 0.0, "b": 0.0}, {"a": 5.0, "b": 5.0}));
+        iforest.fitMatrix(((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (5.0, 5.0, 5.0), (6.0, 6.0, 6.0)));
+        ML::IsolationForest r = cast<ML::IsolationForest>(roundTrip(iforest));
+        list<list<float>> points = ((0.0, 0.0, 0.0), (6.0, 6.0, 6.0));
+        assertEq(iforest.scoreMatrix(points), r.scoreMatrix(points), "another width");
+    }
+}
