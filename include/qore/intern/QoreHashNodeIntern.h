@@ -806,7 +806,7 @@ public:
 
     //! returns the member with the key \a key, or nullptr
     /** GCC passes the fields of the key in registers (an IPA-SRA clone) as long as each caller does nothing with
-        its key but pass it to calls; the find-or-create functions, which also create the member of their key, use
+        its key but pass it to calls; the find-or-create functions that create the member of their key inline use
         findMemberForCreate() instead (qore#7763)
     */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
@@ -1014,9 +1014,9 @@ public:
     DLLLOCAL HashMember* createMemberKnownAbsent(const qore_hash_lookup_key& key);
 
     //! createMemberKnownAbsent(const qore_hash_lookup_key&), always inlined into the find-or-create functions of
-    //! QoreHashNode.cpp (findCreateMember(), findCreateMemberFor(), findCreateMemberPrehashed()), so that a new member
-    //! costs no call more than its allocation, whatever the number of the callers (qore#7763); defined and used only
-    //! in QoreHashNode.cpp
+    //! QoreHashNode.cpp (findCreateMember(const char*, bool&), findCreateMemberFor(), findCreateMemberPrehashed()),
+    //! so that a new member costs no call more than its allocation, whatever the number of the callers (qore#7763);
+    //! defined and used only in QoreHashNode.cpp
     QORE_HASH_ALWAYS_INLINE DLLLOCAL inline HashMember* createMemberKnownAbsentInline(const qore_hash_lookup_key& key);
 
     //! creates a member with the key of the member \a old of another hash, which this hash does not have, without
