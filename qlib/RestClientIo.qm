@@ -736,6 +736,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 bound to the creator's target, proxy and CA locations
             */
             *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+            #! The program of the code that the client's options and secrets are of (qore#7861)
+            /** The creator of the client, or for a client that the connection of the host created for code that was lent
+                it, the host that the creator proof is of; code that a sandbox restricts and that is not this program
+                is refused by the methods that give the options, the OAuth2 options and the tokens of the client
+                (see checkSecretCaller())
+            */
+            transient *int owner_pgm_id;
         }
 
         private {
@@ -1572,10 +1580,40 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 cookie_jar = mgr.getCookieJar(creator_proof);
             }
 
+            # the options and the tokens are the creator's: of the host for a client that the connection of the host
+            # created for code that was lent it (qore#7861)
+            owner_pgm_id = creator_proof ? creator_proof.getOwnerProgramId() : SandboxManager::getCallerProgramId();
+
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
             # request (for non-blocking ping operations that use the existing token as-is)
             if (!opts.skip_login) {
                 checkLogin();
+            }
+        }
+
+        #! Raises an exception if restricted code that is not the owner of the client asks for its secrets (qore#7861)
+        /** The options that a client was created with hold its tokens, passwords, API keys and proxy credentials, and its
+            OAuth2 options its client secret and refresh token: code that a sandbox restricts, and that was lent the
+            client, uses the client with them but does not read them
+
+            @param what what the calling code asks for
+
+            @throw PERMISSION-DENIED the calling code is restricted by a sandbox and is not the owner of the client
+        */
+        private:internal checkSecretCaller(string what) {
+            bool restricted;
+            try {
+                restricted = SandboxManager::isRestricted();
+            } catch (hash<ExceptionInfo> ex) {
+                restricted = True;
+            }
+            if (!restricted) {
+                return;
+            }
+            *int caller = SandboxManager::getCallerProgramId();
+            if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+                throw "PERMISSION-DENIED", sprintf("code that a sandbox restricts cannot take the %s of a REST client "
+                    "that it does not own", what);
             }
         }
 
@@ -1657,6 +1695,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 translated to \c protocol)
         */
         hash<auto> getConstructorOptions() {
+            checkSecretCaller("options");
             # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
             # values of other types to the returned hash, such as a token or flags, to create another client
             hash<auto!> rv = saved_opts;
@@ -1758,7 +1797,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 copy.setConnectionManagerOwner(mgr_owner);
                 # the copy is the same client for another URL, and keeps its cookies
                 copy.setCookieJar(cookie_jar);
+                # and the proof of the host, which the manager accepts for the jar that they share (qore#7837)
+                copy.setCreatorProof(creator_proof);
             }
+            # the options of the copy are the original's: it has the same owner, whoever made the copy (qore#7861)
+            copy.setOwnerProgramId(owner_pgm_id);
             return copy;
         }
 
@@ -1766,11 +1809,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** @since RestClientIo 1.0
         */
         *HttpClientIo::CookieJar getCookieJar() {
-            # the jar of a client that owns its manager is the manager's, which holds the cookies of the host for code
-            # that was lent the client: the manager refuses restricted code that does not own it
-            if (owns_mgr) {
-                mgr.getCookieJar();
-            }
+            # the jar of a client that owns its manager, and of a copy of it, is the manager's, which holds the cookies
+            # of the host for code that was lent the client: the manager refuses restricted code that does not own it
+            mgr.checkCookieJar(cookie_jar);
             return cookie_jar;
         }
 
@@ -1790,7 +1831,37 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @since RestClientIo 1.0
         */
         hash<auto> addClientCookies(string url, string path, *hash<auto> hdr) {
-            return cookie_jar ? mgr.addCookieHeaders(url, path, hdr, cookie_jar) : (hdr ?? {});
+            checkCookieCaller();
+            return addClientCookiesIntern(url, path, hdr);
+        }
+
+        #! Returns request headers with the cookies of the client's cookie jar, for the code of this module (qore#7837)
+        /** Reserved for the code of this module, which acts for the request that it makes
+
+            @param access the token of the module
+
+            @throw PERMISSION-DENIED the object is not the token
+
+            @since RestClientIo 1.0
+        */
+        final hash<auto> addClientCookiesFor(object access, string url, string path, *hash<auto> hdr) {
+            RestClientIoCookieAccess::check(access);
+            return addClientCookiesIntern(url, path, hdr);
+        }
+
+        #! The body of addClientCookies(), for the callers that were checked
+        private:internal hash<auto> addClientCookiesIntern(string url, string path, *hash<auto> hdr) {
+            return cookie_jar ? mgr.addCookieHeaders(url, path, hdr, cookie_jar, creator_proof) : (hdr ?? {});
+        }
+
+        #! Raises an exception if restricted code that does not own the manager of the client takes its cookies (qore#7837)
+        /** The cookie jar of a client that owns its manager is the manager's, which holds the cookies of the host for
+            code that was lent the client
+
+            @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+        */
+        private:internal checkCookieCaller() {
+            mgr.checkCookieJar(cookie_jar);
         }
 
         #! Stores the cookies of a response in the client's cookie jar
@@ -1801,14 +1872,44 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @since RestClientIo 1.0
         */
         storeClientCookies(string url, string path, *hash<auto> resp_headers) {
+            checkCookieCaller();
+            storeClientCookiesIntern(url, path, resp_headers);
+        }
+
+        #! Stores the cookies of a response in the client's cookie jar, for the code of this module (qore#7837)
+        /** Reserved for the code of this module, which acts for the request that it makes
+
+            @param access the token of the module
+
+            @throw PERMISSION-DENIED the object is not the token
+
+            @since RestClientIo 1.0
+        */
+        final storeClientCookiesFor(object access, string url, string path, *hash<auto> resp_headers) {
+            RestClientIoCookieAccess::check(access);
+            storeClientCookiesIntern(url, path, resp_headers);
+        }
+
+        #! The body of storeClientCookies(), for the callers that were checked
+        private:internal storeClientCookiesIntern(string url, string path, *hash<auto> resp_headers) {
             if (cookie_jar) {
-                mgr.storeResponseCookies(url, path, resp_headers, cookie_jar);
+                mgr.storeResponseCookies(url, path, resp_headers, cookie_jar, creator_proof);
             }
         }
 
         #! Shares the cookie jar of a copied client
         private setCookieJar(*HttpClientIo::CookieJar cookie_jar) {
             self.cookie_jar = cookie_jar;
+        }
+
+        #! Shares the creator proof of a copied client, whose manager is the original's (qore#7837)
+        private setCreatorProof(*HttpClientIo::HttpClientCreatorProof creator_proof) {
+            self.creator_proof = creator_proof;
+        }
+
+        #! Gives a copied client the owner of the original (qore#7861)
+        private setOwnerProgramId(*int owner_pgm_id) {
+            self.owner_pgm_id = owner_pgm_id;
         }
 
         #! Shares the internally created manager's lifetime owner with a copied client
@@ -2368,7 +2469,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 # the cookie jar of the connection manager supplies cookies as with other requests
                 HttpClientIo::HttpClientStreamHandle stream =
                     mgr.acquireAndStartStreaming(origin, redirected ? rf.getMethod() : method, req_path,
-                        addClientCookies(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
+                        addClientCookiesIntern(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
                         redirected ? rf.getBody() : prepared.serialized_body);
                 try {
                     if (on_stream) {
@@ -2390,7 +2491,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                             processFinalNegotiateResponse(response.headers,
                                 negotiate_context);
                         }
-                        storeClientCookies(origin, req_path, response.headers);
+                        storeClientCookiesIntern(origin, req_path, response.headers);
                     }
 
                     if (response && response.status_code) {
@@ -3239,7 +3340,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             stream.setDecodeText(False);
             # the cookie jar of the connection manager supplies cookies as with synchronous requests
             hash<auto> result = stream.submitAsyncWithNotifier(method, path,
-                mgr.addDefaultHeaders(addClientCookies(url, path, hdr)), prepared.serialized_body, notifier);
+                mgr.addDefaultHeaders(addClientCookiesIntern(url, path, hdr)), prepared.serialized_body, notifier);
             return result + {
                 "stream": stream,
                 "request_headers": hdr,
@@ -3267,7 +3368,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
             stream.setDecodeText(False);
             return stream.submitAsyncWithNotifier(method, path,
-                mgr.addDefaultHeaders(addClientCookies(origin, path, hdr)), body, notifier) + {
+                mgr.addDefaultHeaders(addClientCookiesIntern(origin, path, hdr)), body, notifier) + {
                 "stream": stream,
             };
         }
@@ -4692,6 +4793,12 @@ rest.addSensitiveHeaders("Qorus-Token");
         /** @return a hash of OAuth2 option values
         */
         hash<auto> getOAuth2Options() {
+            checkSecretCaller("OAuth2 options");
+            return getOAuth2OptionsIntern();
+        }
+
+        #! The body of getOAuth2Options(), for the callers that were checked: the constructor and setOAuth2Options() use it
+        private:internal hash<auto> getOAuth2OptionsIntern() {
             AutoReadLock al(config_lock);
             # sealed credentials are given only when set: the object gives out no secret (qoretechnologies/qore#7248)
             return (sealed_creds ? {"oauth2_sealed_credentials": sealed_creds} : {}) + {
@@ -4757,6 +4864,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             @throw OAUTH2-ERROR if OAuth2 is not configured or token acquisition fails
         */
         hash<auto> getNewToken() {
+            checkSecretCaller("tokens");
             date ts;
             {
                 AutoReadLock al(config_lock);
@@ -4813,7 +4921,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (!grant_type.val() || grant_type == "none") {
                 return True;
             }
-            hash<auto> effective = getOAuth2Options() + opts;
+            hash<auto> effective = getOAuth2OptionsIntern() + opts;
             # a client assertion replaces the client secret of the client credentials grant
             *hash<string, bool> satisfied;
             # sealed credentials replace the client secret and the token URL (qoretechnologies/qore#7248)
@@ -5973,6 +6081,40 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         }
     }
 
+#! The access of this module's code to the cookies of its clients (qore#7837)
+/** Not exported: only this module's code can name it, and so get its token.  The cookie jar of a client that owns its
+    connection manager is the manager's, which holds the cookies of the host for code that was lent the client: the
+    public methods of the client that take or store cookies refuse code that a sandbox restricts and that does not own
+    the manager, while this module's code, which acts for the request that it makes, uses the variants that take the
+    token of this class.
+*/
+class RestClientIoCookieAccess {
+    private:internal {
+        #! the token
+        static object token = new Mutex();
+    }
+
+    #! Raises an exception if the given object is not the token
+    /** @throw PERMISSION-DENIED the object is not the token
+    */
+    static check(object access) {
+        if (access !== token) {
+            throw "PERMISSION-DENIED", "this method of a REST client is reserved for the code of the RestClientIo "
+                "module";
+        }
+    }
+
+    #! Returns request headers with the cookies of the client's cookie jar for the code that makes the request
+    static hash<auto> addClientCookies(RestClientIo client, string url, string path, *hash<auto> hdr) {
+        return client.addClientCookiesFor(token, url, path, hdr);
+    }
+
+    #! Stores the cookies of a response for the code that makes the request
+    static storeClientCookies(RestClientIo client, string url, string path, *hash<auto> resp_headers) {
+        client.storeClientCookiesFor(token, url, path, resp_headers);
+    }
+}
+
 #! Acquires the connection for an event-driven RestClientIo operation and bounds its failed connection attempts
 /** Each acquisition step hands back the connection that the returned readiness notifier reports on.  When the
     notifier fires because that connection closed instead of becoming ready, the connection attempt failed:
@@ -6520,8 +6662,8 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
                 # cookies set by a response are stored before a redirect is followed, like with synchronous requests
                 HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
-                rcio.storeClientCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
-                    resp.headers);
+                RestClientIoCookieAccess::storeClientCookies(rcio, rf ? rf.getOrigin() : rcio.getUrl(),
+                    rf ? rf.getPath() : path, resp.headers);
                 if (!rf) {
                     # redirects are followed with the request as it was sent
                     rf = mgr.getRedirectFollower(rcio.getUrl(), path, method, hdr, request_body);
@@ -7000,7 +7142,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             # the request was prepared for the original request; it is sent as changed by the redirects
             setPendingStream(mgr.acquireStream(rf.getOrigin()));
             pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
-                rcio.addClientCookies(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
+                RestClientIoCookieAccess::addClientCookies(rcio, rf.getOrigin(), rf.getPath(), rf.getHeaders()), False,
+                rf.getBody(),
                 stream_notifier, True);
             connector.submitted();
             state = SPS_STREAM_WAITING;
@@ -7015,7 +7158,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
         # The cookie jar of the connection manager supplies cookies as with other requests.
-        pending_stream.startStreaming(method, path, rcio.addClientCookies(rcio.getUrl(), path, hdr), False,
+        pending_stream.startStreaming(method, path, RestClientIoCookieAccess::addClientCookies(rcio, rcio.getUrl(), path,
+            hdr), False,
             prepared_attempt.serialized_body, stream_notifier, True);
         connector.submitted();
         request_body = prepared_attempt.serialized_body;
@@ -7116,8 +7260,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
         # cookies set by a response are stored before a redirect is followed
         HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
-        rcio.storeClientCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
-            response_headers);
+        RestClientIoCookieAccess::storeClientCookies(rcio, rf ? rf.getOrigin() : rcio.getUrl(),
+            rf ? rf.getPath() : path, response_headers);
         if (!rf) {
             # redirects are followed with the request as it was sent
             rf = mgr.getRedirectFollower(rcio.getUrl(), path, method, hdr, request_body);
