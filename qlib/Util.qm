@@ -2089,9 +2089,11 @@ unlink(testfile);
     For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
     @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
     environment is empty, as it is in that code itself: the variables are not read, and \c "/tmp" (UNIX) or
-    \c "c:\temp" (Windows) is always used; this also holds for the temporary files and directories that library code
-    creates for such code (ex: FsUtil::TmpDir), which such code can place elsewhere by giving their directory
-    explicitly (see @ref sandbox_ambient_host_data)
+    \c "c:\temp" (Windows) is always used and returned unresolved, as it is: its symbolic links are not resolved
+    (ex: \c "/tmp" on macOS, a link to \c "/private/tmp"), so that the result names no other path of the host and is
+    the same absolute path whatever the current directory is; this also holds for the temporary files and
+    directories that library code creates for such code (ex: FsUtil::TmpDir), which such code can place elsewhere by
+    giving their directory explicitly (see @ref sandbox_ambient_host_data)
 
     @throw TMP-ERROR unable to find the location of the temporary directory; temporary directory is not writable;
     the temporary directory of the calling code's %Program is not writable for it
@@ -2110,15 +2112,28 @@ public string sub tmp_location() {
     }
 
     # TODO: add support for other platforms
-    # the environment of the host only for a caller that could read it itself (qore#7586)
-    *string dir = SandboxManager::callerMayReadExternalInfo()
-        ? (ENV.TMPDIR ?* ENV.TMP ?* ENV.TEMP ?* ENV.TEMPDIR)
-        : NOTHING;
-    if (!dir)
-        dir = PlatformOS == "Windows" ? "c:\\temp" : "/tmp";
+    string default_dir = PlatformOS == "Windows" ? "c:\\temp" : "/tmp";
 
-    if (!is_writable(dir))
+    # the environment of the host only for a caller that could read it itself (qore#7586)
+    if (!SandboxManager::callerMayReadExternalInfo()) {
+        # the platform default, as it is: its canonical form would name other paths of the host, and it would be
+        # given to such code in the form of realpath() for it, which is relative to the current directory when it
+        # shares more leading directories with it (ex: "/tmp" -> "/private/tmp" on macOS)
+        if (!is_writable(default_dir)) {
+            throw "TMP-ERROR", sprintf("unable to find the location of the temporary directory; %y is not writable",
+                default_dir);
+        }
+        return default_dir;
+    }
+
+    *string dir = ENV.TMPDIR ?* ENV.TMP ?* ENV.TEMP ?* ENV.TEMPDIR;
+    if (!dir) {
+        dir = default_dir;
+    }
+
+    if (!is_writable(dir)) {
         throw "TMP-ERROR", sprintf("unable to find the location of the temporary directory; %y is not writable", dir);
+    }
 
     return realpath(dir);
 }
