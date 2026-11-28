@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-noop-decref-prune-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -25,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-noop-decref-prune-" + string(getpid());
+string root = tmp.path + "/noop-decref-prune";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -63,13 +74,13 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile !~ /IR-OPT-AOT-LLVM: pruned-noop-decrefs=[1-9][0-9]*/
         || disabled_compile =~ /pruned-noop-decrefs=/) {
     printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 # the qore run that the executables' output is compared with runs the same way
@@ -86,14 +97,14 @@ string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
 if (ast != "10000\n" || enabled != ast || disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }
 if (jit !~ /IR-OPT-LLVM: pruned-noop-decrefs=[1-9][0-9]*/
         || jit !~ /\n10000\n/ || jit_disabled !~ /\n10000\n/
         || jit_disabled =~ /pruned-noop-decrefs=/) {
     printf("unexpected JIT execution:\nenabled:\n%sdisabled:\n%s",
         jit, jit_disabled);
-    exit(2);
+    test_exit(2);
 }
 
 unlink(enabled_exe);

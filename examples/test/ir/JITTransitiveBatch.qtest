@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-jit-transitive-batch-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -59,7 +69,7 @@ try {
 }
 ";
 
-string script_path = "/tmp/qore-jit-transitive-batch-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/transitive-batch.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -78,6 +88,6 @@ foreach hash<auto> test in (("mode": "ast", "disabled": False),
     if (actual != expected) {
         printf("mismatch in %s%s\nexpected:\n%sactual:\n%s", test.mode,
             test.disabled ? " (transitive disabled)" : "", expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }

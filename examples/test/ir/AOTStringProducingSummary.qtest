@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-producing-summary-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -321,7 +332,7 @@ string sub consumerCode() {
 ";
 }
 
-string root = "/tmp/qore-aot-string-producing-summary-" + string(getpid());
+string root = tmp.path + "/string-producing-summary";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -360,7 +371,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string provider_index = backquote(sprintf(
@@ -389,7 +400,7 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
         || provider_index =~ /\"qore_path\": \"unsafeNestedRecord\(string,int,string\)\"[^\n]*\"string_expression_nodes\": \[\{/
         || provider_index =~ /\"qore_path\": \"recursiveWrapper\(string,int\)\"[^\n]*\"string_expression_nodes\": \[\{/) {
     printf("unexpected string-producing metadata:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -418,12 +429,12 @@ if (!is_file(enabled_qo) || !is_file(disabled_qo)
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
         enabled_compile, disabled_compile, hash_disabled_compile,
         borrowed_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
     printf("string producer-consumer fusion was not applied:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string hash_disabled_undefined =
@@ -438,7 +449,7 @@ if (enabled_undefined !~ /qore_rt_hash_keys_string_borrowed_prehashed/
     printf("hash string expression import mismatch:\nenabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
         enabled_undefined, hash_disabled_undefined,
         borrowed_disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -464,7 +475,7 @@ if (!is_file(enabled_exe) || !is_file(disabled_exe)
     printf("link failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%sborrowed disabled:\n%s",
         enabled_link, disabled_link, hash_disabled_link,
         borrowed_disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -477,11 +488,11 @@ string borrowed_disabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
     libqore_dir, borrowed_disabled_exe));
 if (ast !~ /\neffects:1\n$/) {
     printf("effectfulWrapper() side effect not observed exactly once:\n%s", ast);
-    exit(2);
+    test_exit(2);
 }
 if (ast != enabled || ast != disabled || ast != hash_disabled
         || ast != borrowed_disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%sBorrowed disabled:\n%s",
         ast, enabled, disabled, hash_disabled, borrowed_disabled);
-    exit(2);
+    test_exit(2);
 }

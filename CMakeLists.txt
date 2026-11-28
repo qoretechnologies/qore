@@ -81,6 +81,16 @@ if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
     message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
 endif ()
 
+# qore#7780: the single compilation unit of a debug build needs about 16 GB of memory to compile; split, each part
+# needs about 9 GB, and the parts compile one after the other, so that a parallel build needs no more
+option(SINGLE_COMPILATION_UNIT_SPLIT
+       "With SINGLE_COMPILATION_UNIT and one chunk: compile libqore as two units, the interpreter's call path and the rest, one after the other, which halves the memory of the compile (see cmake/QoreScuChunks.cmake)"
+       OFF)
+if (SINGLE_COMPILATION_UNIT_SPLIT AND (NOT SINGLE_COMPILATION_UNIT OR SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1))
+    message(WARNING "SINGLE_COMPILATION_UNIT_SPLIT is ignored without SINGLE_COMPILATION_UNIT or with SINGLE_COMPILATION_UNIT_CHUNKS > 1")
+    set(SINGLE_COMPILATION_UNIT_SPLIT OFF)
+endif ()
+
 option(QORE_COMPILE_RACE_GUARD
        "Compile libqore through tools/compile-race-guard.py, so that a source edited while its object compiles (minutes for a single compilation unit) is compiled again by the next build (see design/compile-race-guard.md)"
        ON)
@@ -242,6 +252,19 @@ qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QOR
 # ships catalogs fail to configure.
 set(QORE_CATALOG_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore/i18n CACHE PATH
     "Install directory for native Qore i18n catalogs")
+
+# The install destinations of the modules and catalogs, relative to the install prefix where the absolute directories
+# above are below the configured prefix, so that "cmake --install --prefix <dir>" relocates the installation; a
+# directory configured outside the prefix stays absolute (qore#7849).  The absolute directories stay the paths compiled
+# into the library and written to QoreConfig.cmake: a relocated installation runs with QORE_MODULE_DIR and QORE_LIBDIR.
+include(${CMAKE_SOURCE_DIR}/cmake/QoreInstallRelativeDir.cmake)
+qore_install_relative_dir(QORE_INSTALL_MODULE_DIR "${MODULE_DIR}")
+qore_install_relative_dir(QORE_INSTALL_MODULE_VER_DIR "${MODULE_VER_DIR}")
+qore_install_relative_dir(QORE_INSTALL_USER_MODULE_VER_DIR "${USER_MODULE_VER_DIR}")
+qore_install_relative_dir(QORE_CATALOG_INSTALL_DIR "${QORE_CATALOG_DIR}")
+# the install directory of the binary modules of the source tree (the macros of QoreMacros.cmake); an external module
+# gets the absolute one from QoreConfig.cmake
+set(QORE_MODULES_DIR "${QORE_INSTALL_MODULE_DIR}")
 
 get_module_api_versions()
 
@@ -2630,8 +2653,25 @@ if (SINGLE_COMPILATION_UNIT)
         qore_scu_split_chunks("${_scu_content}" ${SINGLE_COMPILATION_UNIT_CHUNKS}
             ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt
             ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk LIBQORE_SCU_SRC LIBQORE_SCU_ISOLATED_SRC)
-        # a stale single wrapper from an earlier configure must not be picked up by anything
-        file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+        # a stale single wrapper or split from an earlier configure must not be picked up by anything
+        file(GLOB _scu_old ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-call-path.cpp*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-rest.cpp*)
+        if (_scu_old)
+            file(REMOVE ${_scu_old})
+        endif ()
+    elseif (SINGLE_COMPILATION_UNIT_SPLIT)
+        # the interpreter's call path and the rest, compiled one after the other (see below and
+        # cmake/QoreScuChunks.cmake)
+        include(cmake/QoreScuChunks.cmake)
+        qore_scu_split_call_path("${_scu_content}" ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-
+            LIBQORE_SCU_SRC)
+        # the single wrapper and the chunks of an earlier configure must not be picked up by anything
+        file(GLOB _scu_old ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        if (_scu_old)
+            file(REMOVE ${_scu_old})
+        endif ()
     else ()
         file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
             "${_scu_content}")
@@ -2640,8 +2680,10 @@ if (SINGLE_COMPILATION_UNIT)
             ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
             COPYONLY)
         set(LIBQORE_SCU_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
-        # chunk files of an earlier chunked configure of this build directory are not used any more
-        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        # chunk and split files of an earlier configure of this build directory are not used any more
+        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-call-path.cpp*
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-rest.cpp*)
         if (_scu_old_chunks)
             file(REMOVE ${_scu_old_chunks})
         endif ()
@@ -2700,6 +2742,12 @@ if (SINGLE_COMPILATION_UNIT)
         list(REMOVE_DUPLICATES _scu_object_deps)
         set_source_files_properties(${_scu_file} PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
     endforeach ()
+    if (SINGLE_COMPILATION_UNIT_SPLIT)
+        # the rest compiles after the call path, never at the same time (qore#7780)
+        list(GET LIBQORE_SCU_SRC 0 _scu_call_path)
+        list(GET LIBQORE_SCU_SRC 1 _scu_rest)
+        qore_scu_compile_after(libqore ${_scu_call_path} ${_scu_rest})
+    endif ()
 
     add_library(libqore SHARED ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
@@ -2849,8 +2897,10 @@ string(CONCAT _QORE_AOT_CONFIG_BASE
 )
 qore_generate_aot_link_config("${CMAKE_BINARY_DIR}/aot-link.conf" "${_QORE_AOT_CONFIG_BASE}"
     "${_QORE_AOT_DYN_LIBS}" "${_QORE_AOT_STATIC_LIBS}")
-install(FILES "${CMAKE_BINARY_DIR}/aot-link.conf"
-        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/qore")
+# installed by a script that names the library directory of the install-time prefix in the file (qore#7849)
+install(CODE "set(QORE_AOT_LINK_CONF_SOURCE \"${CMAKE_BINARY_DIR}/aot-link.conf\")
+set(QORE_AOT_LINK_CONF_LIBDIR \"${CMAKE_INSTALL_LIBDIR}\")")
+install(SCRIPT cmake/QoreInstallAOTLinkConfig.cmake)
 
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
@@ -3685,35 +3735,35 @@ qore_dist(${VERSION})
 
 # prepare installation targets
 install(PROGRAMS ${QORE_BIN_FILES}
-        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 install(TARGETS qore qcc qpp libqore
-        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${QCC_FORMAT_STAMP}
-        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 #install(TARGETS qore qpp qr libqore
-#        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
-#        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreEnsureDepfile.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
     tools/qore-qo-source-parse-defines tools/qore-qo-batch-bootstrap
     tools/qore-qo-incremental-plan tools/qore-qo-prune tools/qore-qo-lock
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(DIRECTORY include/qore
-        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
         PATTERN intern EXCLUDE
         PATTERN minitest.hpp EXCLUDE
@@ -3722,11 +3772,11 @@ install(DIRECTORY include/qore
         PATTERN slist_include.h EXCLUDE
         PATTERN qore-version.h EXCLUDE)
 install(FILES ${CMAKE_BINARY_DIR}/include/qore/qore-version.h
-        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 file(GLOB QORE_MAN_PAGES man/*.1)
 install(FILES ${QORE_MAN_PAGES}
-        DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1
+        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES
             doxygen/Doxyfile.in
@@ -3740,7 +3790,7 @@ install(FILES
             doxygen/Qore-Q.ico
             doxygen/header_template.html
             doxygen/footer_template.html
-        DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 # prepare documentation targets
@@ -3749,7 +3799,7 @@ if (DOXYGEN_FOUND)
     # External module documentation needs the language reference index, without
     # installing the complete HTML documentation. It exists after building docs.
     install(FILES ${CMAKE_BINARY_DIR}/qore.tag
-            DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/qore
             OPTIONAL COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
     # documentation
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/footer_template.html ${CMAKE_BINARY_DIR}/doxygen/footer_template.html @ONLY)
@@ -3946,8 +3996,9 @@ endif()
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
 # NOTE: anything below will be installed into versioned dirs!
-set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
-set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
+# relative to the install prefix (qore#7849)
+set(QORE_USER_MODULES_DIR ${QORE_INSTALL_USER_MODULE_VER_DIR})
+set(QORE_AOT_MODULES_DIR ${QORE_INSTALL_MODULE_VER_DIR})
 # modules must go after docs target - it's depending on it
 
 # qlib modules + their documentation

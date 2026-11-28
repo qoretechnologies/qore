@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-summary-cfg-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -148,7 +158,7 @@ printf(\"%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d\\n\", localSize(True),
     optionalLocal(), searchedLocal(), mixedPhi(False));
 ";
 
-string root = "/tmp/qore-aot-string-summary-cfg-" + string(getpid());
+string root = tmp.path + "/string-summary-cfg";
 string src = root + ".qr";
 string enabled = root + "-enabled";
 string disabled = root + "-disabled";
@@ -165,7 +175,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -184,7 +194,7 @@ foreach string function in (("localSize", "phiSize", "searchedLocal")) {
             function))) {
         printf("missing string CFG fusion for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string function in (("repeatedLocal", "repeatedEffectLocal", "repeatedSearchLocal")) {
@@ -193,7 +203,7 @@ foreach string function in (("repeatedLocal", "repeatedEffectLocal", "repeatedSe
             function))) {
         printf("missing multi-consumer string fusion for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -201,21 +211,21 @@ if (enabled_compile
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string CFG fusion:\n%s",
         enabled_compile + disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 foreach string path in ((enabled, disabled)) {
     if (!is_file(path)) {
         printf("AOT compile failed for %s:\n%s%s",
             path, enabled_compile, disabled_compile);
-        exit(2);
+        test_exit(2);
     }
     string actual = run_executable(sprintf(
         "LD_LIBRARY_PATH=%s %s", libqore_dir, path));
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

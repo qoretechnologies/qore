@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-wide-int-expression-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -54,7 +65,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-wide-int-expression-" + string(getpid());
+string root = tmp.path + "/wide-int-expression";
 string enabled_provider_dir = root + "/enabled-provider";
 string enabled_consumer_dir = root + "/enabled-consumer";
 string disabled_provider_dir = root + "/disabled-provider";
@@ -70,9 +81,6 @@ mkdir(enabled_provider_dir);
 mkdir(enabled_consumer_dir);
 mkdir(disabled_provider_dir);
 mkdir(disabled_consumer_dir);
-on_exit {
-    backquote(sprintf("rm -rf %s", root));
-}
 
 File provider_file();
 provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -97,7 +105,7 @@ string enabled_provider_compile = backquote(sprintf(
 string enabled_provider_qo = enabled_provider_dir + "/provider.qo";
 if (!is_file(enabled_provider_qo)) {
     printf("enabled provider compile failed:\n%s", enabled_provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_consumer_compile = backquote(sprintf(
@@ -108,13 +116,13 @@ string enabled_consumer_compile = backquote(sprintf(
 string enabled_consumer_qo = enabled_consumer_dir + "/consumer.qo";
 if (!is_file(enabled_consumer_qo)) {
     printf("enabled consumer compile failed:\n%s", enabled_consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_consumer_compile
         =~ /AOT: eliding exception check for imported pure summary/)) {
     printf("wide expression summary was not imported:\n%s",
         enabled_consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string disabled_provider_compile = backquote(sprintf(
@@ -124,7 +132,7 @@ string disabled_provider_compile = backquote(sprintf(
 string disabled_provider_qo = disabled_provider_dir + "/provider.qo";
 if (!is_file(disabled_provider_qo)) {
     printf("disabled provider compile failed:\n%s", disabled_provider_compile);
-    exit(2);
+    test_exit(2);
 }
 string disabled_consumer_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1"
@@ -136,12 +144,12 @@ string disabled_consumer_qo = disabled_consumer_dir + "/consumer.qo";
 if (!is_file(disabled_consumer_qo)) {
     printf("disabled consumer compile failed:\n%s",
         disabled_consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 if (disabled_consumer_compile =~ /imported pure summary/) {
     printf("wide expression import was not disabled:\n%s",
         disabled_consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_link = backquote(sprintf(
@@ -155,7 +163,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf(
@@ -165,5 +173,5 @@ string disabled = run_executable(sprintf(
 if (ast != "212582239\n" || enabled != ast || disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

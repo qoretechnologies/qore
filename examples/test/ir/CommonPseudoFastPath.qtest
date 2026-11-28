@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-common-pseudo-fast-path-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -90,18 +100,18 @@ string sub runMode(string script_path, string mode) {
 }
 
 string sub runAot(string script_path) {
-    string exe = "/tmp/qore-common-pseudo-fast-path-" + string(getpid());
+    string exe = tmp.path + "/pseudo-fast-path";
     string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
 
 string sub runLinkedAot() {
-    string base = "/tmp/qore-common-pseudo-fast-path-linked-" + string(getpid());
+    string base = tmp.path + "/pseudo-fast-path-linked";
     string qo_dir = base + "-qo";
     string exe = base + "-exe";
     string linked_script_path = base + ".qr";
@@ -116,13 +126,13 @@ string sub runLinkedAot() {
         libqore_dir, qcc_bin, qo_dir, linked_script_path));
     if (compile_out.find("script-context .qo") == -1) {
         printf("linked AOT .qo compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     string link_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s/*.qo 2>&1",
         libqore_dir, qcc_bin, exe, qo_dir));
     if (!is_file(exe)) {
         printf("linked AOT link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -130,11 +140,11 @@ string sub runLinkedAot() {
 sub checkOutput(string label, string expected, string actual) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
-string script_path = "/tmp/qore-common-pseudo-fast-path-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/pseudo-fast-path.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(scriptCode());

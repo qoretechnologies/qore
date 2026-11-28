@@ -1060,9 +1060,12 @@ conn.checkSandboxAccess(True);
         (the base class implementation throws this; subclasses override @ref getAsyncImpl()
         to provide the async variant)
         @throw PERMISSION-DENIED the async client is, or creates, an \c HttpClientIo connection manager (the async
-        clients of HTTP and REST connections, for example), and the calling code is restricted from the \c NETWORK
-        functional domain: the manager is created for the calling code, also with a connection that unrestricted code
-        created (see the \c HttpClientIo module's restricted callers section)
+        clients of HTTP and REST connections, for example), and the calling code is a restricted borrower of the
+        connection, that is it is restricted from the \c NETWORK functional domain, or a sandbox that refuses
+        uncontrolled APIs governs it and it is not the program of the connection's creator: the manager is the
+        creator's, bound to the creator's target, so the borrower never owns what the connection's options give it
+        (the proxy credentials, the cookies, the client's options), and the connection's current target and proxy must
+        be the creator's (qore#7262, qore#7862)
 
         @since ConnectionProvider 2.2
 
@@ -1077,8 +1080,14 @@ conn.checkSandboxAccess(True);
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
         *HttpClientIo::HttpClientCreatorProofGrant grant;
-        if (SandboxManager::isLentToRestricted(DOM_NETWORK) && creator_proof) {
-            grant = creator_proof.grantNext();
+        if (isRestrictedBorrower()) {
+            # the connection's members, which the borrower can change, name the target that the async client is created
+            # for: it is the creator's, or the borrower would build its own client for another target with the
+            # connection's options and own it (qore#7862)
+            checkLentAsyncTarget();
+            if (creator_proof) {
+                grant = creator_proof.grantNext();
+            }
         }
         # the client is created from the connection's members, which restricted code that was lent the connection can
         # change: for such code, from a private copy with its creator's target (see getLentTargetSource(); qore#7327)
@@ -1415,6 +1424,19 @@ conn.checkSandboxAccess(True);
     private checkLentClientTarget() {
     }
 
+    #! Called by getAsync() for a restricted borrower before the connection's async client is created (qore#7862)
+    /** A connection class whose async client is, or creates, an @ref HttpClientIo::HttpClientConnectionManager
+        "HttpClientConnectionManager" checks with checkLentNetworkTarget() the target and the proxy that the client is
+        created for from the connection's members, which a restricted borrower can change; this implementation checks
+        nothing
+
+        @throw PERMISSION-DENIED the target or the proxy is not the one that the connection's creator gave
+
+        @since %ConnectionProvider 3.1
+    */
+    private checkLentAsyncTarget() {
+    }
+
     #! Returns @ref True if the clients of the connection are bound to its creator's target by a rule of their own
     /** The clients of an HTTP-based connection are bound to the target of the connection's creator by its creator
         proof (see checkLentClientTarget()): restricted code that is lent the connection may change the members of
@@ -1446,6 +1468,28 @@ conn.checkSandboxAccess(True);
         # a location option can also name a remote location, which the connection's module code reads apart from its
         # bound clients, so they are confined for code restricted from the NETWORK domain as well
         return hasCreatorBoundClients() && SandboxManager::isLentToRestricted(DOM_FILESYSTEM | DOM_NETWORK);
+    }
+
+    #! Returns @ref True if the calling code is a restricted borrower of the connection (qore#7862)
+    /** That is if it is restricted from the \c NETWORK functional domain, or if a sandbox that refuses uncontrolled APIs
+        governs it (see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") and it is not the
+        program of the connection's creator: restricted code that created the connection uses it as its own.  The client or
+        the connection manager that the connection creates for a restricted borrower is the creator's, bound to the
+        creator's target (see getAsync() and HttpClientIo::HttpClientCreatorProof), so the borrower never becomes the
+        owner of the connection's secrets (the options of its client, the proxy credentials and the cookies of its
+        manager)
+
+        @since %ConnectionProvider 3.1
+    */
+    final private bool isRestrictedBorrower() {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
+            return True;
+        }
+        if (!SandboxManager::isRestricted()) {
+            return False;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        return !creator_proof || !exists caller || caller != creator_proof.getOwnerProgramId();
     }
 
     #! Returns the functional domains that the code that is lent the connection is confined for
@@ -1790,6 +1834,22 @@ conn.checkSandboxAccess(True);
         if (!SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             return;
         }
+        checkBorrowerTarget(url, proxy_url);
+    }
+
+    #! Raises an exception if the target or the proxy is not the one that the connection's creator gave (qore#7862)
+    /** For the code that checks the target that a client is created for for a restricted borrower of the connection
+        (see isRestrictedBorrower() and checkLentAsyncTarget()); checkLentNetworkTarget() does it for code restricted
+        from the \c NETWORK domain
+
+        @param url the URL that the client connects to (an \c http or \c https URL)
+        @param proxy_url the URL of the client's proxy, if any
+
+        @throw PERMISSION-DENIED the connection's creator proof does not allow the target or the proxy
+
+        @since %ConnectionProvider 3.1
+    */
+    final private checkBorrowerTarget(string url, *string proxy_url) {
         # the origin (TLS or not, canonical host, port; the schemes that are mapped to HTTP, such as ws and rest, as
         # their clients map them) and the proxy are derived as for the proof itself; an invalid URL allows nothing
         if (!creator_proof || !creator_proof.allowsUrl(url, proxy_url)) {

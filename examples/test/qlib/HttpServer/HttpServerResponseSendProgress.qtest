@@ -6,17 +6,27 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires HttpServer
 %requires QUnit
+%requires FsUtil
+%requires Util
 %exec-class HttpServerResponseSendProgressTest
 
 class ProgressHandler inherits AbstractHttpRequestHandler {
     public {
         Queue sent();
         const Size = 16 * 1024 * 1024;
+        #! the FIFO that the body of an /idle response is read from: the test writes it
+        *string fifo;
+        #! the size of each of the two parts of an /idle response
+        const PartSize = 1024;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         if (hdr.path =~ /ping$/) {
             return makeResponse(200, "ok");
+        }
+        if (hdr.path =~ /idle$/) {
+            # the open waits for the test's writer, and the last byte can only be sent when the test has written it
+            return makeResponse(200, new FileInputStream(fifo), {"Content-Length": PartSize * 2});
         }
         binary payload = binary(strmul("x", Size));
         if (hdr.path =~ /stream$/) {
@@ -37,6 +47,8 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
         addTestCase("the send bound renews with each progress and ends a stalled send", \boundSteps());
         addTestCase("a response times out when the peer stops reading", \stalled());
         addTestCase("the minimum rate bounds a progressing response", \belowRate());
+        addTestCase("the keep-alive idle time starts after the last response byte", \idleAfterLastByte());
+        addTestCase("an idle connection is closed once its idle time has passed", \idleExpires());
         set_return_value(main());
     }
 
@@ -72,6 +84,98 @@ class HttpServerResponseSendProgressTest inherits QUnit::Test {
             client.readHTTPHeader(60s);
             assertEq("ok", client.recv(2, 60s));
         }
+    }
+
+    #! the keep-alive idle time (ttl) starts after the last byte of a response, not when its send starts
+    /** The response's last byte can only be sent when the test writes it to the FIFO that the body is read from; the
+        clock of the idle deadlines is moved past twice the ttl while the response is being sent, so the connection
+        serves another request only if the idle time starts after the last byte.  The clock is moved with
+        dbg_http_idle_clock_offset() (debug builds), so the result does not depend on the load of the machine
+        (qore#7855)
+    */
+    idleAfterLastByte() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http_idle_clock_offset() is only in a debug build of the library");
+        }
+        string dir = make_tmp_dir("http-idle-clock");
+        on_exit remove_tree(dir);
+        ProgressHandler handler();
+        handler.fifo = dir + "/body";
+        mkfifo(handler.fifo);
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 60s, "ttl": 60s});
+        on_exit server.stop();
+        on_exit call_function("dbg_http_idle_clock_offset", 0);
+        server.setDefaultHandler("idle", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        on_exit client.close();
+        client.send("GET /idle HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n");
+        # the open waits for the handler to open the FIFO for reading
+        File w();
+        w.open2(handler.fifo, O_WRONLY);
+        on_exit w.close();
+        w.write(binary(strmul("a", ProgressHandler::PartSize)));
+        hash<auto> header = client.readHTTPHeader(60s);
+        assertEq(200, header.status_code);
+        assertEq(ProgressHandler::PartSize * 2, header."content-length".toInt());
+        assertEq(ProgressHandler::PartSize, recvAll(client, ProgressHandler::PartSize).size(), "first part");
+        # the response is being sent: the server waits for the rest of the body; twice the ttl passes
+        call_function("dbg_http_idle_clock_offset", 120s);
+        w.write(binary(strmul("b", ProgressHandler::PartSize)));
+        w.close();
+        assertEq(binary(strmul("b", ProgressHandler::PartSize)), recvAll(client, ProgressHandler::PartSize),
+            "last part");
+        # the ttl starts after the last byte: the connection serves another request
+        client.send("GET /ping HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        assertEq(200, client.readHTTPHeader(60s).status_code);
+        assertEq("ok", client.recv(2, 60s));
+    }
+
+    #! a connection that waits for the next request longer than the keep-alive idle time (ttl) is closed
+    /** The negative counterpart of idleAfterLastByte(): the same clock, moved past the ttl after a response, ends the
+        connection instead of letting it serve the next request (qore#7855)
+    */
+    idleExpires() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http_idle_clock_offset() is only in a debug build of the library");
+        }
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 60s, "ttl": 60s});
+        on_exit server.stop();
+        on_exit call_function("dbg_http_idle_clock_offset", 0);
+        server.setDefaultHandler("idle", new ProgressHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        on_exit client.close();
+        client.send("GET /ping HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n");
+        assertEq(200, client.readHTTPHeader(60s).status_code);
+        assertEq("ok", client.recv(2, 60s));
+        # the connection waits for the next request: its ttl passes
+        call_function("dbg_http_idle_clock_offset", 120s);
+        client.send("GET /ping HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        # the server closes the connection without a response
+        string rest;
+        try {
+            rest = client.recv(-1, 60s) ?? "";
+        } catch (hash<ExceptionInfo> ex) {
+            # a reset of the connection ends it as well
+            rest = "";
+        }
+        assertEq("", rest, "no response after the idle time");
+    }
+
+    #! reads exactly the given number of bytes
+    private binary recvAll(Socket client, int size) {
+        binary rv = binary();
+        while (rv.size() < size) {
+            *binary chunk = client.recvBinary(size - rv.size(), 60s);
+            if (!chunk) {
+                break;
+            }
+            rv += chunk;
+        }
+        return rv;
     }
 
     #! the bound of an HTTP/1 response send by its progress, checked step by step without a socket or a clock

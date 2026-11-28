@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-native-closure-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -263,8 +274,8 @@ if (getenv(\"QORE_TEST_AOT_CLOSURE_EH\")) {
 ";
 }
 
-string source_path = "/tmp/qore-aot-native-closure-" + string(getpid()) + ".qr";
-string exe_path = "/tmp/qore-aot-native-closure-" + string(getpid());
+string source_path = tmp.path + "/native-closure.qr";
+string exe_path = tmp.path + "/native-closure";
 string disabled_exe_path = exe_path + "-disabled";
 string fallback_only_exe_path = exe_path + "-fallback-only";
 {
@@ -294,11 +305,11 @@ string fallback_only_compile_out = backquote(sprintf(
 if (!is_file(exe_path) || !is_file(disabled_exe_path) || !is_file(fallback_only_exe_path)) {
     printf("native closure AOT compile failed:\n%sDisabled:\n%sFallback-only:\n%s",
         compile_out, disabled_compile_out, fallback_only_compile_out);
-    exit(2);
+    test_exit(2);
 }
 if (!(compile_out =~ /compiled native closure/)) {
     printf("native closure body was not compiled:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 string native_out = run_executable(sprintf(
@@ -342,5 +353,5 @@ if (ast_out != expected || fallback_out != expected || disabled_out != expected
         eager_fallback_out, fallback_only_out, compile_out);
     printf("\nAST EH:\n%sNative EH:\n%sFallback EH:\n%sDisabled EH:\n%s",
         ast_eh_out, native_eh_out, fallback_eh_out, disabled_eh_out);
-    exit(2);
+    test_exit(2);
 }

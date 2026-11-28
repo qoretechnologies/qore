@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires FsUtil
 
 %exec-class BgCompileShutdownTest
 
@@ -18,12 +19,15 @@ class BgCompileShutdownTest inherits QUnit::Test {
         string qore_bin;
         string libqore_dir;
         string script_path;
+        #! the files of the test, removed when the test object is destroyed (qore#7817)
+        TmpDir tmp;
     }
 
     constructor() : QUnit::Test("BgCompileShutdownTest", "1.0", \ARGV) {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        script_path = "/tmp/qore-bg-compile-shutdown-" + string(getpid()) + ".qr";
+        tmp = new TmpDir("qore-bg-compile-shutdown-");
+        script_path = tmp.path + "/bg-compile-shutdown.qr";
         addTestCase("queued tier promotions are cancelled at shutdown", \testShutdown());
         addTestCase("native code remains mapped for module delete callbacks", \testModuleDeleteCallback());
         addTestCase("oversized functions remain at the IR tier", \testOversizedFunction());
@@ -75,7 +79,7 @@ class BgCompileShutdownTest inherits QUnit::Test {
     }
 
     private testModuleDeleteCallback() {
-        string module_path = "/tmp/QoreJitDeleteCallback" + string(getpid()) + ".qm";
+        string module_path = tmp.path + "/QoreJitDeleteCallback" + string(getpid()) + ".qm";
         string log_path = module_path + ".log";
         on_exit unlink(module_path);
         on_exit unlink(log_path);

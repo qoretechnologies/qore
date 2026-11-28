@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) connections served by the async I/O handler thread pool
+# test-platform: macos - the handler pool's HTTP/2 (TLS) and HTTP/3 (QUIC) connections and dedicated HTTP/1.x threads
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 /*  qore#7682: a handler can keep values in the user thread context of the listener
@@ -8,8 +8,11 @@
     the requests of many connections one after the other: the values that a request's handler set must not reach a
     later request that the thread serves, for another handler (of another Program, trusted or not), also when the
     handler's code raised an exception.  The thread-local data of a pool task does not outlive the task, so they
-    never do; this test pins that.  The server runs one handler thread, so every request runs on the same thread.
-    (The thread of a dedicated persistent connection keeps its handlers' values apart itself: qore#6847.)
+    never do; this test pins that.  For the pool, the server runs one handler thread, so every request runs on the
+    same thread.
+    The thread of a dedicated persistent HTTP/1.x connection runs the requests of its connection one after the other
+    and keeps its handlers' values apart itself (qore#6847): a trusted handler's values never reach a sandboxed
+    handler's request on that thread, nor the reverse.
 */
 
 %modern
@@ -52,6 +55,49 @@ AbstractHttpRequestHandler sub get_handler() {
     return new TenantHandler();
 }
 ";
+
+        #! a session handler that keeps its persistent connection dedicated to its thread, and a handler that sets a
+        #! value; each answers with its thread and the user thread context that it sees
+        const DedicatedSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires Mime
+class Session inherits AbstractHttpRequestHandler {
+    bool keepPersistentConnectionDedicated() {
+        return True;
+    }
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv = sprintf(\"%d %s %y\", gettid(), get_name(), cx.uctx);
+        if (hdr.path =~ /start/) {
+            listener.addUserThreadContext({\"session\": get_name()});
+            setPersistent(True);
+        } else if (hdr.path =~ /stop/) {
+            setPersistent(False);
+        }
+        return makeResponse(200, rv, {\"Content-Type\": MimeTypeText});
+    }
+}
+class Setter inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv = sprintf(\"%d %y\", gettid(), cx.uctx);
+        listener.addUserThreadContext({\"setter\": get_name()});
+        return makeResponse(200, rv, {\"Content-Type\": MimeTypeText});
+    }
+}
+our string name;
+string sub get_name() {
+    return name;
+}
+AbstractHttpRequestHandler sub get_session(string n) {
+    name = n;
+    return new Session();
+}
+AbstractHttpRequestHandler sub get_setter() {
+    return new Setter();
+}
+";
     }
 
     private {
@@ -63,6 +109,10 @@ AbstractHttpRequestHandler sub get_handler() {
         addTestCase("HTTP/1.1", \http11Test());
         addTestCase("HTTP/2", \http2Test());
         addTestCase("HTTP/3", \http3Test());
+        addTestCase("HTTP/1.1 dedicated persistent connection: trusted, then sandboxed handlers",
+            \dedicatedTest(), False);
+        addTestCase("HTTP/1.1 dedicated persistent connection: sandboxed, then trusted handlers",
+            \dedicatedTest(), True);
         set_return_value(main());
     }
 
@@ -155,5 +205,71 @@ AbstractHttpRequestHandler sub get_handler() {
             testSkip(sprintf("HTTP/3 not negotiated (got %y)", hc.getHttpVersion()));
         }
         checkRequests(hc, "HTTP/3");
+    }
+
+    #! returns a Program with the handlers of the dedicated persistent connection, sandboxed or trusted
+    private Program dedicatedProgram(string name, bool sandboxed) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (sandboxed) {
+            p.setSandboxManager(new SandboxManager());
+        }
+        p.parse(DedicatedSource, name);
+        programs += p;
+        return p;
+    }
+
+    #! sends a request on the persistent connection; returns (tid, the rest of the answer)
+    private list<string> dedicatedGet(HTTPClient hc, string path) {
+        hash<auto> resp = hc.send(NOTHING, "GET", path);
+        assertEq(200, resp.status_code, path);
+        return (resp.body =~ x/^([0-9]+) (.*)$/) ?? ("", resp.body);
+    }
+
+    #! the first handler's session makes the connection's thread dedicated and sets a value, then ends its
+    #! persistence; the other Program's handlers run next on the same thread: they never see the first's values, and
+    #! the first's session never sees theirs
+    dedicatedTest(bool first_sandboxed) {
+        string first = first_sandboxed ? "sandboxed" : "trusted";
+        string second = first_sandboxed ? "trusted" : "sandboxed";
+        Program p1 = dedicatedProgram(first, first_sandboxed);
+        Program p2 = dedicatedProgram(second, !first_sandboxed);
+        HttpServer server();
+        on_exit server.stop();
+        server.setHandler("session1", "^session1", NOTHING, p1.callFunction("get_session", first));
+        server.setHandler("setter1", "^setter1", NOTHING, p1.callFunction("get_setter"));
+        server.setHandler("session2", "^session2", NOTHING, p2.callFunction("get_session", second));
+        server.setHandler("setter2", "^setter2", NOTHING, p2.callFunction("get_setter"));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port)});
+        on_exit hc.disconnect();
+
+        string label = "HTTP/1.1 dedicated " + first + " then " + second;
+        list<string> r1 = dedicatedGet(hc, "/session1/start");
+        list<string> r2 = dedicatedGet(hc, "/session1/stop");
+        # the first Program's other handler leaves a value on the thread
+        list<string> r3 = dedicatedGet(hc, "/setter1");
+        # the other Program's handlers run next on the same thread
+        list<string> r4 = dedicatedGet(hc, "/setter2");
+        list<string> r5 = dedicatedGet(hc, "/session2/start");
+        # a handler that keeps its connection persistent gets every request of the connection: the other session ends
+        # its persistence before the first one is asked
+        list<string> r6 = dedicatedGet(hc, "/session2/stop");
+        # the first session gets back only its own value
+        list<string> r7 = dedicatedGet(hc, "/session1/check");
+        foreach list<string> r in ((r2, r3, r4, r5, r6, r7)) {
+            assertEq(r1[0], r[0], label + ": every request runs on the connection's thread");
+        }
+        # the sessions answer with the name of their Program, then the user thread context that they see
+        assertEq(first + " null", r1[1], label + ": the first session starts with no user thread context");
+        assertEq(sprintf("%s {session: %y}", first, first), r2[1], label + ": the first session sees its own value");
+        assertEq("null", r3[1], label + ": the first Program's other handler sees none of the session's values");
+        assertEq("null", r4[1], label + ": the other Program's handler sees none of the first Program's values");
+        assertEq(second + " null", r5[1], label + ": the other Program's session sees none of the first Program's "
+            "values");
+        assertEq(sprintf("%s {session: %y}", second, second), r6[1], label + ": the other Program's session sees its "
+            "own value");
+        assertEq(sprintf("%s {session: %y}", first, first), r7[1], label + ": the first session sees only its own "
+            "value");
     }
 }

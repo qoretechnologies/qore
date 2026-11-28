@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-search-fusion-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -279,8 +289,8 @@ printf(\"%y:%y:%y:%d:%d:%s:%d:%s:%y:%d:%s:%d\\n\",
     factory.instanceLength(left, middle, right));
 ";
 
-string src = "/tmp/qore-aot-string-search-fusion-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-string-search-fusion-" + string(getpid());
+string src = tmp.path + "/string-search-fusion.qr";
+string exe = tmp.path + "/string-search-fusion";
 string disabled = exe + "-disabled";
 File source();
 source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
@@ -293,7 +303,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -313,7 +323,7 @@ foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains"
             function))) {
         printf("missing string consumer fusion for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (enabled_compile
@@ -321,7 +331,7 @@ if (enabled_compile
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string consumer fusion:\n%s",
         enabled_compile + disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "True:True:True:False:4:4:4:ré-:13:11:False:4:ré:1:True\n"
@@ -336,7 +346,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled)) {
@@ -345,7 +355,7 @@ foreach string path in ((exe, disabled)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

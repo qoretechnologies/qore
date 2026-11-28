@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-case-pipeline-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -114,7 +124,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-string-case-pipeline-" + string(getpid());
+string root = tmp.path + "/string-case-pipeline";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -150,7 +160,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -160,7 +170,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 unlink(provider_path);
 
@@ -171,7 +181,7 @@ string sub compileConsumer(string output_dir, string env) {
         env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
     if (!is_file(output_dir + "/consumer.qo")) {
         printf("consumer compile failed:\n%s", output);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -189,19 +199,19 @@ foreach string function in (("lowerContains", "upperStartsWith",
             function))) {
         printf("missing composed string pipeline for %s:\n%s",
             function, enabled_compile);
-        exit(2);
+        test_exit(2);
     }
 }
 if (!enabled_compile.regex(
         "IR-OPT-AOT-EFFECTS: [^\\n]*plainSliceContains[^\\n]*:"
             + ".*string-consumers=1")) {
     printf("missing untransformed string pipeline:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (disabled_compile =~ /string-consumers=[1-9]/) {
     printf("disabled string producer-consumer fusion was applied:\n%s",
         disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_qo = enabled_dir + "/consumer.qo";
@@ -219,7 +229,7 @@ if (enabled_undefined !~ /qore_rt_string_concat_multi_pipeline_search/
             !~ /qore_rt_pseudo_string_case_consume_native_noguard/) {
     printf("composed string pipeline helper mismatch:\nenabled:\n%s"
         + "disabled:\n%s", enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string sub link(string output, string consumer_qo) {
@@ -228,7 +238,7 @@ string sub link(string output, string consumer_qo) {
         libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
     if (!is_file(output)) {
         printf("link failed:\n%s", link_out);
-        exit(2);
+        test_exit(2);
     }
     return output;
 }
@@ -241,8 +251,8 @@ foreach string path in ((
     if (actual != expected) {
         printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
-exit(0);
+test_exit(0);

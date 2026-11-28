@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-implicit-self-hash-string-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -132,7 +143,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-implicit-self-hash-string-" + string(getpid());
+string root = tmp.path + "/implicit-self-hash-string";
 string enabled_dir = root + "/enabled";
 string reuse_disabled_dir = root + "/reuse-disabled";
 string disabled_dir = root + "/disabled";
@@ -170,42 +181,42 @@ if (!is_file(enabled_qo) || !is_file(reuse_disabled_qo)
         || !is_file(disabled_qo)) {
     printf("compile failed:\nenabled:\n%sreuse disabled:\n%sdisabled:\n%s",
         enabled_compile, reuse_disabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile =~ /AOT-EFFECTS: HashStringFormatter__consumers_[^\n]*string-consumers=[1-9][0-9]*/)) {
     printf("implicit-self hash string consumers were not fused:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__consumers_[^\n]*hash-string-extraction-reuses=[1-9][0-9]*/)) {
     printf("hash string extractions were not reused:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__overlapConsumers_[^\n]*hash-string-extraction-overlap-reuses=[1-9][0-9]*/)) {
     printf("overlapping hash string extractions were not reused:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__crossBlockConsumers_[^\n]*hash-string-extraction-cross-block-reuses=[1-9][0-9]*/)) {
     printf("cross-block hash string extractions were not reused:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__crossBlockMutation_[^\n]*hash-string-extraction-cross-block-reuses=[1-9][0-9]*/) {
     printf("cross-block hash string extraction survived mutation:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (reuse_disabled_compile
         =~ /hash-string-extraction-reuses=[1-9][0-9]*/) {
     printf("disabled hash string extraction reuse was applied:\n%s",
         reuse_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -224,7 +235,7 @@ if (!is_file(enabled_exe) || !is_file(reuse_disabled_exe)
         || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sreuse disabled:\n%sdisabled:\n%s",
         enabled_link, reuse_disabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
@@ -238,5 +249,5 @@ if (ast != enabled || ast != reuse_disabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
         + "Reuse disabled:\n%sDisabled:\n%s",
         ast, enabled, reuse_disabled, disabled);
-    exit(2);
+    test_exit(2);
 }

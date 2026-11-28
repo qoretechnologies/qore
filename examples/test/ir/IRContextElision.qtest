@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-ir-context-elision-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -113,7 +123,7 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
 ";
 
 string expected = "4:32:25:5:4:11:12:7:9:10\n";
-string root = "/tmp/qore-ir-context-elision-" + string(getpid());
+string root = tmp.path + "/context-elision";
 string src = root + ".qr";
 string exe = root + "-aot";
 File source();
@@ -128,7 +138,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -141,7 +151,7 @@ string compile_out = backquote(sprintf(
     libqore_dir, qcc_bin, exe, src));
 if (!is_file(exe)) {
     printf("AOT compile failed:\n%s", compile_out);
-    exit(2);
+    test_exit(2);
 }
 
 hash<string, string> expected_stats = {
@@ -163,7 +173,7 @@ foreach string function in (keys expected_stats) {
             "AOT-CONTEXT: [^\\n]*%s[^\\n]*: %s", function, flags))) {
         printf("missing context analysis for %s (%s):\n%s",
             function, flags, compile_out);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -173,7 +183,7 @@ foreach string env in (("", "QORE_DISABLE_IR_CONTEXT_ELISION=1")) {
     if (actual != expected) {
         printf("AOT mismatch with env '%s'\nexpected:\n%sactual:\n%s",
             env, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

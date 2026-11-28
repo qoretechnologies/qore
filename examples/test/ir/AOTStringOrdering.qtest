@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-string-ordering-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -94,7 +105,7 @@ int sub main() {
 main();
 ";
 
-string root = "/tmp/qore-aot-string-ordering-" + string(getpid());
+string root = tmp.path + "/string-ordering";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
 mkdir(root);
@@ -129,7 +140,7 @@ string disabled_qo = disabled_dir + "/source.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
@@ -143,7 +154,7 @@ if (enabled_undefined !~ /qore_rt_string_lt_typed_soft_native/
         || disabled_undefined !~ /qore_rt_string_cmp_typed_soft/) {
     printf("string ordering helper mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -157,7 +168,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf(
@@ -168,5 +179,5 @@ if (ast != ir || ast != jit || ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sIR:\n%sJIT:\n%s"
         + "Enabled:\n%sDisabled:\n%s",
         ast, ir, jit, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

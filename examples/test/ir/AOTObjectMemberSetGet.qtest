@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-object-member-set-get-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -25,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-object-member-set-get-" + string(getpid());
+string root = tmp.path + "/object-member-set-get";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -226,7 +237,7 @@ string enabled_compile = backquote(sprintf("%s %s -O3 --strip-source -o %s %s 2>
     env, qcc_bin, enabled_exe, source_path));
 if (!is_file(enabled_exe)) {
     printf("enabled compile failed:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string disabled_exe = root + "/disabled";
@@ -235,7 +246,7 @@ string disabled_compile = backquote(sprintf(
     env, qcc_bin, disabled_exe, source_path));
 if (!is_file(disabled_exe)) {
     printf("disabled compile failed:\n%s", disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string native_disabled_exe = root + "/native-disabled";
@@ -244,7 +255,7 @@ string native_disabled_compile = backquote(sprintf(
     env, qcc_bin, native_disabled_exe, source_path));
 if (!is_file(native_disabled_exe)) {
     printf("native-disabled compile failed:\n%s", native_disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_symbols = backquote(sprintf("nm -u %s 2>&1", enabled_exe));
@@ -264,7 +275,7 @@ if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
     printf("unexpected helper symbols:\nenabled:\n%sdisabled:\n%s"
         "native-disabled:\n%s", enabled_symbols, disabled_symbols,
         native_disabled_symbols);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
@@ -286,5 +297,5 @@ if (ast != "7:True:True:True:1004:9:1:hash<auto>:11:13:13:8020\n"
         "Disabled:\n%sNative-disabled:\n%s",
         ast, enabled, separate_read, direct_scalar_disabled, disabled,
         native_disabled);
-    exit(2);
+    test_exit(2);
 }

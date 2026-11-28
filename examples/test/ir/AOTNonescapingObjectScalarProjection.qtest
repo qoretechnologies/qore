@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-object-scalar-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -130,8 +140,8 @@ printf(\"%s:%d:%d:%d:%d:%d\\n\", projectedKernel(), mutationKernel(),
     escapeKernel(), computedKernel(), maybeAssignedKernel(True), destructors);
 ";
 
-string src = "/tmp/qore-aot-object-scalar-projection-" + string(getpid()) + ".qr";
-string exe = "/tmp/qore-aot-object-scalar-projection-" + string(getpid());
+string src = tmp.path + "/object-scalar-projection.qr";
+string exe = tmp.path + "/object-scalar-projection";
 string disabled = exe + "-disabled";
 File source();
 source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
@@ -144,7 +154,7 @@ string sub compile(string out, string env) {
         env, libqore_dir, qcc_bin, out, src));
     if (!is_file(out)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     return compile_out;
 }
@@ -157,14 +167,14 @@ if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: projectedKernel[^:]*:.*object-scalar-projections=2/) {
     printf("missing nonescaping object scalar projections:\n%s",
         enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         =~ /IR-OPT-AOT-EFFECTS: (mutationKernel|escapeKernel|computedKernel|maybeAssignedKernel)[^:]*:.*object-scalar-projections=[1-9]/
         || disabled_compile =~ /object-scalar-projections=[1-9]/) {
     printf("unsafe or disabled object scalar projection:\n%s\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string expected = "7:2.5:1:56:11:9:13:3\n";
@@ -175,7 +185,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 foreach string path in ((exe, disabled)) {
@@ -184,7 +194,7 @@ foreach string path in ((exe, disabled)) {
     if (actual != expected) {
         printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
             path, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 

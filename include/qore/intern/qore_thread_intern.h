@@ -704,6 +704,17 @@ DLLLOCAL bool qore_builtin_caller_is_restricted();
 //! is not the innermost one
 DLLLOCAL QoreProgram* qore_builtin_caller_program();
 
+//! Returns true if the code that called the method that is calling this builtin is the code of a library module
+//! (qore#7863)
+/** For a check that a module's own method makes for its caller (SandboxManager::checkSecretAccess()): the innermost
+    frame is the builtin's, whose Program is that of the method (library code), and the next frame is the call of the
+    method, which records the Program of its call site: the code that called the method, which must be a library
+    module's.  Fails closed: false if the frames are not these (a thread entry, a compiled frame that records no
+    Program), or the code that called the method is not library code (qore_program_is_library_module(): a module that
+    restricted code loaded is not), or it is code that restricted code created or declared
+*/
+DLLLOCAL bool qore_caller_of_builtin_caller_is_library_code();
+
 //! Returns true if the innermost frame of the thread is the frame of a builtin function or method (qore#7146)
 /** In such a frame, the class context of the code that called the builtin is runtime_get_caller_class()
 */

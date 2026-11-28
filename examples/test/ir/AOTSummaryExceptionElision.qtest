@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-summary-exception-elision-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -72,7 +83,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-summary-exception-elision-" + string(getpid());
+string root = tmp.path + "/summary-exception-elision";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -86,9 +97,6 @@ mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
-on_exit {
-    backquote(sprintf("rm -rf %s", root));
-}
 
 File provider_file();
 provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -113,7 +121,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -130,18 +138,18 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (!(enabled_compile =~ /AOT: eliding exception check for imported pure summary/)
         || !(enabled_compile =~ /AOT: eliding exception edge for imported pure summary/)
         || !(enabled_compile =~ /qore_rt_div_int/)
         || !(enabled_compile =~ /qore_rt_has_exception/)) {
     printf("unexpected enabled lowering:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (disabled_compile =~ /AOT: eliding exception/) {
     printf("exception elision was not disabled:\n%s", disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_link = backquote(sprintf(
@@ -153,7 +161,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf(
@@ -163,5 +171,5 @@ string disabled = run_executable(sprintf(
 if (ast != "35:22:1\n" || enabled != ast || disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

@@ -1563,6 +1563,12 @@
     directory creates a @ref FileDataProvider::FileDataProvider "FileDataProvider" itself
     (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
 
+    @par The File Poller of a Filesystem Connection Polls the Connection's Directory
+    The \c "filepoller" data provider of a @ref ConnectionProvider::FilesystemConnection "FilesystemConnection"
+    raises \c DATA-PROVIDER-ERROR for a \c path constructor option that names another directory than the
+    connection's: code that polled another directory with it uses a connection to that directory
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
 
     @par Direct Module Requirements in the Module Hash
@@ -2488,6 +2494,8 @@
       - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - delivers only the files under the polled directory by their real paths (see @ref filepoller_confinement)
+        (<a href="https://github.com/qoretechnologies/qore/issues/7873">issue 7873</a>)
       - see @ref file_poller_2_1 for all changes
 
     - @ref fixedlengthutilintro "FixedLengthUtil" module
@@ -3192,6 +3200,9 @@
     - the data provider that a read-only @ref ConnectionProvider::FilesystemConnection "FilesystemConnection"
       returns is read-only, whatever constructor options the caller gives
       (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>)
+    - <tt>cmake --install --prefix</tt> installs every file below the given prefix, and the installed
+      \c QoreConfig.cmake and \c aot-link.conf name the paths of that prefix; most files went to the prefix given at
+      configure time (<a href="https://github.com/qoretechnologies/qore/issues/7849">issue 7849</a>)
     - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
       thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
       running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
@@ -3561,6 +3572,10 @@
       links and concurrent path changes, with the new
       @ref Qore::SandboxManager::callWithFilesystemRoot() "SandboxManager::callWithFilesystemRoot()"; see
       @ref filedataprovider_root_lock (<a href="https://github.com/qoretechnologies/qore/issues/7821">issue 7821</a>)
+    - security fix: a file poller (also the \c filepoller data provider of a file connection) delivers only the files
+      under its directory by their real paths, also against a concurrent change of a path, and its directory cannot
+      be changed by code restricted from the file system; see @ref filepoller_confinement
+      (<a href="https://github.com/qoretechnologies/qore/issues/7873">issue 7873</a>)
     - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
       diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
       issue #7314)

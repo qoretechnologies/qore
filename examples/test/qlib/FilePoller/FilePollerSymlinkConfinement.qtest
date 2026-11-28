@@ -1,0 +1,516 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - symbolic link resolution and the pinned file-system confinement of a polled directory
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A file poller delivers only the files under its directory by their real paths (qore#7873): a symbolic link that
+# leads outside of the directory is not delivered, links that stay under it are, an entry that is replaced by a link
+# to a file outside of the directory after it was listed is refused too (the replacement is made with
+# dbg_fs_swap_on_open() in debug builds), and the directory cannot be changed by code restricted from the file system.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FilePoller
+
+%exec-class FilePollerSymlinkConfinementTest
+
+#! the log messages of a poller
+class LogStore {
+    public {
+        list<string> log = ();
+    }
+
+    add(string msg) {
+        log += msg;
+    }
+}
+
+#! a poller that records the events and log messages of the polls that the test runs with runOnce()
+class RecordingPoller inherits FilePoller {
+    public {
+        #! the events delivered, by name
+        hash<string, hash<FilePollerFileEventInfo>> events;
+        #! the log messages
+        LogStore store;
+        #! an optional handler for each event
+        *code handler;
+    }
+
+    constructor(string dir, *code handler, LogStore store = new LogStore())
+            : FilePoller(dir, ".*", {"log_info": \store.add()}) {
+        self.handler = handler;
+        self.store = store;
+    }
+
+    singleFileEvent(hash<FilePollerFileEventInfo> event) {
+        events{event.name} = event;
+        if (handler) {
+            handler(self, event);
+        }
+    }
+
+    #! runs one poll and returns the sorted names of the files delivered
+    list<string> poll() {
+        events = {};
+        store.log = ();
+        runOnce();
+        return sort(keys events);
+    }
+
+    #! returns True if a log message reports the given entry as not polled
+    bool reported(string name) {
+        string pfx = sprintf("%y is not polled", name);
+        return (foldl $1 || $2, (map $1.substr(0, pfx.length()) == pfx, store.log)) ?? False;
+    }
+}
+
+#! an observer that queues the names of the file events that it receives
+class QueueObserver inherits Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push(data_.name);
+    }
+}
+
+#! an appender that stores the messages logged
+class CaptureAppender inherits LoggerAppenderWithLayout {
+    private {
+        list<string> lines();
+        Mutex m();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            m.lock();
+            on_exit m.unlock();
+            lines += params.toString();
+        }
+    }
+
+    string getLog() {
+        m.lock();
+        on_exit m.unlock();
+        return lines.join("");
+    }
+}
+
+class FilePollerSymlinkConfinementTest inherits QUnit::Test {
+    private {
+        #! the code of the Programs that the host lends a provider or a poller to
+        const Source = "%modern
+%requires DataProvider
+%requires FilePoller
+# redirects a provider that the host created to the directory of a Dir object
+string sub redirect(AbstractDataProvider dp, object dir) {
+    try {
+        dp.updateConnectionObjects(dir, dir);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# changes the directory of a poller that the host created
+string sub set_path(FilePoller::FilePoller fp, string path) {
+    try {
+        fp.setPath(path);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! how long to wait for a file event; only a guard against a hang
+        const EventTimeout = 30s;
+
+        TmpDir tmp;
+        #! the polled directory, the directory outside of it, and a directory next to it with a longer name, by their
+        #! real paths
+        string root;
+        string outside;
+        string sibling;
+        #! a link to the polled directory
+        string root_link;
+    }
+
+    constructor() : Test("FilePollerSymlinkConfinementTest", "1.0") {
+        addTestCase("links out of the directory", \linksOutTest());
+        addTestCase("the directory is a link", \rootLinkTest());
+        addTestCase("handlers", \handlerTest());
+        addTestCase("changed after the listing", \raceTest());
+        addTestCase("file connection", \connectionTest());
+        addTestCase("redirect", \redirectTest());
+        addTestCase("other file types and the root directory", \otherTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (PlatformOS == "Windows") {
+            return;
+        }
+        tmp = new TmpDir("FilePollerSymlinkConfinement-");
+        string base = realpath(tmp.path);
+        root = base + "/root";
+        outside = base + "/outside";
+        sibling = base + "/rootx";
+        root_link = base + "/root-link";
+    }
+
+    setUp() {
+        if (PlatformOS == "Windows") {
+            testSkip("symbolic links");
+        }
+        # a fresh tree for every test
+        foreach string dir in ((root, outside, sibling)) {
+            if (is_dir(dir)) {
+                remove_tree(dir);
+            }
+        }
+        if (is_link(root_link)) {
+            unlink(root_link);
+        }
+        mkdir(root);
+        mkdir(root + "/sub");
+        mkdir(outside);
+        mkdir(sibling);
+        writeFile(root + "/in.txt", "inside");
+        writeFile(root + "/sub/deep.txt", "deep");
+        writeFile(outside + "/secret.txt", "secret file outside");
+        writeFile(sibling + "/secret.txt", "secret file in the sibling");
+        # links that leave the directory
+        symlink(outside + "/secret.txt", root + "/file-out");
+        symlink("../outside/secret.txt", root + "/rel-out");
+        symlink("chain2", root + "/chain1");
+        symlink("sub/../../outside/secret.txt", root + "/chain2");
+        symlink(outside, root + "/dir-out");
+        symlink("../rootx/secret.txt", root + "/sibling-out");
+        symlink(outside + "/missing", root + "/dangling-out");
+        symlink("loop2", root + "/loop1");
+        symlink("loop1", root + "/loop2");
+        # links that stay under it
+        symlink("in.txt", root + "/file-in");
+        symlink(root + "/in.txt", root + "/abs-in");
+        symlink("sub/deep.txt", root + "/deep-in");
+        symlink("sub/../in.txt", root + "/dotdot-in");
+        # a dangling link under the directory is not a file, as before
+        symlink("missing-in", root + "/dangling-in");
+    }
+
+    tearDown() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+    }
+
+    #! the links that leave the directory are not delivered and are reported; the links that stay in it are delivered
+    linksOutTest() {
+        RecordingPoller fp(root);
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), fp.poll());
+        foreach string name in (("file-out", "rel-out", "chain1", "chain2", "dir-out", "sibling-out", "dangling-out",
+                "loop1", "loop2")) {
+            assertTrue(fp.reported(name), "reported " + name);
+        }
+        # entries that are not regular files under the directory are left out silently, as before
+        foreach string name in (("sub", "dangling-in", "in.txt", "file-in")) {
+            assertFalse(fp.reported(name), "not reported " + name);
+        }
+        # a link under the directory is delivered with its own path, its target and the status of its file
+        hash<StatInfo> in_info = hstat(root + "/in.txt");
+        assertEq(root + "/file-in", fp.events."file-in".filepath);
+        assertEq("in.txt", fp.events."file-in".link);
+        assertEq(in_info.inode, fp.events."file-in".inode);
+        assertEq(in_info.size, fp.events."file-in".size);
+        assertEq("REGULAR", fp.events."file-in".type);
+        assertEq(hstat(root + "/sub/deep.txt").inode, fp.events."deep-in".inode);
+        assertEq(root + "/in.txt", fp.events."in.txt".filepath);
+        assertNothing(fp.events."in.txt".link);
+        # no event has the status of a file outside
+        int secret = hstat(outside + "/secret.txt").inode;
+        assertEq((), select fp.events.values(), $1.inode == secret);
+
+        # getFiles() returns the same files
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"),
+            map $1.name, fp.getFiles(FilePoller::SortName));
+
+        # the mask is matched against the name of the link
+        MaskPoller mp(root, "-out$");
+        mp.runOnce();
+        assertEq({}, mp.events);
+        mp = new MaskPoller(root, "-in$");
+        mp.runOnce();
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in"), sort(keys mp.events));
+    }
+
+    #! the polled directory given by a link: the confinement is the directory that the link refers to
+    rootLinkTest() {
+        symlink(root, root_link);
+        RecordingPoller fp(root_link);
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), fp.poll());
+        assertEq(root_link + "/in.txt", fp.events."in.txt".filepath);
+        assertTrue(fp.reported("file-out"));
+        # a relative path of a directory
+        {
+            string cwd = getcwd();
+            chdir(root + "/..");
+            on_exit chdir(cwd);
+            RecordingPoller rfp("root");
+            assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), rfp.poll());
+            assertTrue(rfp.reported("rel-out"));
+        }
+        # a directory that does not exist is an error of the listing, as before
+        RecordingPoller mfp(root + "/missing");
+        assertThrows("DIR-READ-FAILURE", \mfp.runOnce());
+    }
+
+    #! handlers that delete, move or read the files delivered never reach a file outside of the directory
+    handlerTest() {
+        mkdir(root + "/done");
+        # a handler that moves each file to a directory under the polled directory, and deletes its link
+        code mover = sub (FilePoller fp, hash<FilePollerFileEventInfo> event) {
+            fp.callConfined(QSEC_ALL, sub () {
+                if (event.link) {
+                    unlink(event.filepath);
+                } else {
+                    rename(event.filepath, root + "/done/" + event.name);
+                }
+            });
+        };
+        RecordingPoller fp(root, mover);
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), fp.poll());
+        # the files outside are untouched, as are the links that lead to them
+        assertEq("secret file outside", ReadOnlyFile::readTextFile(outside + "/secret.txt"));
+        assertEq("secret file in the sibling", ReadOnlyFile::readTextFile(sibling + "/secret.txt"));
+        foreach string name in (("file-out", "rel-out", "chain1", "chain2", "dir-out", "sibling-out")) {
+            assertTrue(is_link(root + "/" + name), name);
+        }
+        assertTrue(is_file(root + "/done/in.txt"));
+        assertFalse(exists hlstat(root + "/file-in"));
+        # a second poll delivers nothing
+        assertEq((), fp.poll());
+
+        # a handler that deletes every file delivered
+        unlink(root + "/done/in.txt");
+        writeFile(root + "/in.txt", "inside");
+        symlink("in.txt", root + "/file-in");
+        RecordingPoller dfp(root, sub (FilePoller fp, hash<FilePollerFileEventInfo> event) {
+            unlink(event.filepath);
+        });
+        assertEq(("file-in", "in.txt"), dfp.poll());
+        assertEq("secret file outside", ReadOnlyFile::readTextFile(outside + "/secret.txt"));
+        assertTrue(is_link(root + "/file-out"));
+
+        # callConfined() refuses a file outside of the directory, also as the target of a move
+        writeFile(root + "/in.txt", "inside");
+        assertEq("inside", fp.callConfined(QSEC_READ, \ReadOnlyFile::readTextFile(), root + "/in.txt"));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fp.callConfined(), (QSEC_READ, \ReadOnlyFile::readTextFile(),
+            root + "/file-out"));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fp.callConfined(), (QSEC_READ, \ReadOnlyFile::readTextFile(),
+            sibling + "/secret.txt"));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fp.callConfined(), (QSEC_ALL, \rename(),
+            (root + "/in.txt", outside + "/moved.txt")));
+        assertTrue(is_file(root + "/in.txt"));
+        assertFalse(is_file(outside + "/moved.txt"));
+        # read access only
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fp.callConfined(), (QSEC_READ, \unlink(), root + "/in.txt"));
+        assertTrue(is_file(root + "/in.txt"));
+        # the confinement ends with the call
+        assertEq("secret file outside", ReadOnlyFile::readTextFile(root + "/file-out"));
+    }
+
+    #! an entry that is replaced by a link to a file outside of the directory after it was listed is not delivered
+    /** dbg_fs_swap_on_open() replaces the file at the n-th check of its path (the checks of its status in the
+        confinement): for every n, no event has the status of the file outside, and for at least one of them the
+        replacement comes after the listing and is refused by the confinement (FILESYSTEM-ACCESS-DENIED)
+    */
+    raceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the path needs dbg_fs_swap_on_open()");
+        }
+        int secret = hstat(outside + "/secret.txt").inode;
+        int secret_size = hstat(outside + "/secret.txt").size;
+        bool refused;
+        bool replaced;
+        for (int n = 0; n < 8; ++n) {
+            writeFile(root + "/race.txt", "inside");
+            RecordingPoller fp(root);
+            call_function("dbg_fs_swap_on_open", root + "/race.txt", outside + "/secret.txt", n);
+            fp.poll();
+            call_function("dbg_fs_swap_on_open", "", "");
+            if (*hash<FilePollerFileEventInfo> event = fp.events."race.txt") {
+                assertNeq(secret, event.inode, sprintf("inode %d", n));
+                assertNeq(secret_size, event.size, sprintf("size %d", n));
+                assertEq("REGULAR", event.type, sprintf("type %d", n));
+            } else {
+                refused = True;
+                # an entry left out because of the replacement is reported
+                assertTrue(fp.reported("race.txt"), sprintf("reported %d", n));
+            }
+            if (is_link(root + "/race.txt")) {
+                replaced = True;
+            }
+            unlink(root + "/race.txt");
+        }
+        assertTrue(replaced, "replaced");
+        assertTrue(refused, "refused");
+    }
+
+    #! the filepoller data provider of a file connection is confined to the connection's directory
+    connectionTest() {
+        FilesystemConnection conn("fs", "fs", "file://" + root);
+        AbstractDataProvider dp = conn.getDataProvider("filepoller", {"poll_interval": 1});
+        CaptureAppender capture();
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        logger.addAppender(capture);
+        dp.setLogger(logger);
+        QueueObserver observer();
+        cast<Observable>(dp).registerObserver(observer);
+        cast<DelayedObservable>(dp).observersReady();
+        on_exit cast<DelayedObservable>(dp).stopEvents();
+
+        # the files of a poll are delivered in the order of their names: the last one ends the first poll
+        hash<string, bool> seen;
+        while (True) {
+            string name = observer.q.get(EventTimeout);
+            seen{name} = True;
+            if (name == "in.txt") {
+                break;
+            }
+        }
+        cast<DelayedObservable>(dp).stopEvents();
+        assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), sort(keys seen));
+        string log = capture.getLog();
+        foreach string name in (("file-out", "rel-out", "chain1", "dir-out", "sibling-out")) {
+            assertRegex(sprintf("\"%s\" is not polled", name), log, name);
+        }
+        # an observer reads the file of an event confined to the polled directory
+        FilePollerDataProviderBase fdp = cast<FilePollerDataProviderBase>(dp);
+        assertEq("inside", fdp.callConfined(QSEC_READ, \ReadOnlyFile::readTextFile(), root + "/file-in"));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fdp.callConfined(), (QSEC_READ, \ReadOnlyFile::readTextFile(),
+            root + "/file-out"));
+    }
+
+    #! the directory of a poller or provider cannot be changed by code restricted from the file system
+    redirectTest() {
+        FileDelayedPollerDataProvider dp({"path": root});
+        Dir out_dir();
+        out_dir.chdir(outside);
+
+        # code restricted from the file system that is given the provider and a Dir object
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.parse(Source, "restricted");
+            assertEq("PERMISSION-DENIED", p.callFunction("redirect", dp, out_dir));
+            RecordingPoller fp(root);
+            assertEq("PERMISSION-DENIED", p.callFunction("set_path", fp, outside));
+            assertEq(("abs-in", "deep-in", "dotdot-in", "file-in", "in.txt"), fp.poll());
+        }
+        # code that a sandbox's file-system policy governs: the handlers act with the access of the creator, so also
+        # a directory that the sandbox allows to be read (or to be changed) is refused
+        Dir sib_dir();
+        sib_dir.chdir(sibling);
+        foreach hash<auto> i in ({"denied": 0, "read-only": QSEC_READ, "all": QSEC_ALL}.pairIterator()) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(False);
+            if (i.value) {
+                sm.addFilesystemAllowedPath(outside, i.value);
+                sm.addFilesystemAllowedPath(sibling, i.value);
+            }
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(sm);
+            p.parse(Source, "sandboxed-" + i.key);
+            assertEq("PERMISSION-DENIED", p.callFunction("redirect", dp, out_dir), i.key);
+            assertEq("PERMISSION-DENIED", p.callFunction("redirect", dp, sib_dir), i.key);
+        }
+        # the refused redirects left the provider on its directory
+        assertEq("inside", dp.callConfined(QSEC_READ, \ReadOnlyFile::readTextFile(), root + "/in.txt"));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \dp.callConfined(), (QSEC_READ, \ReadOnlyFile::readTextFile(),
+            outside + "/secret.txt"));
+        # the host's code can redirect it; a Dir object is required
+        assertEq("ok", redirectHost(dp, out_dir));
+        assertThrows("UPDATE-CONNECTION-ERROR", \dp.updateConnectionObjects(), (dp, dp));
+
+        assertEq("secret file outside", dp.callConfined(QSEC_READ, \ReadOnlyFile::readTextFile(),
+            outside + "/secret.txt"));
+
+        # after a redirect, the poller is confined to its new directory
+        RecordingPoller fp(root);
+        fp.setPath(outside);
+        symlink(root + "/in.txt", outside + "/back-in");
+        assertEq(("secret.txt",), fp.poll());
+        assertTrue(fp.reported("back-in"));
+    }
+
+    #! entries that are not regular files are delivered as before, except directories; the root directory confines
+    otherTest() {
+        mkfifo(root + "/fifo");
+        symlink("fifo", root + "/fifo-in");
+        RecordingPoller fp(root);
+        assertEq(("abs-in", "deep-in", "dotdot-in", "fifo", "fifo-in", "file-in", "in.txt"), fp.poll());
+        assertEq("FIFO", fp.events.fifo.type);
+        assertEq("FIFO", fp.events."fifo-in".type);
+        assertEq("fifo", fp.events."fifo-in".link);
+        # an entry left out is reported when it is first left out, not on every poll
+        assertTrue(fp.reported("file-out"));
+        fp.poll();
+        assertFalse(fp.reported("file-out"));
+        unlink(root + "/file-out");
+        symlink(sibling + "/secret.txt", root + "/file-out");
+        fp.poll();
+        assertFalse(fp.reported("file-out"), "the same reason");
+        unlink(root + "/file-out");
+        fp.poll();
+        symlink(outside + "/secret.txt", root + "/file-out");
+        fp.poll();
+        assertTrue(fp.reported("file-out"), "left out again");
+
+        # callConfined() applies the access modes also for the root directory of the file system
+        RecordingPoller rfp("/");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \rfp.callConfined(), (QSEC_READ, \unlink(), root + "/in.txt"));
+        assertTrue(is_file(root + "/in.txt"));
+        assertEq("inside", rfp.callConfined(QSEC_READ, \ReadOnlyFile::readTextFile(), root + "/in.txt"));
+    }
+
+    static string redirectHost(AbstractDataProvider dp, object dir) {
+        try {
+            dp.updateConnectionObjects(dir, dir);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}
+
+#! a poller with a mask
+class MaskPoller inherits FilePoller {
+    public {
+        hash<string, hash<auto>> events = {};
+    }
+
+    constructor(string dir, string mask) : FilePoller(dir, mask) {
+    }
+
+    singleFileEvent(hash<FilePollerFileEventInfo> event) {
+        events{event.name} = event;
+    }
+}

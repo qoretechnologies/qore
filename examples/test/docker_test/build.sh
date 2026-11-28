@@ -61,8 +61,10 @@ if command -v python3 > /dev/null 2>&1; then
     rm -f "${QORE_CI_COMPILE_MEMORY_LOG}"
     export QORE_CI_COMPILE_MEMORY_LOG
 fi
+# libqore as two units compiled one after the other (SINGLE_COMPILATION_UNIT_SPLIT): the single unit needs about
+# 16 GB to compile in a debug build, the memory limit of a build container (qore#7780)
 cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} \
-    "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DSINGLE_COMPILATION_UNIT_SPLIT=ON -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
     ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"} ${COMPILE_MEMORY_ARGS}
 # the compiler output is kept in build.log for check-build-warnings (see ci-build-log.sh)
 . "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"

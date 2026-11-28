@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-lazy-method-fast-args-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -91,7 +101,7 @@ printf(\"%d:%d:%d:%d:%d:%s:%s:%s\\n\",
     maybeNothing(exact, True), deletedReceiver());
 ";
 
-string root = "/tmp/qore-aot-lazy-method-fast-args-" + string(getpid());
+string root = tmp.path + "/lazy-method-fast-args";
 string source_path = root + ".qr";
 File source();
 source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -112,7 +122,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         libqore_dir, qore_bin, mode, source_path));
     if (!actual.regex("^" + expected + "$")) {
         printf("unexpected %s result:\n%s", mode, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -125,12 +135,12 @@ foreach hash<string, string> variant in ((
         libqore_dir, variant.env, qcc_bin, executable, source_path));
     if (!is_file(executable)) {
         printf("%s AOT compile failed:\n%s", variant.name, compile_out);
-        exit(2);
+        test_exit(2);
     }
     string actual = run_executable(sprintf("LD_LIBRARY_PATH=%s %s",
         libqore_dir, executable));
     if (!actual.regex("^" + expected + "$")) {
         printf("unexpected %s AOT result:\n%s", variant.name, actual);
-        exit(2);
+        test_exit(2);
     }
 }

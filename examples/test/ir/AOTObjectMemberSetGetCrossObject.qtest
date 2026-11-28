@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-object-set-get-cross-object-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -25,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-object-set-get-cross-object-" + string(getpid());
+string root = tmp.path + "/object-set-get-cross-object";
 string provider_dir = root + "/provider";
 string consumer_dir = root + "/consumer";
 mkdir(root);
@@ -97,7 +108,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string provider_index = backquote(sprintf(
@@ -105,7 +116,7 @@ string provider_index = backquote(sprintf(
 if (provider_index !~ /"symbol_index_version", "value": "37"/
         || provider_index !~ /"qore_path": "CrossObjectBox::echo[^\n]*"native_symbol": "", "abi_kind": "qore_summary_v1"[^\n]*"object_set_get_member": "value", "object_set_get_param": 0/) {
     printf("provider object set/get metadata mismatch:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 # Prove that consumer lowering needs only the source-stripped provider object.
@@ -143,7 +154,7 @@ string consumer_compile = backquote(sprintf(
 string consumer_qo = consumer_dir + "/consumer.qo";
 if (!is_file(consumer_qo)) {
     printf("consumer compile failed:\n%s", consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
@@ -151,7 +162,7 @@ if (undefined_symbols !~ /qore_rt_object_member_set_get_aot/
         || undefined_symbols !~ /qore_rt_object_member_set_get_int_aot/) {
     printf("consumer did not import the object set/get summary:\n%scompile:\n%s",
         undefined_symbols, consumer_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string exe_path = root + "/cross-object";
@@ -160,7 +171,7 @@ string link_out = backquote(sprintf(
     env, qcc_bin, exe_path, provider_qo, consumer_qo));
 if (!is_file(exe_path)) {
     printf("cross-object link failed:\n%s", link_out);
-    exit(2);
+    test_exit(2);
 }
 
 string actual = run_executable(sprintf("%s %s", env, exe_path));
@@ -168,5 +179,5 @@ string expected = "7:ok:True:1004\n";
 if (actual != expected) {
     printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",
         expected, actual);
-    exit(2);
+    test_exit(2);
 }

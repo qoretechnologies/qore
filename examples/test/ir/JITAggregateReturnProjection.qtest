@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-jit-aggregate-return-projection-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -75,8 +85,7 @@ if (ENV.QORE_JIT_TEST_WARMUP) {
 printf(\"%s\\n\", kernel(1000, NOTHING));
 ";
 
-string script_path = "/tmp/qore-jit-aggregate-return-projection-"
-    + string(getpid()) + ".qr";
+string script_path = tmp.path + "/aggregate-return-projection.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -92,7 +101,7 @@ string expected = "2006000:NOTHING:11:2:rejected\n";
 string ast = runMode("ast");
 if (ast != expected) {
     printf("AST mismatch\nexpected:\n%sactual:\n%s", expected, ast);
-    exit(2);
+    test_exit(2);
 }
 
 string disabled = runMode("jit",
@@ -100,7 +109,7 @@ string disabled = runMode("jit",
 if (disabled != expected) {
     printf("disabled JIT mismatch\nexpected:\n%sactual:\n%s",
         expected, disabled);
-    exit(2);
+    test_exit(2);
 }
 
 # the compilation trace shows the fusion
@@ -111,7 +120,7 @@ string enabled = enabled_run.trace.join("\n") + "\n" + enabled_run.out;
 if (enabled !~ /fused [1-9][0-9]* aggregate-return projection group/
         || enabled !~ /2006000:NOTHING:11:2:rejected\n$/) {
     printf("enabled JIT aggregate-return projection mismatch:\n%s", enabled);
-    exit(2);
+    test_exit(2);
 }
 
 unlink(script_path);

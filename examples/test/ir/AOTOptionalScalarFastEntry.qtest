@@ -4,8 +4,19 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-optional-scalar-fast-entry-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -22,7 +33,7 @@ string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
     ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-string root = "/tmp/qore-aot-optional-scalar-fast-entry-" + string(getpid());
+string root = tmp.path + "/optional-scalar-fast-entry";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
 mkdir(root);
@@ -161,17 +172,17 @@ string disabled_qo = disabled_dir + "/optional-scalar.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 # runAssigned's assigned optional local (argument 1 of scale()) is native, so it needs no NOTHING guard
 if (!(enabled_compile =~ /native fast-entry argument 1 needs no NOTHING guard for SSA value [0-9]+ in 'runAssigned'/)) {
     printf("assigned-state argument guard was not elided:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 # runBoxedAssigned's list is boxed, and its facts prove it assigned
 if (!(enabled_compile =~ /eliding fast-entry argument NOTHING guard for SSA value [0-9]+ in 'runBoxedAssigned'/)) {
     printf("boxed assigned-state argument guard was not elided:\n%s", enabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -182,7 +193,7 @@ string disabled_link = backquote(sprintf("%s %s -O3 -o %s %s 2>&1",
     env, qcc_bin, disabled_exe, disabled_qo));
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled = run_executable(sprintf("%s %s", env, enabled_exe));
@@ -190,5 +201,5 @@ string disabled = run_executable(sprintf("%s %s", env, disabled_exe));
 if (ast != enabled || ast != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

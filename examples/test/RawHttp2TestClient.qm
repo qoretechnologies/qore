@@ -100,6 +100,9 @@ public class RawHttp2Client {
         *string goaway_debug;
         #! the server's SETTINGS_MAX_CONCURRENT_STREAMS, once its SETTINGS frame has been read
         *int max_concurrent_streams;
+        #! True (the default) to credit the data of each DATA frame back as it is read; False sends no WINDOW_UPDATE
+        #! frames, so that the client sends nothing while it reads, until credit() is called
+        bool credit_data = True;
     }
 
     private {
@@ -270,6 +273,15 @@ public class RawHttp2Client {
         }, read_timeout);
     }
 
+    #! Credits data back to a stream and to the connection (WINDOW_UPDATE frames)
+    /** @param stream_id the stream
+        @param size the bytes to credit, at least 1
+    */
+    credit(int stream_id, int size) {
+        sock.send(frame(FrameWindowUpdate, 0, 0, u32(size)) + frame(FrameWindowUpdate, 0, stream_id, u32(size)),
+            io_timeout);
+    }
+
     #! Reads frames until the server closes the connection
     /** @throw SOCKET-TIMEOUT a frame did not arrive in time: the server did not close the connection
     */
@@ -277,7 +289,8 @@ public class RawHttp2Client {
         readUntil(bool sub (hash<auto> f) { return False; }, read_timeout);
     }
 
-    #! Handles a frame read: acknowledges SETTINGS and PING, credits DATA back, records RST_STREAM and GOAWAY
+    #! Handles a frame read: acknowledges SETTINGS and PING, credits DATA back (see credit_data), records RST_STREAM
+    #! and GOAWAY
     /** @return False if the server has closed or reset the connection (a send failed for it)
     */
     private bool handleFrame(hash<auto> f) {
@@ -310,7 +323,7 @@ public class RawHttp2Client {
                 # the data is credited back to the connection, also the data of the frame that ends its stream (whose
                 # stream needs no more credit): otherwise each stream would use up part of the connection's window
                 # for good (qorus#1335)
-                if (f.payload.size()) {
+                if (f.payload.size() && credit_data) {
                     bool ends = (f.flags & FlagEndStream).toBool();
                     binary credit = frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()));
                     if (!ends) {
