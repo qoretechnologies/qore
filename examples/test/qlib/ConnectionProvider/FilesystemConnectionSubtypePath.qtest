@@ -1,0 +1,241 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FilePoller
+
+%exec-class FilesystemConnectionSubtypePathTest
+
+#! The file poller of a filesystem connection polls the connection's directory: the caller's "path" option cannot
+#! point it at another directory (qore#7806)
+class FilesystemConnectionSubtypePathTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the Programs that the connection is lent to
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the code of the Programs that the connection is lent to
+        const Code = "%modern
+object sub get_poller(object conn, *hash<auto> opts) {
+    return conn.getDataProvider(\"filepoller\", opts);
+}
+
+string sub try_poller(object conn, *hash<auto> opts) {
+    try {
+        conn.getDataProvider(\"filepoller\", opts);
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+        #! the longest time to wait for the first file event of a poller
+        const EventTimeout = 30s;
+    }
+
+    constructor() : QUnit::Test("FilesystemConnectionSubtypePath", "1.0") {
+        addTestCase("without a path the poller polls the connection's directory", \defaultPathTest());
+        addTestCase("a path that names the connection's directory is accepted", \samePathTest());
+        addTestCase("a path that names another directory is refused", \otherPathTest());
+        addTestCase("a path that is not a string is refused", \nonStringPathTest());
+        addTestCase("the other poller options are the caller's", \otherOptionsTest());
+        addTestCase("the subtype's option info is unchanged", \optionInfoTest());
+        foreach string mode in (keys Modes) {
+            addTestCase("connection given to another Program, " + mode, \otherProgramTest(), mode);
+            addTestCase("connection lent to restricted code, " + mode, \lentRestrictedTest(), mode);
+        }
+        set_return_value(main());
+    }
+
+    #! creates a file with the given name in the given directory
+    private static createFile(string dir, string name) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(name);
+        f.close();
+    }
+
+    private static FilesystemConnection getConnection(string dir, bool readonly = False) {
+        return new FilesystemConnection("fs", "fs", "file://" + dir, {"monitor": False}, {"readonly": readonly});
+    }
+
+    #! returns the file path of the first file event of the given poller
+    private static string getFirstEventPath(AbstractDataProvider provider) {
+        FileDelayedPollerDataProvider dp = cast<FileDelayedPollerDataProvider>(provider);
+        FilesystemConnectionSubtypePathObserver observer();
+        dp.registerObserver(observer);
+        dp.observersReady();
+        on_exit dp.stopEvents();
+        return observer.q.get(EventTimeout).filepath;
+    }
+
+    #! checks that the poller polls the given directory, which holds the file "a.txt" only
+    private checkPolls(AbstractDataProvider dp, string dir, string label) {
+        on_exit delete dp;
+        assertEq("FileDelayedPollerDataProvider", dp.className(), label);
+        assertEq(dir + DirSep + "a.txt", getFirstEventPath(dp), label);
+    }
+
+    #! returns the error of creating the poller with the given options, or "OK"
+    private static string tryPoller(FilesystemConnection conn, *hash<auto> opts) {
+        try {
+            conn.getDataProvider("filepoller", opts);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    defaultPathTest() {
+        TmpDir tmp();
+        createFile(tmp.path, "a.txt");
+        foreach bool readonly in (False, True) {
+            FilesystemConnection conn = getConnection(tmp.path, readonly);
+            foreach *hash<auto> opts in ((NOTHING, {}, {"path": NOTHING}, {"path": ""})) {
+                checkPolls(conn.getDataProvider("filepoller", opts), tmp.path,
+                    sprintf("readonly %y opts %y", readonly, opts));
+            }
+        }
+    }
+
+    samePathTest() {
+        TmpDir tmp();
+        createFile(tmp.path, "a.txt");
+        mkdir(tmp.path + DirSep + "sub");
+        FilesystemConnection conn = getConnection(tmp.path);
+        # the path is compared after normalization
+        foreach string path in (tmp.path, tmp.path + DirSep, tmp.path + DirSep + "." + DirSep,
+                tmp.path + DirSep + "sub" + DirSep + "..", tmp.path + DirSep + DirSep) {
+            checkPolls(conn.getDataProvider("filepoller", {"path": path}), tmp.path, path);
+        }
+        # a connection URL with a trailing separator
+        conn = new FilesystemConnection("fs", "fs", "file://" + tmp.path + DirSep, {"monitor": False});
+        checkPolls(conn.getDataProvider("filepoller", {"path": tmp.path}), tmp.path, "URL with a separator");
+    }
+
+    otherPathTest() {
+        TmpDir parent();
+        string dir = parent.path + DirSep + "conn";
+        mkdir(dir);
+        mkdir(dir + DirSep + "sub");
+        # a sibling directory whose name starts with the connection's directory name
+        mkdir(dir + "x");
+        TmpDir other();
+        foreach string d in ((other.path, parent.path, dir + DirSep + "sub", dir + "x")) {
+            createFile(d, "b.txt");
+        }
+
+        # the relative path names the connection's directory from the working directory
+        assertEq(dir, normalize_dir(getRelativePath(dir)));
+        foreach bool readonly in (False, True) {
+            FilesystemConnection conn = getConnection(dir, readonly);
+            # relative paths are refused whatever the working directory is
+            foreach string path in (other.path, parent.path, dir + DirSep + "sub", dir + "x", dir + DirSep + "..",
+                    "/", "sub", "conn", ".", "./", getRelativePath(dir)) {
+                string label = sprintf("readonly %y path %y", readonly, path);
+                string err = tryPoller(conn, {"path": path});
+                assertRegex("^DATA-PROVIDER-ERROR: ", err, label);
+                assertRegex("uses the connection's directory", err, label);
+                assertNeq(-1, err.find(sprintf("the \"path\" option %y", path)), label);
+            }
+        }
+    }
+
+    #! returns a relative path that names the given absolute directory from the working directory
+    private static string getRelativePath(string dir) {
+        int depth = elements (select getcwd().split(DirSep), $1 != "");
+        return strmul(".." + DirSep, depth) + dir.substr(1);
+    }
+
+    nonStringPathTest() {
+        TmpDir tmp();
+        FilesystemConnection conn = getConnection(tmp.path);
+        foreach auto path in ((1, True, (tmp.path,), {"path": tmp.path})) {
+            assertRegex("^DATA-PROVIDER-ERROR: ", tryPoller(conn, {"path": path}), sprintf("%y", path));
+        }
+    }
+
+    otherOptionsTest() {
+        TmpDir tmp();
+        # sorted by name, "b.dat" comes first: the first event is "c.txt" only if the mask is applied
+        createFile(tmp.path, "b.dat");
+        createFile(tmp.path, "c.txt");
+        FilesystemConnection conn = getConnection(tmp.path);
+        AbstractDataProvider dp = conn.getDataProvider("filepoller", {
+            "path": tmp.path,
+            "mask": "*.txt",
+            "sort_type": "name",
+            "poll_interval": 1,
+        });
+        {
+            on_exit delete dp;
+            assertEq(tmp.path + DirSep + "c.txt", getFirstEventPath(dp));
+        }
+
+        # without the mask, the first event is "b.dat"
+        dp = conn.getDataProvider("filepoller", {"sort_type": "name"});
+        on_exit delete dp;
+        assertEq(tmp.path + DirSep + "b.dat", getFirstEventPath(dp));
+    }
+
+    optionInfoTest() {
+        TmpDir tmp();
+        FilesystemConnection conn = getConnection(tmp.path);
+        hash<auto> info = conn.getDataProviderSubtypes().filepoller;
+        assertEq(keys FilePollerDataProviderBase::ConstructorOptions, keys info);
+        assertTrue(info.path.required);
+    }
+
+    #! a Program that is not restricted from the file system that is given the connection gets the same poller
+    otherProgramTest(string mode) {
+        TmpDir tmp();
+        createFile(tmp.path, "a.txt");
+        TmpDir other();
+        createFile(other.path, "a.txt");
+        Program p(PO_NEW_STYLE);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "fs-subtype-" + mode);
+        FilesystemConnection conn = getConnection(tmp.path);
+        assertRegex("^DATA-PROVIDER-ERROR: ", p.callFunction("try_poller", conn, {"path": other.path}));
+        checkPolls(p.callFunction("get_poller", conn), tmp.path, "no path");
+        checkPolls(p.callFunction("get_poller", conn, {"path": tmp.path + DirSep}), tmp.path, "same path");
+    }
+
+    #! code restricted from the file system that is lent the connection cannot give a path, and gets a poller of the
+    #! connection's directory
+    lentRestrictedTest(string mode) {
+        TmpDir tmp();
+        createFile(tmp.path, "a.txt");
+        TmpDir other();
+        createFile(other.path, "a.txt");
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "fs-subtype-restricted-" + mode);
+        FilesystemConnection conn = getConnection(tmp.path);
+        foreach string path in ((other.path, tmp.path)) {
+            assertRegex("^PERMISSION-DENIED: .*data provider option", p.callFunction("try_poller", conn,
+                {"path": path}), path);
+        }
+        # the connection's creator gives the poller its directory
+        checkPolls(p.callFunction("get_poller", conn), tmp.path, "no path");
+    }
+}
+
+#! queues the file events of a poller
+class FilesystemConnectionSubtypePathObserver inherits Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push(data_);
+    }
+}

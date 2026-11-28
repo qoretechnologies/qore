@@ -38,6 +38,11 @@ public namespace ConnectionProvider {
     options that the caller gives cannot change them (a caller may make the data provider of a writable connection
     read-only with the \c "readonly" constructor option)
 
+    The \c "filepoller" data provider subtype polls the connection's directory: a \c "path" constructor option is
+    accepted only if it is an absolute path that names that directory after normalization (symbolic links and
+    environment variables in it are not resolved), and any other value raises \c DATA-PROVIDER-ERROR; a caller that
+    needs to poll another directory uses a connection to that directory
+
     @note the path will be subject to environment variable substitutions
 */
 public class FilesystemConnection inherits AbstractConnectionWithInfo {
@@ -268,9 +273,11 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         providers
         @param constructor_options any additional constructor options required by the data provider
 
-        @return a data provider object for the connection and subtype passed as an argument
+        @return a data provider object for the connection and subtype passed as an argument; a subtype with a
+        \c "path" option (the \c "filepoller" subtype) has the connection's directory as its path
 
-        @throw DATA-PROVIDER-ERROR the given subtype is not valid
+        @throw DATA-PROVIDER-ERROR the given subtype is not valid; the \c "path" constructor option is not an absolute
+        path that names the connection's directory
     */
     private AbstractDataProvider getDataProviderImpl(string subtype, *hash<auto> constructor_options) {
         *hash<auto> conf = DataProviderSubtypeMap{subtype};
@@ -284,8 +291,21 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         }
         checkSubtypeInfo();
         constructor_options = {} + constructor_options;
-        if (subtype_info{subtype}.path && !constructor_options.path) {
-            constructor_options.path = urlh.path;
+        if (subtype_info{subtype}.path) {
+            # the connection's directory is the subtype's path; a caller cannot point it at another directory, and is
+            # told so rather than having its path replaced, as the poller hands the files of the directory that it
+            # polls to handlers that move or delete them (qore#7806); a relative path is refused, so that the result
+            # does not depend on the process's working directory
+            string dir = urlh.path ?? "/";
+            auto path = constructor_options.path;
+            if (exists path && path !== ""
+                && (path.typeCode() != NT_STRING || !absolute_path(cast<string>(path))
+                    || normalize_dir(cast<string>(path)) != dir)) {
+                throw "DATA-PROVIDER-ERROR", sprintf("file connection %y: the %y data provider uses the connection's "
+                    "directory %y; the \"path\" option %y names another directory; use a connection to that "
+                    "directory instead", name, subtype, dir, path);
+            }
+            constructor_options.path = dir;
         }
         # a subtype with a "readonly" option is read-only unless the caller makes it writable, and always for a
         # read-only connection (qore#7806); no subtype has the option at present (the file poller only reads)
