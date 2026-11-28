@@ -224,8 +224,8 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        ws.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        ws.setLogger(logger);
     }
 
     #! Returns a DiscordWebSocketClient connection from the options

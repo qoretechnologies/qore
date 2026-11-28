@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreAllocFailure.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -1238,6 +1239,31 @@ static QoreValue f_dbg_module_load_waiters(const QoreListNode* params, RuntimeCo
     int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
     return QMM.dbgWaitLoadWaiters(name->c_str(), count > 0 ? static_cast<unsigned>(count) : 0u,
         static_cast<int>(timeout_ms));
+#else
+    return false;
+#endif
+}
+
+//! Reserves the name of a module as a load in progress of the calling thread until dbg_module_load_release() (#7808)
+/** The name stays reserved after the thread has ended: a load of the name in another thread waits until it is
+    released, and a compilation of the name fails; returns false if the name is being loaded already
+*/
+static QoreValue f_dbg_module_load_hold(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    return QMM.dbgHoldLoad(name->c_str());
+#else
+    return false;
+#endif
+}
+
+//! Releases the reservation of dbg_module_load_hold() as a load that registered no module (#7808)
+/** returns false if the name is not reserved as a load in progress
+*/
+static QoreValue f_dbg_module_load_release(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    return QMM.dbgReleaseLoad(name->c_str());
 #else
     return false;
 #endif
@@ -2750,6 +2776,31 @@ static void ut_rsection_waiters_woken_on_release(UnitTestCounters& c) {
 }
 
 namespace {
+//! a lock that is taken while another registered lock is held has a higher rank than it (qore#7812)
+/** The fork handlers acquire the locks in increasing rank order, and handlers of one rank in an unspecified order;
+    a thread that holds one lock and takes another therefore deadlocks with a concurrent fork() unless the lock it
+    takes has the higher rank.  The class data locks are taken with the complex types lock held
+    (QoreTypeDeclRefs::addMortalDecls() refers to classes under it); at the same rank, a fork() took them first and
+    then waited for the complex types lock, held by a thread that waited for one of them.
+*/
+static void ut_fork_nested_lock_ranks(UnitTestCounters& c) {
+    static const char* nested[][3] = {
+        // outer lock, the lock taken while it is held, where
+        {"complex_types", "class_data_locks", "QoreTypeDeclRefs::addMortalDecls() -> qore_class_private::refClass()"},
+        {"complex_types", "generic_cache_registry", "the registry of the generic caches by the types their keys name"},
+        {nullptr, nullptr, nullptr},
+    };
+    for (size_t i = 0; nested[i][0]; ++i) {
+        QoreForkHandler* outer = qore_fork_find_handler(nested[i][0]);
+        QoreForkHandler* inner = qore_fork_find_handler(nested[i][1]);
+        UT_ASSERT(c, outer && inner, "both locks are registered with fork handlers");
+        if (outer && inner) {
+            UT_ASSERT(c, inner->getRank() > outer->getRank(),
+                "a lock taken while another is held has the higher rank, so fork() acquires it after the other");
+        }
+    }
+}
+
 //! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
 struct ForkHoldTest {
     std::mutex m;
@@ -17858,6 +17909,126 @@ static void ut_restricted_contexts_count_for_scopes(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "contexts: the Program is destroyed");
 }
 
+//! The class frames entered in an open update scope of a shared object are recorded and removed with the helpers
+//! that enter them, also when an exception unwinds them and in nested scopes, and the frame of a class of restricted
+//! code entered since a scope opened counts for it while it is on the stack (qore#7795)
+static void ut_scope_class_frames(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* host = parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS))
+        : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS));
+    // released as a namespace releases its classes
+    auto release_class = [] (QoreClass* cls) {
+        qore_class_private::get(*cls)->deref(true, true, true);
+    };
+    std::unique_ptr<QoreClass, decltype(release_class)> a_cls(new QoreClass("UtScopeFrameA", "::UtScopeFrameA"),
+        release_class);
+    std::unique_ptr<QoreClass, decltype(release_class)> b_cls(new QoreClass("UtScopeFrameB", "::UtScopeFrameB"),
+        release_class);
+    const qore_class_private* a = qore_class_private::get(*a_cls);
+    qore_class_private* b = qore_class_private::get(*b_cls);
+    UT_ASSERT(c, !a->sys && !b->sys, "class frames: the classes are not builtin classes");
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "class frames: the host is entered");
+        // no scope is open: nothing is recorded
+        {
+            ClassOnlySubstitutionHelper ah(a);
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: none without an open scope");
+        }
+        // a helper that the scope opens and ends in
+        std::unique_ptr<ClassOnlySubstitutionHelper> before(new ClassOnlySubstitutionHelper(b));
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        qore_thread_shared_update_scope_begin();
+        {
+            ClassOnlySubstitutionHelper ah(a);
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: a frame entered in the scope");
+            {
+                // the same class again is recorded as well
+                ClassOnlySubstitutionHelper ah2(a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2, "class frames: the same class again");
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: the same class again ended");
+            // a builtin class is not recorded
+            {
+                OptionalClassObjSubstitutionHelper ph(qore_class_private::get(*QC_PROGRAM));
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: a builtin class");
+            }
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "class frames: a trusted class does not count");
+            {
+                ClassOnlySubstitutionHelper bh(b);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2, "class frames: a nested frame");
+                b->sandbox_ctx = true;
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                    "class frames: a class of restricted code entered since the scope opened counts");
+                {
+                    // lower on the stack
+                    ClassOnlySubstitutionHelper ah3(a);
+                    UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: a trusted frame below");
+                    UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                        "class frames: a class of restricted code lower on the stack counts");
+                    // a scope opened below the class: its frames are those of the code that opened it
+                    QoreThreadProgramMarker inner = qore_thread_program_marker();
+                    qore_thread_shared_update_scope_begin();
+                    {
+                        OptionalClassOnlySubstitutionHelper bh2(b);
+                        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 4, "class frames: the inner scope");
+                        UT_ASSERT(c, qore_thread_sandboxed_entered_since(inner),
+                            "class frames: a class of restricted code entered in the inner scope counts");
+                    }
+                    UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                        "class frames: a class of restricted code below the inner scope does not count for it");
+                    qore_thread_shared_update_scope_end(inner);
+                    UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: the inner scope ended");
+                }
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: the nested frames ended");
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "class frames: a class of restricted code that returned does not count");
+            // an exception unwinds the helpers
+            try {
+                ClassOnlySubstitutionHelper bh(b);
+                ObjectSubstitutionHelper oh(nullptr, a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 3, "class frames: before the exception");
+                throw std::runtime_error("unwind");
+            } catch (std::runtime_error&) {
+            }
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 1, "class frames: after the exception");
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "class frames: a class of restricted code that an exception unwound does not count");
+        }
+        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: the frames of the scope ended");
+        qore_thread_shared_update_scope_end(marker);
+        // the helper that the scope opened in ends after it
+        before.reset();
+        UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: none after the scope");
+        // a scope opened in the frame of a class of restricted code: the frame does not count for it, but the same
+        // class entered again in the scope does, also below a trusted frame
+        {
+            ClassOnlySubstitutionHelper bh(b);
+            QoreThreadProgramMarker outer = qore_thread_program_marker();
+            qore_thread_shared_update_scope_begin();
+            // the innermost frame is the builtin frame of the unit tests, whose caller's class is not the class of
+            // the helper
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(outer),
+                "class frames: the frame that the scope opened in does not count for it");
+            UT_ASSERT(c, qore_thread_scope_class_frame_count() == 0, "class frames: the opener's frame");
+            {
+                ClassOnlySubstitutionHelper bh2(b);
+                ClassOnlySubstitutionHelper ah(a);
+                UT_ASSERT(c, qore_thread_scope_class_frame_count() == 2,
+                    "class frames: the same class entered again in the scope");
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(outer),
+                    "class frames: the class of restricted code entered again in the scope counts");
+            }
+            qore_thread_shared_update_scope_end(outer);
+        }
+        b->sandbox_ctx = false;
+    }
+    UT_ASSERT(c, !xsink, "class frames: no exception");
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "class frames: the Program is destroyed");
+}
+
 //! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
 //! for the update scopes of shared objects (also while it runs the code that it called and after the scope opened),
 //! the per-Program cache, the check of a builtin's caller and the Program of the calling code (qore#7202)
@@ -17865,6 +18036,76 @@ static void ut_restricted_contexts_count_for_scopes(UnitTestCounters& c, QorePro
     of the Program that compiled the code and the override that records it), and as the options of a callback install
     it (a hold and the override)
 */
+//! the immediate caller of library code counts code compiled in a restricted or sandboxed Program that runs in
+//! another Program (a foreign code entry, which enters no Program context) as restricted, in the frame that it runs
+//! in, also when the override that it set was cleared by the host code that it called (qore#7302 with qore#7202)
+static void ut_immediate_caller_foreign_code(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
+        return parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po)
+            : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po);
+    };
+    QoreProgram* host = make_pgm(QoreParseOptions());
+    QoreProgram* tenant = make_pgm(QoreParseOptions());
+    QoreProgram* restricted = make_pgm(QoreParseOptions(PO_NO_FILESYSTEM));
+    // the library code that asks for its immediate caller
+    QoreProgram* lib = new QoreProgram(QoreParseOptions(PO_IN_MODULE));
+    qore_program_private::get(*lib)->module_program.store(true, std::memory_order_release);
+    qore_program_private::get(*lib)->library_module = true;
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    tenant->setSandboxManager(sm);
+    auto foreign_override = [](const QoreProgram* code_pgm) -> QoreCallParseOptionsOverride {
+        QoreCallParseOptionsOverride o;
+        o.code_pgm = code_pgm;
+        return o;
+    };
+    // the immediate caller of the library code entered now
+    auto ask = [&xsink, lib](QoreImmediateCallerInfo& info) -> int {
+        ProgramThreadCountContextHelper lib_ctx(&xsink, lib, true);
+        return qore_get_immediate_caller(info);
+    };
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "immediate caller: the host is entered");
+        QoreImmediateCallerInfo info;
+        UT_ASSERT(c, !ask(info) && info.pgm == host && !info.restricted && info.trusted_frame >= 0,
+            "immediate caller: the host's own code is trusted");
+        for (QoreProgram* code_pgm : {tenant, restricted}) {
+            const char* what = code_pgm == tenant ? "sandboxed" : "restricted";
+            {
+                // the code compiled in the other Program runs in the host, as a call of a user variant runs it
+                ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+                UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(code_pgm, &xsink), "immediate caller: held");
+                RuntimeParseOptionsOverrideHelper po(foreign_override(code_pgm));
+                QoreImmediateCallerInfo in_foreign;
+                UT_ASSERT(c, !ask(in_foreign) && in_foreign.restricted && in_foreign.trusted_frame < 0,
+                    (std::string("immediate caller: the foreign code itself is restricted: ") + what).c_str());
+                {
+                    // host code that the foreign code calls clears the override; the foreign code stays below it
+                    RuntimeParseOptionsOverrideHelper cleared;
+                    cleared.setCleared();
+                    QoreImmediateCallerInfo below;
+                    std::string msg = std::string("immediate caller: the frame that runs the foreign code is "
+                        "restricted: ") + what;
+                    UT_ASSERT(c, !ask(below) && below.pgm == host && below.restricted && below.trusted_frame < 0,
+                        msg.c_str());
+                }
+            }
+            QoreImmediateCallerInfo after;
+            UT_ASSERT(c, !ask(after) && !after.restricted && after.trusted_frame >= 0,
+                (std::string("immediate caller: trusted again once the foreign code has been left: ") + what).c_str());
+        }
+    }
+    UT_ASSERT(c, !xsink, "immediate caller: no exception");
+    xsink.clear();
+    sm->deref(nullptr);
+    lib->waitForTerminationAndDeref(&xsink);
+    restricted->waitForTerminationAndDeref(&xsink);
+    tenant->waitForTerminationAndDeref(&xsink);
+    host->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
 static void ut_foreign_code_counts_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
     ExceptionSink xsink;
     auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
@@ -29672,6 +29913,19 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
 }
 
 // defined in JITRuntime.cpp
+DLLLOCAL int64 qore_rt_dbg_missing_return_coercion_error_count();
+
+//! Debug-only: returns the number of missing return values that the fast entries of native code have rejected in the
+//! current thread (qore#7787)
+/** A test uses it to check that the error of a missing return value came from the fast entry of native code, whose
+    location it checks, and not from the caller of a standard entry
+*/
+static QoreValue f_dbg_get_missing_return_coercion_error_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_rt_dbg_missing_return_coercion_error_count();
+}
+
+// defined in JITRuntime.cpp
 DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats();
 DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
         ExceptionSink* xsink);
@@ -30892,6 +31146,10 @@ static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
             if (a.r.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
                 e.u32(0).u32(0).i64(0).u32(str).u32(str);
             }
+            // the location of its signature (QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION): none
+            if (a.r.getHeader().version >= QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION) {
+                e.u32(0).u32(0).i64(0).u32(str).u32(str);
+            }
             // return type, one parameter with a default
             e.u32(str).u16(1).u32(str).u32(str).u8(1);
             if (bad_default) {
@@ -31412,6 +31670,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_immediate_caller_foreign_code(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
@@ -32342,7 +32601,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_foreign_code_counts_for_scopes(c, rc.getProgram());
+    ut_immediate_caller_foreign_code(c, rc.getProgram());
     ut_restricted_contexts_count_for_scopes(c, rc.getProgram());
+    ut_scope_class_frames(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -32470,6 +32731,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);
     ut_fork_waits_for_lock_holders(c);
+    ut_fork_nested_lock_ranks(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
@@ -33286,6 +33548,24 @@ static QoreValue f_dbg_close_program_bg_compile(const QoreListNode* params, Runt
 static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
+}
+
+// defined in JITRuntime.cpp
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_function_reference_fast_calls;
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_function_reference_native_calls;
+
+//! returns the number of calls through references to user functions that the runtime made without the generic call
+//! path (qore#5578; see qore_rt_try_call_function_reference())
+static QoreValue f_dbg_function_reference_fast_calls(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_function_reference_fast_calls.load(std::memory_order_relaxed);
+}
+
+//! returns the number of calls through references to AOT functions that AOT code made through the functions'
+//! call-reference entries (qore#5578; see qore_rt_call_ref_t())
+static QoreValue f_dbg_function_reference_native_calls(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_function_reference_native_calls.load(std::memory_order_relaxed);
 }
 
 //! runs the return analysis of a function's IR in a native thread without Qore thread data, as the background JIT
@@ -34372,7 +34652,9 @@ static QoreValue f_dbg_get_list_create_count(const QoreListNode* params, Runtime
 //! returns the number of cancellation checks (qore_check_cancel()) that the current thread has made
 /** Code that checks for cancellation at a fixed interval of the work it does - every 100 nodes of a syntax tree in
     the astparser module, for example - makes a number of checks that grows with that work, so tests use this to
-    verify that the work grows linearly with the size of the input.
+    verify that the work grows linearly with the size of the input.  The inline polls of the loops of native (JIT,
+    tiered, AOT) code are not counted, only the full checks that they make: one per invocation of a loop without a
+    request.
 */
 static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_cancel_check_count();
@@ -39529,8 +39811,18 @@ static QoreValue f_dbg_release_thread_start(const QoreListNode* params, RuntimeC
 //! thread fail with std::bad_alloc; 0 disarms it (qore#7466)
 static QoreValue f_dbg_fail_allocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64 min_size = get_param_value(params, 1).getAsBigInt();
+    // a negative size makes the creation of a hash member fail instead (qore#7466)
+    if (min_size < 0) {
+        qore_dbg_fail_hash_member(get_param_value(params, 0).getAsBigInt());
+        return QoreValue();
+    }
     qore_dbg_fail_allocation(get_param_value(params, 0).getAsBigInt(), min_size > 0 ? (size_t)min_size : 0);
     return QoreValue();
+}
+
+//! Returns the number of hashes that exist in the process (qore#7763)
+static QoreValue f_dbg_live_hash_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)qore_dbg_live_hashes.load(std::memory_order_relaxed);
 }
 
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
@@ -39605,6 +39897,15 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
 static QoreValue f_dbg_sandbox_fail_next_resolutions(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_sandbox_resolutions(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+//! Makes the next count owner contexts of objects that trusted class code creates in a method of an object that a
+//! sandbox owns fail as if no memory could be allocated
+/** Tests that such an object is then refused to every sandboxed caller and to trusted code that serves one (qore#7921)
+*/
+static QoreValue f_dbg_sandbox_fail_next_owned_creations(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_owned_creation_contexts(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
 #endif
@@ -40089,6 +40390,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_module_load_waiters", f_dbg_module_load_waiters, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_module_load_hold", f_dbg_module_load_hold, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_module_load_release", f_dbg_module_load_release, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
@@ -40205,6 +40510,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stats", f_dbg_aot_dispatch_reclaim_stats, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_get_missing_return_coercion_error_count",
+        f_dbg_get_missing_return_coercion_error_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stress", f_dbg_aot_dispatch_reclaim_stress, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "target", bigIntTypeInfo,
         QORE_PARAM_NO_ARG, "threads", bigIntTypeInfo, QORE_PARAM_NO_ARG, "iterations");
@@ -40259,6 +40566,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_allocation", f_dbg_fail_allocation,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "n", bigIntTypeInfo, QoreValue((int64)0), "min_size");
+    qns.addBuiltinVariant("dbg_live_hash_count", f_dbg_live_hash_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
@@ -40280,6 +40589,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_resolutions", f_dbg_sandbox_fail_next_resolutions,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_owned_creations", f_dbg_sandbox_fail_next_owned_creations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,
@@ -40683,6 +40995,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_jit_recompile_native_code", f_dbg_jit_recompile_native_code, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_function_reference_fast_calls", f_dbg_function_reference_fast_calls,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_function_reference_native_calls", f_dbg_function_reference_native_calls,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",

@@ -1,0 +1,297 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - its sandbox cases run in Programs of the test's own process
+# test-platform: macos - whole-object reads of JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The whole-object reads that do not depend on a class context (formatting with %y, serialization) give the
+# non-public members of an object only to trusted code and to sandboxed code whose sandbox created the object (issue
+# #7033): the code of a tenant without a class context (its top-level code, plain functions, closures) is refused an
+# object that trusted code created and that no sandbox owns, as the code of a tenant's class is; the Program of the
+# code that reads decides, not the Program of the object (issue #7925).  Trusted code and the tenant's own objects
+# are not affected; in every execution mode of the tenant's code and in a qcc-compiled host.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxWholeObjectReadNoClassTest
+
+#! a class that trusted code declares, with a private member; it opts in to the serialization of its non-public
+#! state for sandboxed code (SandboxSerializable), so that only the owner rule decides whether a reader gets it
+public class HostSecret inherits SandboxSerializable {
+    public {
+        string pub = "p";
+    }
+
+    private {
+        string secret = "q7925-secret";
+    }
+}
+
+#! the object that the host creates before any sandboxed call (in the constructor of the test): no sandbox owns it
+our HostSecret unowned;
+
+#! the code of a tenant: each form of code reads the object it is given with %y and by serializing it
+const TenantSource = "%modern
+class TSecret inherits Serializable {
+    public {
+        string pub = 'p';
+    }
+
+    private {
+        string secret = 'q7925-secret';
+    }
+}
+
+# returns 'y=<the private member is shown>|ser=<serialized or the error>'
+string sub read(object o) {
+    string ser;
+    try {
+        Serializable::serialize(o);
+        ser = 'serialized';
+    } catch (hash<ExceptionInfo> ex) {
+        ser = ex.err;
+    }
+    return sprintf('y=%y|ser=%s', sprintf('%y', o) =~ /q7925-secret/, ser);
+}
+
+class TReader {
+    static string sread(object o) {
+        return ::read(o);
+    }
+
+    string mread(object o) {
+        return ::read(o);
+    }
+}
+
+# the top-level code of the tenant reads the host's unowned object when the Program runs
+our hash<string, string> top = {};
+top.unowned = read(unowned);
+
+hash<string, string> sub top_results() {
+    return top;
+}
+
+string sub function_read(object o) {
+    return read(o);
+}
+
+string sub closure_read(object o) {
+    code c = string sub (object x) { return read(x); };
+    return c(o);
+}
+
+string sub static_read(object o) {
+    return TReader::sread(o);
+}
+
+string sub method_read(object o) {
+    return (new TReader()).mread(o);
+}
+
+object sub make_own() {
+    return new TSecret();
+}
+";
+
+#! the qcc-compiled host: runs the tenant's code given as ARGV[0] and prints the results
+const AotHostSource = "%modern
+public class HostSecret inherits SandboxSerializable {
+    public {
+        string pub = \"p\";
+    }
+
+    private {
+        string secret = \"q7925-secret\";
+    }
+}
+
+our HostSecret unowned = new HostSecret();
+
+SandboxManager sm();
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.importGlobalVariable(\"unowned\");
+t.setSandboxManager(sm);
+t.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"tenant\");
+t.run();
+printf(\"top=%s\\n\", t.callFunction(\"top_results\").unowned);
+foreach string f in (\"function_read\", \"closure_read\", \"static_read\", \"method_read\") {
+    printf(\"%s=%s\\n\", f, t.callFunction(f, unowned));
+}
+printf(\"own=%s\\n\", t.callFunction(\"function_read\", t.callFunction(\"make_own\")));
+";
+
+class SandboxWholeObjectReadNoClassTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the result of a read that is refused the non-public members
+        const Refused = "y=False|ser=SERIALIZATION-ERROR";
+        #! the result of a read that is given them
+        const Given = "y=True|ser=serialized";
+
+        #! the forms of the tenant's code that read an object it is given
+        const Forms = ("function_read", "closure_read", "static_read", "method_read");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("whole-object reads without a class context", "1.0", \ARGV) {
+        unowned = new HostSecret();
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant reads in " + mode, getTenantTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns 'y=<the private member is shown>|ser=<serialized or the error>' for trusted code
+    static string read(object o) {
+        string ser;
+        try {
+            Serializable::serialize(o);
+            ser = "serialized";
+        } catch (hash<ExceptionInfo> ex) {
+            ser = ex.err;
+        }
+        return sprintf("y=%y|ser=%s", sprintf("%y", o) =~ /q7925-secret/, ser);
+    }
+
+    #! returns a new tenant Program in the given execution mode, at tenant isolation (the default)
+    private static Program tenant(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        p.importGlobalVariable("unowned");
+        p.setSandboxManager(new SandboxManager());
+        p.parse(TenantSource, "tenant");
+        p.run();
+        return p;
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program t = tenant(mode);
+        Program other = tenant(mode);
+        object other_obj = other.callFunction("make_own");
+        object own = t.callFunction("make_own");
+        # the top-level code of the tenant, which ran when the Program ran
+        assertEq(Refused, t.callFunction("top_results").unowned, mode + ": top-level code on an unowned object");
+        foreach string f in (Forms) {
+            # the results of every call
+            hash<string, bool> unowned_r;
+            hash<string, bool> other_r;
+            hash<string, bool> own_r;
+            for (int i = 0; i < count; ++i) {
+                unowned_r{t.callFunction(f, unowned)} = True;
+                other_r{t.callFunction(f, other_obj)} = True;
+                own_r{t.callFunction(f, own)} = True;
+            }
+            assertEq((Refused,), keys unowned_r, mode + ": " + f + " on an unowned object");
+            assertEq((Refused,), keys other_r, mode + ": " + f + " on another tenant's object");
+            assertEq((Given,), keys own_r, mode + ": " + f + " on its own object");
+        }
+    }
+
+    trustedTest() {
+        assertEq(Given, read(unowned), "the host on its own object");
+        # trusted code reads a tenant's object too
+        Program t = tenant("ast");
+        assertEq(Given, read(t.callFunction("make_own")), "the host on a tenant's object");
+        # a trusted Program without a sandbox: its code without a class context reads the host's object
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.importGlobalVariable("unowned");
+        p.parse(TenantSource, "trusted");
+        p.run();
+        assertEq(Given, p.callFunction("top_results").unowned, "trusted top-level code");
+        foreach string f in (Forms) {
+            assertEq(Given, p.callFunction(f, unowned), "trusted " + f);
+        }
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-whole-object-read-no-class-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, TenantSource);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s", libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe,
+            tenant_src), NOTHING, "QORE_JIT_TIMING=1");
+        hash<string, string> results;
+        foreach string line in (r.out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z_]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected = {
+            "top": Refused,
+            "function_read": Refused,
+            "closure_read": Refused,
+            "static_read": Refused,
+            "method_read": Refused,
+            "own": Given,
+        };
+        assertEq(expected, results, "compiled host output:\n" + r.out);
+        assertEq(0, r.rc);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

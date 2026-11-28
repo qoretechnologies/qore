@@ -1,0 +1,323 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# += on float locals: the scenario of IRFloatLocalAdd.qtest, whose output must be the same in every execution mode
+%modern
+%requires ./IRFloatLocalAddModule.qm
+
+#! formats a float so that -0.0 and 0.0 differ; a NaN prints without its sign, which the hardware add sets
+string sub fmt(auto v) {
+    if (v.typeCode() != NT_FLOAT) {
+        return sprintf("<%s %y>", v.type(), v);
+    }
+    return v.nanp() ? "nan" : sprintf("%.17g", v);
+}
+
+string sub fmtList(list<auto> l) {
+    return foldl $1 + " " + $2, (map fmt($1), l);
+}
+
+const Floats = (0.0, -0.0, 1.5, -1.5, 1.7976931348623157e308, -1.7976931348623157e308, 4.9406564584124654e-324,
+    @inf@, -@inf@, @nan@);
+
+float sub step(float value) { return 65535.5 - value; }
+float sub stepInt() { return 7; }
+float sub stepThrow(float value) {
+    if (value < 0.0) {
+        throw "FLOAT-ADD-STEP", "negative";
+    }
+    return value * 2.0;
+}
+
+# the return check converts an int and raises for a value that float does not take (a char, a string), before the
+# add
+float sub badReturn(string kind) {
+    auto v = kind == "int" ? 2 : (kind.size() == 1 ? kind[0] : kind);
+    return v;
+}
+
+float sub ov(int x) { return x + 0.5; }
+float sub ov(string x) { return 1.0; }
+
+our float g_delta = 0.5;
+thread_local int tl_int = 3;
+
+class FloatSteps {
+    static float step(float value) { return value + 0.25; }
+}
+
+# functions whose += is a native float add
+
+float sub localAdd(float initial, float delta) {
+    float value = initial;
+    value += delta;
+    return value;
+}
+
+float sub constantAdd(float initial) {
+    float value = initial;
+    value += 2.5;
+    value += -0.0;
+    return value;
+}
+
+float sub intAdd(float initial, int delta) {
+    float value = initial;
+    value += delta;
+    value += (delta & 7);
+    return value;
+}
+
+float sub boolAdd(float initial, int a, int b) {
+    float value = initial;
+    value += (a < b);
+    value += (a > b);
+    return value;
+}
+
+float sub falseAdd(float initial, int a, int b) {
+    float value = initial;
+    value += (a < b);
+    return value;
+}
+
+# the product is rounded before the sum: a fused multiply-add would give 2^-60 for x = 1 + 2^-30
+float sub productAdd(float initial, float x) {
+    float value = initial;
+    value += x * x;
+    return value;
+}
+
+float sub callAdd(float initial, float x) {
+    float value = initial;
+    value += step(x);
+    value += stepInt();
+    value += FloatSteps::step(x);
+    return value;
+}
+
+float sub loopAdd(int count, float initial, float delta) {
+    float value = initial;
+    for (int i = 0; i < count; ++i) {
+        value += delta;
+        value += i;
+    }
+    return value;
+}
+
+list<auto> sub resultAdd(float initial, float delta) {
+    float value = initial;
+    float r1 = (value += delta);
+    auto r2 = (value += delta) + 1.0;
+    return (r1, r2, value);
+}
+
+float sub unassignedAdd(float delta) {
+    float value;
+    value += delta;
+    return value;
+}
+
+auto sub unassignedLoopAdd(int count, float delta) {
+    float value;
+    for (int i = 0; i < count; ++i) {
+        value += delta;
+    }
+    return value;
+}
+
+# the operand reads or assigns the local: it is evaluated before the local is read
+list<auto> sub selfAdd(float initial) {
+    float a = initial;
+    a += a;
+    float b = initial;
+    b += (b = 3.0);
+    float c = initial;
+    c += (c += 1.0);
+    return (a, b, c);
+}
+
+list<auto> sub tryAdd(float initial, float x) {
+    float value = initial;
+    string status = "ok";
+    try {
+        value += stepThrow(x);
+    } catch (hash<ExceptionInfo> ex) {
+        status = ex.err;
+    }
+    return (value, status);
+}
+
+# the operand is a variable of another kind: a global, a thread-local variable, a closure variable
+list<auto> sub variableAdd(float initial) {
+    float a = initial;
+    a += g_delta;
+    float b = initial;
+    b += tl_int;
+    float captured = -0.0;
+    code add = float sub (float start) {
+        float c = start;
+        c += captured;
+        return c;
+    };
+    return (a, b, add(initial));
+}
+
+list<auto> sub badReturnAdd(float initial, string kind) {
+    float value = initial;
+    string status = "ok";
+    try {
+        value += badReturn(kind);
+    } catch (hash<ExceptionInfo> ex) {
+        status = ex.err;
+    }
+    return (value, status);
+}
+
+list<auto> sub unassignedResult(float delta) {
+    float value;
+    auto r = (value += delta);
+    return (r, value);
+}
+
+# functions whose += takes the lvalue path
+
+# the call's variant is chosen at runtime
+float sub overloadAdd(float initial, auto a) {
+    float value = initial;
+    value += ov(a);
+    return value;
+}
+
+# the function runs in the module's Program
+float sub moduleAdd(float initial) {
+    float value = initial;
+    value += IRFloatLocalAddModule::moduleStep(1.0);
+    return value;
+}
+
+float sub removedAdd(float delta) {
+    float value = 1.0;
+    remove value;
+    value += delta;
+    return value;
+}
+
+auto sub optionalAdd(*float initial, float delta) {
+    *float value = initial;
+    value += delta;
+    return value;
+}
+
+auto sub softAdd(softfloat initial, auto delta) {
+    softfloat value = initial;
+    value += delta;
+    return value;
+}
+
+float sub mixedAdd(float initial, auto delta) {
+    float value = initial;
+    value += delta;
+    return value;
+}
+
+float sub callbackAdd(float initial, code<float()> fn) {
+    float value = initial;
+    value += fn();
+    return value;
+}
+
+float sub referenceAdd(reference<float> value, float delta) {
+    value += delta;
+    return value;
+}
+
+float sub capturedAdd(float delta) {
+    float value = 1.5;
+    code add = sub () { value += delta; };
+    add();
+    add();
+    return value;
+}
+
+thread_local float tl_value = 1.5;
+float sub threadLocalAdd(float delta) {
+    tl_value += delta;
+    return tl_value;
+}
+
+float sub otherThreadAdd() {
+    float value = 0.0;
+    Counter done(2);
+    code add = sub () {
+        on_exit done.dec();
+        for (int i = 0; i < 1000; ++i) {
+            value += 0.5;
+        }
+    };
+    background add();
+    background add();
+    done.waitForZero();
+    return value;
+}
+
+float sub replaceArgument(reference<float> value) {
+    value = 7.5;
+    return 2.5;
+}
+
+float sub rhsChangesLocal() {
+    float value = 1.5;
+    value += replaceArgument(\value);
+    return value;
+}
+
+list<string> lines;
+foreach float initial in (Floats) {
+    list<auto> row = ();
+    foreach float delta in (Floats) {
+        push row, localAdd(initial, delta);
+    }
+    push lines, sprintf("local %s: %s", fmt(initial), fmtList(row));
+}
+push lines, sprintf("constant: %s", fmtList(map constantAdd($1), Floats));
+push lines, sprintf("int: %s %s %s", fmtList(map intAdd($1, 3), Floats), fmt(intAdd(0.0, 9007199254740993)),
+    fmt(intAdd(-0.0, -9223372036854775807 - 1)));
+push lines, sprintf("zero: %s %s %s", fmt(intAdd(-0.0, 0)), fmt(falseAdd(-0.0, 2, 1)), fmt(localAdd(-0.0, -0.0)));
+push lines, sprintf("bool: %s", fmtList(map boolAdd($1, 1, 2), Floats));
+float x = 1.0 + pow(2.0, -30);
+push lines, sprintf("product: %s %s", fmt(productAdd(-(1.0 + pow(2.0, -29)), x)), fmt(productAdd(-0.0, -0.0)));
+push lines, sprintf("call: %s", fmtList(map callAdd($1, 1.5), Floats));
+push lines, sprintf("loop: %s %s %s", fmt(loopAdd(0, -0.0, 0.5)), fmt(loopAdd(257, 1.5, 0.1)),
+    fmt(loopAdd(3, 1.7976931348623157e308, 1.7976931348623157e308)));
+push lines, sprintf("result: %s %s", fmtList(resultAdd(1.5, 0.25)), fmtList(resultAdd(-0.0, -0.0)));
+push lines, sprintf("unassigned: %s %s %s %s", fmt(unassignedAdd(-0.0)), fmt(unassignedAdd(2.5)),
+    fmt(unassignedLoopAdd(3, -0.0)), fmt(unassignedLoopAdd(0, 1.0)));
+push lines, sprintf("self: %s %s", fmtList(selfAdd(1.5)), fmtList(selfAdd(-0.0)));
+push lines, sprintf("variables: %s %s", fmtList(variableAdd(1.5)), fmtList(variableAdd(-0.0)));
+push lines, sprintf("bad-return: %s %s %s %s", fmtList(badReturnAdd(1.5, "int")), fmtList(badReturnAdd(-0.0, "int")),
+    fmtList(badReturnAdd(1.5, "5")), fmtList(badReturnAdd(1.5, "2.5")));
+push lines, sprintf("unassigned-result: %s %s", fmtList(unassignedResult(-0.0)), fmtList(unassignedResult(2.5)));
+push lines, sprintf("try: %s %s", fmtList(tryAdd(1.5, 2.0)), fmtList(tryAdd(1.5, -2.0)));
+push lines, sprintf("overload: %s %s", fmt(overloadAdd(1.5, 2)), fmt(overloadAdd(1.5, "x")));
+push lines, sprintf("module: %s %s", fmt(moduleAdd(1.5)), fmt(moduleAdd(-0.0)));
+push lines, sprintf("removed: %s %s", fmt(removedAdd(-0.0)), fmt(removedAdd(2.5)));
+push lines, sprintf("optional: %s %s %s", fmt(optionalAdd(NOTHING, -0.0)), fmt(optionalAdd(NOTHING, 2.5)),
+    fmt(optionalAdd(1.5, 2.5)));
+push lines, sprintf("soft: %s %s %s", fmt(softAdd(1.5, "2.5")), fmt(softAdd(1.5, "5"[0])), fmt(softAdd(-0.0, 0)));
+push lines, sprintf("mixed: %s %s %s %s %s %s", fmt(mixedAdd(1.5, 2)), fmt(mixedAdd(1.5, 2.5n)),
+    fmt(mixedAdd(1.5, "2.5")), fmt(mixedAdd(1.5, "5"[0])), fmt(mixedAdd(-0.0, NOTHING)), fmt(mixedAdd(1.5, True)));
+code<float()> int_cb = int sub () { return 2; };
+code<float()> char_cb = auto sub () { return "5"[0]; };
+code<float()> nothing_cb = *float sub () { return NOTHING; };
+push lines, sprintf("callback: %s %s %s %s", fmt(callbackAdd(1.5, float sub () { return 0.25; })),
+    fmt(callbackAdd(1.5, int_cb)), fmt(callbackAdd(1.5, char_cb)), fmt(callbackAdd(-0.0, nothing_cb)));
+float shared = 1.5;
+push lines, sprintf("reference: %s %s", fmt(referenceAdd(\shared, 2.5)), fmt(shared));
+push lines, sprintf("captured: %s", fmt(capturedAdd(2.5)));
+push lines, sprintf("thread-local: %s %s", fmt(threadLocalAdd(2.5)), fmt(threadLocalAdd(-0.0)));
+push lines, sprintf("other-thread: %s", fmt(otherThreadAdd()));
+push lines, sprintf("rhs-changes-local: %s", fmt(rhsChangesLocal()));
+printf("%s\n", foldl $1 + "\n" + $2, lines);

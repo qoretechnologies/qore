@@ -75,8 +75,8 @@ public class ServiceNowRestDataProviderBase inherits DataProvider::AbstractDataP
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 }
 }

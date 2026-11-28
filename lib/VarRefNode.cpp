@@ -637,6 +637,12 @@ int VarRefNewObjectNode::parseInitConstructorCall(const QoreProgramLocation* loc
         if (!err) {
             err = -1;
         }
+    } else if (variant && CONMV_const(variant)->isPrivate()
+            && qore_class_private::parseCheckSandboxPrivateAccess(loc, qore_class_private::get(*qc),
+                parse_get_class_priv(), "constructor", "constructor") && !err) {
+        // a class that sandboxed code declared cannot create an object with a private constructor of a class that
+        // trusted code declared (qore#6843)
+        err = -1;
     }
 
     printd(5, "VarRefFunctionCallBase::parseInitConstructorCall() this: %p class: %s (%p) constructor: %p " \

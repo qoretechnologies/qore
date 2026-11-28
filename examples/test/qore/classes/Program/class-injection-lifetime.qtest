@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-injection
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ClassInjectionLifetimeTest
+
+class Unrelated {
+    string value() {
+        return "unrelated";
+    }
+}
+
+#! an injected class keeps the class that it is injected in place of (qore#7664)
+/** Program::importClass() with injection makes a copy of a class that stands in for a class of the Program that the
+    copy is imported from.  The copy keeps the Program of its source, but that Program can be another one, which can
+    be deleted while the copy is still in use: the type checks of the copy's objects still compare it with the class
+    that it stands in for, which must then still exist, with the declarations that it names.
+
+    Three Programs: "source" declares Mock and gives it to "middle"; "middle" declares Replaced and injects Mock in
+    place of Replaced into "target"; "target" makes an object of the injected class, and then "middle" is deleted.
+*/
+class ClassInjectionLifetimeTest inherits QUnit::Test {
+    private {
+        #! the Programs do not inherit the classes of this one, so that only their own declarations survive them
+        const Opts = PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_USER_API;
+
+        #! the class injected: its signature is not the one of Replaced
+        const MockSrc = "public class Mock {
+    string value() { return \"mock\"; }
+    string mockOnly() { return \"mock only\"; }
+}
+sub give(Program m) { m.importClass(\"Mock\"); }
+";
+
+        #! the class that Mock is injected in place of
+        const ReplacedSrc = "public class Replaced {
+    string value() { return \"replaced\"; }
+}
+";
+
+        #! the class that Mock is injected in place of, with a member and a method signature that name another class
+        #! of its Program
+        const ReplacedWithPartSrc = "public class Part {
+    string name() { return \"part\"; }
+}
+public class Replaced {
+    public {
+        *Part part;
+    }
+    string value() { return \"replaced\"; }
+    *Part swap(*Part p) { return p; }
+}
+";
+
+        const InjectSrc = "sub inject(Program t) { t.importClass(\"Mock\", \"Replaced\", True); }\n";
+
+        const TargetSrc = "object sub make() { return new Replaced(); }
+bool sub is_replaced(object o) { return o instanceof Replaced; }
+bool sub accepts(auto v) {
+    try {
+        Replaced r = v;
+        return r instanceof Replaced;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"RUNTIME-TYPE-ERROR\") {
+            rethrow;
+        }
+        return False;
+    }
+}
+";
+
+        #! the probe of a Program with a class of the given source
+        const ProbeSrc = "bool sub accepts(object o) { return o instanceof Replaced; }
+object sub make() { return new Replaced(); }
+";
+
+        #! a class with the name of Replaced and another signature
+        const OtherSrc = "public class Replaced {
+    string value() { return \"other\"; }
+    int extra() { return 1; }
+}
+";
+    }
+
+    constructor() : Test("class injection lifetime", "1.0", \ARGV) {
+        addTestCase("type checks after the Program of the replaced class is deleted", \testTypeChecks());
+        addTestCase("the replaced class's name and signature after its Program is deleted", \testLookAlike());
+        addTestCase("the replaced class keeps what it names", \testSurvivor());
+        set_return_value(main());
+    }
+
+    #! injects Mock in place of Replaced (of the source given) into a new target Program; the Program of Replaced is
+    #! deleted on return; returns the source and the target Programs and the object made in the target
+    private static hash<auto> inject(string replaced_src) {
+        Program source = new Program(Opts);
+        source.parse(MockSrc, "source");
+        Program target = new Program(Opts | PO_ALLOW_INJECTION);
+        object receiver;
+        {
+            Program middle(Opts);
+            source.callFunction("give", middle);
+            middle.parse(replaced_src + InjectSrc, "middle");
+            middle.callFunction("inject", target);
+            target.parse(TargetSrc, "target");
+            receiver = target.callFunction("make");
+        }
+        # the Program of the injected class's code is kept by the caller: only the Program of Replaced is deleted
+        return {"source": source, "target": target, "receiver": receiver};
+    }
+
+    testTypeChecks() {
+        hash<auto> h = inject(ReplacedSrc);
+        Program target = h.target;
+        object receiver = h.receiver;
+
+        assertEq("Replaced", receiver.className());
+        assertEq("mock", receiver.value());
+        assertTrue(target.callFunction("is_replaced", receiver));
+        assertFalse(receiver instanceof Unrelated);
+        assertThrows("RUNTIME-TYPE-ERROR", auto sub () { Unrelated u = receiver; return u; });
+        assertThrows("RUNTIME-CAST-ERROR", auto sub () { return cast<Unrelated>(receiver); });
+        # the injected class as the declared type
+        assertTrue(target.callFunction("accepts", receiver));
+        assertFalse(target.callFunction("accepts", new Unrelated()));
+    }
+
+    testLookAlike() {
+        hash<auto> h = inject(ReplacedSrc);
+        Program target = h.target;
+        object receiver = h.receiver;
+
+        # a class with the name and the signature of the replaced class, and one with its name only
+        Program same(Opts);
+        same.parse(ReplacedSrc + ProbeSrc, "same");
+        Program other(Opts);
+        other.parse(OtherSrc + ProbeSrc, "other");
+
+        # the injected class is the replaced class's type
+        assertTrue(same.callFunction("accepts", receiver));
+        assertFalse(other.callFunction("accepts", receiver));
+        # and the replaced class's type is accepted for the injected class
+        assertTrue(target.callFunction("accepts", same.callFunction("make")));
+        assertFalse(target.callFunction("accepts", other.callFunction("make")));
+    }
+
+    testSurvivor() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_type_declaration_groups() is only available in a library-debug build");
+        }
+        int groups = call_function("dbg_type_declaration_groups");
+        {
+            hash<auto> h = inject(ReplacedWithPartSrc);
+            Program target = h.target;
+            object receiver = h.receiver;
+
+            # the replaced class survives its Program with Part, which it names: they form a group
+            assertEq(groups + 1, call_function("dbg_type_declaration_groups"));
+
+            Program same(Opts);
+            same.parse(ReplacedWithPartSrc + ProbeSrc, "same");
+            assertTrue(same.callFunction("accepts", receiver));
+            assertTrue(target.callFunction("accepts", same.callFunction("make")));
+            assertFalse(receiver instanceof Unrelated);
+            assertThrows("RUNTIME-TYPE-ERROR", auto sub () { Unrelated u = receiver; return u; });
+            assertEq("mock", receiver.value());
+        }
+        # and both are released with the injected class
+        assertEq(groups, call_function("dbg_type_declaration_groups"));
+    }
+}

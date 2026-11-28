@@ -136,7 +136,10 @@ static QoreValue get_hard_value_param(const QoreListNode* n, size_t i) {
 #define HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); ReferenceHolder<Type> vname(reinterpret_cast<Type*>(obj_##vname->getReferencedPrivateData(cid, xsink)), xsink); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname)
 
 //! destructively sets up an object pointer; caller owns the pointer
-#define TAKE_HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); Type* vname = reinterpret_cast<Type*>(const_cast<QoreObject*>(obj_##vname)->getAndClearPrivateData(cid, xsink)); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname); else if (vname) const_cast<QoreObject*>(obj_##vname)->doDelete(xsink)
+/** The object is deleted; refused for an object that the current code may not delete (qore_check_object_delete(),
+    declared in the private implementation: the macro is for libqore only)
+*/
+#define TAKE_HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); Type* vname = qore_check_object_delete(*obj_##vname, "take over", xsink) ? nullptr : reinterpret_cast<Type*>(const_cast<QoreObject*>(obj_##vname)->getAndClearPrivateData(cid, xsink)); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname); else if (vname) const_cast<QoreObject*>(obj_##vname)->doDelete(xsink)
 
 //! sets up an object pointer
 #define HARD_QORE_VALUE_OBJ_OR_NOTHING_DATA(vname, Type, list, i, cid, xsink) HARD_QORE_VALUE_OR_NOTHING_PARAM(obj_##vname, const QoreObject, list, i); ReferenceHolder<Type> vname(obj_##vname ? reinterpret_cast<Type*>(obj_##vname->getReferencedPrivateData(cid, xsink)) : nullptr, xsink);

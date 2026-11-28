@@ -1,0 +1,58 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module FcrProvider {
+    version = "1.0";
+    desc = "functions whose return values fail their declared types, for fast-call-return-check-paths.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! an object whose destructor raises an exception
+public class FcrTmp {
+    private {
+        string n;
+        bool raise;
+    }
+
+    constructor(string n, bool raise) {
+        self.n = n;
+        self.raise = raise;
+    }
+
+    destructor() {
+        if (raise) {
+            throw "DESTRUCTOR-ERROR", n;
+        }
+    }
+
+    string name() {
+        return n;
+    }
+
+    auto value() {
+        return n == "ok" ? 1 : n;
+    }
+}
+
+public int sub fcr_checked(string s) {
+    auto v = s == "ok" ? 1 : s;
+    return v;
+}
+
+public int sub fcr_given(FcrTmp t) {
+    auto v = t.name() == "ok" ? 1 : t.name();
+    return v;
+}
+
+# without locals of its own, it returns a value that it does not check itself
+public int sub fcr_value(FcrTmp t) {
+    return t.value();
+}
+
+public int sub fcr_value_str(string s) {
+    return (new FcrTmp(s, False)).value();
+}

@@ -33,8 +33,11 @@
 
 #define _QORE_INTERN_FUNCTIONREFERENCENODE_H
 
+#include <atomic>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <typeinfo>
 #include <vector>
 
 class QoreParseTypeInfo;
@@ -43,7 +46,15 @@ struct QoreTypeParamInstantiation;
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
 class FunctionEntry;
+
+//! marks a call reference that a Program object gives (Program::getCallReference()) so that its calls record the
+//! call into the Program as the Program object's methods that run its code do (QoreLentProgramInfoHelper,
+//! qore#7678); does nothing for any other value
+DLLLOCAL void qore_call_reference_set_lent_program(QoreValue v);
 class RuntimeConfig;
+class ThreadData;
+class AbstractQoreFunctionVariant;
+class UserVariantBase;
 
 struct CallReferenceNodeLocation {
     const QoreProgramLocation* loc;
@@ -127,6 +138,26 @@ public:
         target without the generic lookup (qore_call_reference_code_program())
     */
     DLLLOCAL virtual const QoreProgram* getOriginCodeProgram() const;
+
+    //! returns true if a call of the reference made now by the code of \a pgm, the thread's current Program, runs
+    //! with nothing from the context that created the reference (qore#5578)
+    /** That is: the reference records no creator context (a reference that its own code calls in place), or the
+        context that the code running now would record as the creator's (captureCreatorParseOptions()) is the one
+        recorded: the same effective parse options, the same kind of Program (a module's or not), and no sandbox
+        provenance or origin restrictions recorded for the reference (qore_get_call_reference_provenance()).  A call
+        path that does not apply the creator context (QoreCallReferenceCallHelper, QoreSandboxProvenanceHelper) may
+        only be taken then.
+    */
+    DLLLOCAL bool creatorContextIsCurrent(const QoreProgram* pgm) const;
+
+    //! creatorContextIsCurrent() with the current thread's data (qore_get_thread_data())
+    DLLLOCAL bool creatorContextIsCurrent(ThreadData* td, const QoreProgram* pgm) const;
+
+    //! refuses the call of a reference that code that may not control threads created, if the expression of the
+    //! background operator makes it itself, as the call of a function reference does (qore#7087)
+    /** @return -1 with an exception raised in \a xsink if the call is refused, otherwise 0
+    */
+    DLLLOCAL int checkBackgroundCreator(ExceptionSink* xsink) const;
 
 protected:
     //! records the effective parse options of the context creating the reference value
@@ -259,7 +290,7 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
 };
 
-class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
+class StaticMethodCallReferenceNode final : public LocalStaticMethodCallReferenceNode {
 protected:
     QoreProgram* pgm;
     const qore_class_private* class_ctx;
@@ -296,10 +327,33 @@ public:
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
+
+    //! marks the reference as one that a Program object gave (see FunctionCallReferenceNode::setLentProgram())
+    DLLLOCAL void setLentProgram() {
+        lent_program = true;
+    }
+
+private:
+    //! true if a Program object gave the reference (Program::getCallReference(), qore#7678)
+    bool lent_program = false;
+
+    //! the bodies of the dispatchers and their variants for a reference that a Program object gave (qore#7678)
+    DLLLOCAL QoreValue dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+    DLLLOCAL QoreValue dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
 };
 
 //! a call reference to a static user method resolved after AOT source linking
-class DeferredStaticMethodCallReferenceNode : public ResolvedCallReferenceNodeIntern {
+class DeferredStaticMethodCallReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const char* n_class_path,
             const char* n_method_name);
@@ -340,7 +394,7 @@ private:
 };
 
 //! a call reference to a user function resolved after AOT source linking
-class DeferredFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
+class DeferredFunctionCallReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc, const char* n_function_name);
 
@@ -412,7 +466,7 @@ public:
     DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
-class MethodCallReferenceNode : public LocalMethodCallReferenceNode {
+class MethodCallReferenceNode final : public LocalMethodCallReferenceNode {
 protected:
     QoreObject* obj;
 
@@ -486,6 +540,54 @@ public:
         return fe;
     }
 
+    //! what the runtime's call through the reference without the generic call path needs of the function (qore#5578)
+    /** Taken by the first such call (takeFastCallInfo()) and kept with the reference.  The facts hold for the single
+        variant that the function had then: a call checks that it still has only that variant, as a later parse
+        commit can add an overload, which only adds to the variants of a committed function (so a variant once
+        replaced is never the single variant again).
+    */
+    struct FastCallInfo {
+        //! the single variant of the function
+        const AbstractQoreFunctionVariant* variant = nullptr;
+        //! the variant as a user variant
+        const UserVariantBase* uvb = nullptr;
+        //! the number of parameters of the variant
+        unsigned num_params = 0;
+    };
+
+    //! the states of the facts of a fast call (fast_call_state)
+    enum FastCallState : uint8_t {
+        //! not taken yet
+        FCS_UNKNOWN = 0,
+        //! a thread is taking them; the others make their calls through the generic call path meanwhile
+        FCS_TAKING = 1,
+        //! taken: the reference can be called without the generic call path, if the checks made for each call allow
+        FCS_ELIGIBLE = 2,
+        //! taken: the reference is always called through the generic call path
+        FCS_NOT_ELIGIBLE = 3,
+    };
+
+    //! returns the state of the facts of a fast call; if FCS_ELIGIBLE, getFastCallInfo() returns them
+    /** An acquire load, which pairs with the release store that publishes the facts (takeFastCallInfo()): a
+        reference is shared by threads, any of which can make the first call
+    */
+    DLLLOCAL FastCallState getFastCallState() const {
+        return static_cast<FastCallState>(fast_call_state.load(std::memory_order_acquire));
+    }
+
+    //! returns the facts of a fast call; only after getFastCallState() returned FCS_ELIGIBLE
+    DLLLOCAL const FastCallInfo& getFastCallInfo() const {
+        assert(fast_call_state.load(std::memory_order_relaxed) == FCS_ELIGIBLE);
+        return fast_call_info;
+    }
+
+    //! takes the facts of a fast call if no thread has taken them and returns them, or nullptr if the reference is
+    //! always called through the generic call path or another thread is taking them
+    /** Reads the variant's signature: called only once the variant's Program cannot be deleted while it reads it (the
+        thread is in the Program, and it was not being deleted then: see UserVariantBase::fastCallBlocked())
+    */
+    DLLLOCAL const FastCallInfo* takeFastCallInfo() const;
+
 protected:
     const QoreFunction* uf;
     //! the explicit type arguments of the reference, or null; shared with the copies that the evaluation makes
@@ -498,6 +600,13 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
+
+private:
+    //! the state of the facts of a fast call: a FastCallState; see getFastCallState()
+    mutable std::atomic<uint8_t> fast_call_state{FCS_UNKNOWN};
+    //! the facts of a fast call; written once, by the thread that changed fast_call_state to FCS_TAKING, before the
+    //! release store of FCS_ELIGIBLE, and never after
+    mutable FastCallInfo fast_call_info;
 };
 
 //! a call reference to a user function
@@ -505,7 +614,7 @@ protected:
     its functions when it is deleted, and a call of the reference must then fail as a call into a deleted Program
     does (see qore_get_function_pgm_context()), not use a freed function
 */
-class FunctionCallReferenceNode : public LocalFunctionCallReferenceNode {
+class FunctionCallReferenceNode final : public LocalFunctionCallReferenceNode {
 public:
     DLLLOCAL FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
             QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
@@ -541,13 +650,65 @@ public:
         }
     }
 
+    //! marks the reference as one that a Program object gave (Program::getCallReference()): its calls record the call
+    //! into the Program as the Program object's methods that run its code do (qore#7678)
+    DLLLOCAL void setLentProgram() {
+        lent_program = true;
+    }
+
 protected:
     QoreProgram* pgm;
+    //! true if a Program object gave the reference (see setLentProgram())
+    bool lent_program = false;
+
+    //! the bodies of the dispatchers and their variants for a reference that a Program object gave (qore#7678)
+    DLLLOCAL QoreValue dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+    DLLLOCAL QoreValue dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+
     //! the declarations of the explicit type arguments (see holdExplicitTypeArgDecls())
     QoreTypeDeclRefs explicit_type_arg_decls;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };
+
+//! Returns the node as a reference to a user function if its class is exactly FunctionCallReferenceNode or
+//! LocalFunctionCallReferenceNode, otherwise nullptr (qore#5578)
+/** The classes are identified by the address of their type_info object, as qore_exact_node_cast() does; any other
+    class, including a subclass of LocalFunctionCallReferenceNode other than FunctionCallReferenceNode and a
+    sandbox-bound reference (which wraps a callback), is not identified.
+
+    @param n a node whose type is NT_FUNCREF
+    @param pgm set to the Program of the reference (FunctionCallReferenceNode::getProgram()) or nullptr for a
+    LocalFunctionCallReferenceNode, whose call runs without an explicit Program (LocalFunctionCallReferenceNode::dispatchValue())
+*/
+DLLLOCAL inline const LocalFunctionCallReferenceNode* qore_get_exact_function_call_reference(const AbstractQoreNode* n,
+        QoreProgram*& pgm) {
+    assert(n && n->getType() == NT_FUNCREF);
+    const std::type_info* t = &typeid(*n);
+    if (t == &typeid(FunctionCallReferenceNode)) {
+        const FunctionCallReferenceNode* fr = static_cast<const FunctionCallReferenceNode*>(n);
+        assert(fr == dynamic_cast<const FunctionCallReferenceNode*>(n));
+        pgm = fr->FunctionCallReferenceNode::getProgram();
+        return fr;
+    }
+    if (t == &typeid(LocalFunctionCallReferenceNode)) {
+        const LocalFunctionCallReferenceNode* lr = static_cast<const LocalFunctionCallReferenceNode*>(n);
+        assert(lr == dynamic_cast<const LocalFunctionCallReferenceNode*>(n));
+        pgm = nullptr;
+        return lr;
+    }
+    return nullptr;
+}
 
 //! an unresolved static method call reference, only present temporarily in the parse tree
 class UnresolvedStaticMethodCallReferenceNode : public AbstractUnresolvedCallReferenceNode {
@@ -574,7 +735,7 @@ protected:
 class ImportedFunctionEntry;
 
 //! a run-time call reference to a method of a particular object
-class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimeObjectMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
     //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
@@ -666,7 +827,7 @@ private:
     to a pseudo-method of an object is a RunTimeObjectMethodReferenceNode, whose call looks the method up by name as a
     direct call does.  The value is scanned for recursive references (qore_get_call_reference_scan_node())
 */
-class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimePseudoMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     //! a pseudo-method is builtin code
     DLLLOCAL const QoreProgram* getOriginCodeProgram() const override {
@@ -732,7 +893,7 @@ DLLLOCAL bool qore_object_has_pseudo_or_member_method(const qore_class_private* 
 
 //! a run-time call reference to a method of a particular object where the method's class
 // is known when the method reference node object is created
-class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimeResolvedMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL const QoreProgram* getOriginCodeProgram() const override;
 
@@ -846,5 +1007,62 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
 */
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
         ExceptionSink* xsink, bool* restricted = nullptr);
+
+// declared in QoreSandboxProvenance.h: the callback that a sandbox-bound call reference wraps, otherwise nullptr
+DLLLOCAL const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if its class is one of the final classes of the call
+//! reference values that the library creates, otherwise nullptr (also for a closure)
+/** The type tests of qore_get_resolved_call_reference_intern() without its fallback: a nullptr result does not mean
+    that the node is not a ResolvedCallReferenceNodeIntern.  The classes are identified by the address of their
+    type_info object, as qore_exact_node_cast() does.
+*/
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_listed_call_reference_intern(
+        const AbstractQoreNode* r) {
+    static_assert(std::is_final_v<FunctionCallReferenceNode> && std::is_final_v<MethodCallReferenceNode>
+        && std::is_final_v<StaticMethodCallReferenceNode> && std::is_final_v<RunTimeObjectMethodReferenceNode>
+        && std::is_final_v<RunTimeResolvedMethodReferenceNode> && std::is_final_v<DeferredFunctionCallReferenceNode>
+        && std::is_final_v<DeferredStaticMethodCallReferenceNode> && std::is_final_v<RunTimePseudoMethodReferenceNode>,
+        "an exact type test is only equivalent to a dynamic_cast for a final class");
+    if (!r || r->getType() == NT_RUNTIME_CLOSURE) {
+        return nullptr;
+    }
+    const std::type_info* t = &typeid(*r);
+    if (t == &typeid(FunctionCallReferenceNode) || t == &typeid(MethodCallReferenceNode)
+            || t == &typeid(StaticMethodCallReferenceNode) || t == &typeid(RunTimeObjectMethodReferenceNode)
+            || t == &typeid(RunTimeResolvedMethodReferenceNode) || t == &typeid(DeferredFunctionCallReferenceNode)
+            || t == &typeid(DeferredStaticMethodCallReferenceNode) || t == &typeid(RunTimePseudoMethodReferenceNode)) {
+        const ResolvedCallReferenceNodeIntern* rv = static_cast<const ResolvedCallReferenceNodeIntern*>(r);
+        assert(rv == dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
+        return rv;
+    }
+    return nullptr;
+}
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const ResolvedCallReferenceNodeIntern*>(), which is too slow for the per-call
+    paths: a dynamic_cast compares the type names with strcmp() as it searches the class hierarchy.
+
+    ResolvedCallReferenceNode is a class of the public API, whose layout and vtable modules depend on, so it has no
+    flag or virtual function for its internal subclasses, and all of them have the type code NT_FUNCREF.  Instead,
+    a closure is excluded by its type code (only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE), and the
+    classes of the call reference values that the library creates, which are final, are identified by the address of
+    their type_info object (qore_get_listed_call_reference_intern()).  A call reference that wraps a callback
+    (AbstractCallReferenceNode::getSandboxBoundCallback(): a sandbox-bound reference) is not one either, as no
+    internal class overrides that function.  Any other class (the base classes of the references in the parse tree, a
+    module's call reference, a node that is not a call reference) is tested with the dynamic_cast, so the result does
+    not depend on the list being complete.
+*/
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_reference_intern(
+        const AbstractQoreNode* r) {
+    if (const ResolvedCallReferenceNodeIntern* rv = qore_get_listed_call_reference_intern(r)) {
+        return rv;
+    }
+    if (!r || r->getType() == NT_RUNTIME_CLOSURE || qore_get_sandbox_bound_callback(r)) {
+        assert(!dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
+        return nullptr;
+    }
+    return dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r);
+}
 
 #endif

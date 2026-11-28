@@ -203,15 +203,33 @@ public:
     DLLEXPORT int checkCreatePolicy(ExceptionSink* xsink) const;
 
     //! returns the current directory name or 0 if none is set
-    /** @return the current directory name or 0 if none is set
+    /** @return the current directory name or 0 if none is set; this is the path of the host, also when it derives from
+        the process's current directory: C++ code that gives it to %Qore code applies the rule of dirnameForCaller()
+        (qore#7662)
     */
     DLLEXPORT QoreStringNode* dirname() const;
+
+    //! returns the current directory name for the code running on the thread or nullptr if none is set
+    /** A path that derives from the process's current directory that the object started in is given relative to it
+        to code that is not given host directories that it did not give itself (qore#7662)
+    */
+    DLLLOCAL QoreStringNode* dirnameForCaller() const;
+
+    //! returns the process's current directory that the path derives from, or an empty string (qore#7662)
+    DLLLOCAL std::string getCwdBase() const;
+
+    //! sets the process's current directory that the path derives from (an object for a subdirectory; qore#7662)
+    DLLLOCAL void setCwdBase(const std::string& base);
 
     //! returns a complete path with the argument appended to the current directory name
     /** @param sub the subdirectory name to append to the current directory name
         @return a complete path with the argument appended to the current directory name
     */
     DLLEXPORT std::string getPath(const char* sub) const;
+
+    //! returns a complete path with the argument appended to the current directory name, and in \a base the
+    //! process's current directory that it derives from, or an empty string, read together (qore#7662)
+    DLLLOCAL std::string getPath(const char* sub, std::string& base) const;
 
     //! returns the encoding used for the filesystem
     /** @return the encoding used for the filesystem

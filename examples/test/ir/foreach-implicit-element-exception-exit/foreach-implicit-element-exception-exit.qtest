@@ -202,7 +202,10 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
         }
         TmpDir dir("foreach-implicit-element-debugger-aot-");
         string exe = dir.path + "/foreach-implicit-element-debugger";
-        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, debugger_script));
+        # compiled with -g: the debugger runs the function's debug IR, which -g keeps the debugger's run-time checks
+        # for, and without which the debugger warns about the code (qore#7676)
+        string out = ExecModeHarness::run_any(sprintf("%s %s -g %s -o %s %s", env, qcc_bin, opt, exe,
+            debugger_script));
         assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
         string exp = debuggerAst();
         assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s nodebug", env, exe)), "AOT " + opt);

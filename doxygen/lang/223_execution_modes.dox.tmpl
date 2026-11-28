@@ -435,6 +435,48 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     text is not required either: stripped-source artifacts still report file
     and line.
 
+    @subsection aot_debugging Debugging AOT-Compiled Code
+
+    The debug support of AOT-compiled code that costs performance is compiled
+    only with \c qcc \c -g, as with the \c -g option of C and C++ compilers:
+    - every call that a debugger must see checks whether a debugger is attached
+      before it calls its callee directly, so a debugger attached at any time
+      gets the entry and exit events of the calls made after it attached;
+    - top-level code makes the calls of \c substr(), \c index() and
+      \c rindex() as calls, so that its debug IR can express them;
+    - a closure keeps its IR, which runs while a debugger is attached also
+      when native code created the closure, and native code calls closures
+      through the runtime instead of their native bodies directly;
+    - at \c -O0, the calls that a debugger can step into are kept as calls.
+
+    Code compiled without \c -g has none of these costs.  Its functions still
+    have the IR that the IR interpreter runs while a debugger is attached
+    (lowered again without the rewrites of the native code where they changed
+    it, which costs compile time only, as a source-stripped build also runs it
+    at parse time), so a debugger attached to it gets the events of the
+    functions that it starts, but can miss the entry and exit of calls that
+    native code makes directly, the closures that native code creates run their
+    native bodies, and top-level code with such calls has no debug IR and runs
+    its native code, with no statement events.  When a debugger attaches to a Program that
+    has AOT code compiled without \c -g, or such code is registered into a Program
+    that a debugger is attached to, %Qore prints a warning once for the Program to
+    standard error.  Only the code of the debugged Program counts: the code of a
+    module runs in the module's own Program, of which a debugger attached to a
+    Program that uses the module gets no events, so the modules that a debugger
+    such as \c qdbg loads itself give no warning:
+    @verbatim
+warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded (<label>): calls in it may give no entry/exit events, and some of its functions cannot be stepped
+    @endverbatim
+
+    The user modules of the %Qore build are compiled without \c -g in every
+    CMake build type; configure with <tt>-DQORE_QMOD_DEBUGGING=ON</tt> to
+    compile them with it.  A binary records the choice: <tt>qcc --dump-info</tt>
+    shows \c debugging in its \c kind line, and \c qcc links only objects
+    compiled with the same choice as the link (an object compiled with another
+    choice is an error that names it).  DWARF debug information, which has no
+    runtime cost, is emitted with or without \c -g unless
+    \c --strip-debug-info is given.
+
     @subsection aot_local_variables Local Variables of AOT-Compiled Code
 
     A function, method or closure compiled ahead of time keeps its local
@@ -531,7 +573,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --strip-source|Omit Qore source text
     |\c --strip-debug-info|Omit DWARF debug info
     |<tt>--file-prefix-map=OLD=NEW</tt>|Map source paths that start with \c OLD to \c NEW in the metadata, debug information and exception locations of a final executable or whole module, for reproducible builds; repeatable, and the last matching prefix wins; \c OLD also matches the canonical form of the path it names; input files and dependency files keep their physical paths; not for incremental <tt>.qo</tt> or object-link modes. The %Qore CMake macros pass each \c -ffile-prefix-map option in the C++ compiler flags (\c CMAKE_CXX_FLAGS) to \c qcc in this form when compiling a user module
-    |\c -g|Emit DWARF debug info
+    |\c -g|Compile with debugging: the debug support that costs performance (see @ref aot_debugging); DWARF debug info is emitted without it too
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200
     |\c --jobs=N|Parallel backend-codegen threads for the parts of a split module (split-after-opt); default CPU count, throttled by the GNU make jobserver; does not change the output

@@ -104,7 +104,7 @@ int main(int, char**) {
     init_NATIVE_REGISTER_AGG_qo(pgm);
     int rc = qore_aot_script_end_batch(pgm);
     if (rc != 0) {
-        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm) ? qore_last_error(pgm) : \"(reported above)\");
         qore_destroy_program(pgm);
         qore_cleanup();
         return 1;

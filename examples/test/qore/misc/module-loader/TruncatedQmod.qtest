@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# test-exec-mode: children - every check runs in a child process of its own that loads the module in the execution
+# mode that the check names
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%requires FsUtil
+%requires Util
+
+%exec-class TruncatedQmodTest
+
+#! A damaged binary module file is refused with an error or replaced by its source, and never crashes the process (qore#7804)
+/** A `.qmod` (a shared object) that is shorter than its ELF program headers say makes `dlopen()` map pages beyond the
+    end of the file, and the process dies with SIGBUS when the code of the module is read: the module loader checks
+    the segments against the size of the file first.  A module that the test compiles with qcc is cut to several
+    lengths, and the truncated copy is put first in the module path of a child process, in a directory of the test's
+    own: the module is loaded from its source when one follows it (\c BINARY-MODULE-SOURCE-FALLBACK) and refused with
+    \c LOAD-MODULE-ERROR when it does not; the exit status of the child is never that of a signal.
+*/
+class TruncatedQmodTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string env;
+
+        #! the directory of the test's files: the source and the compiled module of the module that the test loads
+        string work;
+        #! the source of the module, and the compiled module
+        string src_dir;
+        string qmod_path;
+        int qmod_size;
+
+        #! the module that the child loads
+        const Module = "TruncatedQmodProbe";
+
+        #! the output of a child that loaded the module
+        const Marker = "TRUNCATED-QMOD-LOADED";
+    }
+
+    constructor() : QUnit::Test("TruncatedQmodTest", "1.0", \ARGV) {
+        qore_bin = TruncatedQmodTest::absolutePath(TestInterpreter::qore_interpreter());
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = TruncatedQmodTest::absolutePath(ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc"));
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("the intact module loads", \intactTest());
+        addTestCase("a truncated module falls back to its source", \fallbackTest());
+        addTestCase("a truncated module without a source is refused", \refusedTest());
+        addTestCase("every length of a truncated module", \lengthsTest());
+        addTestCase("a truncated module loaded by a compiled executable", \executableTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        work = make_tmp_dir("truncated-qmod-");
+        src_dir = work + "/src";
+        mkdir(src_dir);
+        write(src_dir + "/" + Module + ".qm", sprintf("%%modern\nmodule %s { version = \"1.0\"; desc = \"probe\"; "
+            "author = \"Qore\"; license = \"MIT\"; }\npublic namespace %s { public string sub value() "
+            "{ return \"%s\"; } }\n", Module, Module, Marker));
+        qmod_path = work + "/" + Module + ".qmod";
+        run(sprintf("cd '%s' && %s %s -m -o %s %s", work, env, qcc_bin, qmod_path,
+            src_dir + "/" + Module + ".qm"));
+        if (!is_file(qmod_path)) {
+            qmod_path = "";
+            return;
+        }
+        qmod_size = hstat(qmod_path).size;
+    }
+
+    globalTearDown() {
+        if (work) {
+            remove_tree(work);
+        }
+    }
+
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! runs a command of qore or qcc and returns its output with the exit status of the command on the last line
+    /** The module loader's warnings are part of the output, as the checks of the interpreter read them; the compiled
+        executable runs through ExecModeHarness::run_command() (qore#7805)
+    */
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1; echo \"STATUS=$?\"");
+    }
+
+    private static int status(string out) {
+        *list<string> m = (out =~ x/STATUS=(\d+)\s*$/);
+        return m ? m[0].toInt() : -1;
+    }
+
+    #! returns a new directory of the test and puts a copy of the compiled module cut to \a len bytes in it
+    private string truncatedDir(int len) {
+        string dir = make_tmp_dir("cut-", NOTHING, work);
+        string copy = dir + "/" + Module + ".qmod";
+        # head -c: the first bytes of the file, as on every platform that has the module
+        assertEq(0, system(sprintf("head -c %d '%s' > '%s'", len, qmod_path, copy)), "copy " + len);
+        assertEq(len, hstat(copy).size, "length of the copy");
+        return dir;
+    }
+
+    #! writes the script that loads the module and prints what it returns
+    private string script(string name = "load.q") {
+        string path = work + "/" + name;
+        write(path, sprintf("%%modern\n%%requires %s\nprintf(\"%%s\\n\", %s::value());\n", Module, Module));
+        return path;
+    }
+
+    private bool haveModule() {
+        if (!qmod_path) {
+            testSkip("qcc cannot compile a module here");
+            return False;
+        }
+        return True;
+    }
+
+    intactTest() {
+        if (!haveModule()) {
+            return;
+        }
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s:%s %s %s", env, work, src_dir, qore_bin, script()));
+        assertEq(0, TruncatedQmodTest::status(out), out);
+        assertRegex(Marker, out);
+        assertEq(False, boolean(out =~ /BINARY-MODULE-SOURCE-FALLBACK/), "the intact module is not replaced");
+    }
+
+    fallbackTest() {
+        if (!haveModule()) {
+            return;
+        }
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string dir = truncatedDir(4096);
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s:%s %s --exec-mode=%s %s", env, dir, src_dir, qore_bin,
+                mode, script()));
+            assertEq(0, TruncatedQmodTest::status(out), mode + ": " + out);
+            assertRegex(Marker, out, mode);
+            assertRegex("BINARY-MODULE-SOURCE-FALLBACK", out, mode);
+        }
+    }
+
+    refusedTest() {
+        if (!haveModule()) {
+            return;
+        }
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string dir = truncatedDir(4096);
+            # no source follows the module in the module path
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s %s --exec-mode=%s %s", env, dir, qore_bin, mode,
+                script()));
+            int st = TruncatedQmodTest::status(out);
+            # an error exit, never a signal (128 + n)
+            assertTrue(st > 0 && st < 128, sprintf("%s: status %d: %s", mode, st, out));
+            assertRegex("LOAD-MODULE-ERROR", out, mode);
+            assertRegex(Module + "\\.qmod", out, mode);
+        }
+    }
+
+    lengthsTest() {
+        if (!haveModule()) {
+            return;
+        }
+        # the ELF header (64 bytes), the program headers, a page, a part of the file, and the file without its last
+        # byte
+        foreach int len in (0, 1, 52, 64, 120, 1024, 4096, 8192, qmod_size / 2, qmod_size - 1) {
+            string dir = truncatedDir(len);
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s:%s %s %s", env, dir, src_dir, qore_bin, script()));
+            assertEq(0, TruncatedQmodTest::status(out), sprintf("length %d: %s", len, out));
+            assertRegex(Marker, out, "length " + len);
+        }
+    }
+
+    executableTest() {
+        if (!haveModule()) {
+            return;
+        }
+        string exe = work + "/loader";
+        string out = run(sprintf("cd '%s' && %s QORE_MODULE_DIR=%s:%s %s -o %s %s", work, env, work, src_dir, qcc_bin,
+            exe, script("loader.q")));
+        if (!is_executable(exe)) {
+            testSkip("qcc cannot compile the script: " + out);
+            return;
+        }
+        # the compiled program loads the module from the module path when it runs, as the interpreter does
+        string dir = truncatedDir(4096);
+        # the warning that the module is loaded from its source is the loader's, not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR=%s:%s %s",
+            env, dir, src_dir, exe), True, "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, r.out);
+        assertEq(Marker + "\n", r.stdout);
+        assertEq("", r.stderr, "stderr");
+        string fallback = sprintf("for feature '%s' failed to load; loading source module", Module);
+        assertEq(1, (select r.loader_warnings, $1.find(fallback) >= 0).size(),
+            sprintf("the module is loaded from its source: %y", r.loader_warnings));
+    }
+}

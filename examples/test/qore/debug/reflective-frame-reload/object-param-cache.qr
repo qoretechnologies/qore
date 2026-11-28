@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+
+class ObjectCacheBase {
+    int next(int value) { return value + 1; }
+}
+class ObjectCacheDerived inherits ObjectCacheBase {
+    int next(int value) { return value + 10; }
+}
+class ObjectCacheReplacer inherits ObjectCacheBase {
+    int next(int value) {
+        set_local_var_value(1, "receiver", new ObjectCacheDerived());
+        return value + 1;
+    }
+}
+class ObjectCacheBox<T> {
+    public { T value; }
+    constructor(T value) { self.value = value; }
+}
+our ObjectCacheBase reference_target = new ObjectCacheDerived();
+
+sub objectCacheInstallReference(ObjectCacheBase argument) {
+    set_local_var_value(1, "receiver", \reference_target);
+}
+sub objectCacheMoveReference(ObjectCacheBase value) { reference_target = value; }
+sub objectCacheInstallInvalid(ObjectCacheBase argument) { set_local_var_value(1, "receiver", 42); }
+sub objectCacheReplace(ObjectCacheBase replacement) { set_local_var_value(1, "receiver", replacement); }
+sub objectCacheReplaceBox(ObjectCacheBox<int> replacement) { set_local_var_value(1, "receiver", replacement); }
+sub objectCacheDeleteObject(ObjectCacheBase object) { delete object; }
+
+class ObjectCacheMutator {
+    private { ObjectCacheBase replacement; }
+    constructor(ObjectCacheBase replacement) { self.replacement = replacement; }
+    destructor() { set_local_var_value(1, "receiver", replacement); }
+}
+
+int sub objectCacheStable(auto receiver) {
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) { sum += receiver.next(0); }
+    return sum;
+}
+ObjectCacheBase sub objectCachePassthrough(auto receiver) { return receiver; }
+
+int sub objectCacheReference(auto receiver) {
+    int sum = receiver.next(0);
+    objectCacheInstallReference(receiver);
+    sum += receiver.next(0);
+    objectCacheMoveReference(new ObjectCacheBase());
+    # No second reflective write: a reference introduced by the first write
+    # must continue to be evaluated normally after its referent changes.
+    sum += receiver.next(0);
+    return sum;
+}
+
+string sub objectCacheInvalid(auto receiver) {
+    int first = receiver.next(0);
+    objectCacheInstallInvalid(receiver);
+    return sprintf("%d:%y", first, receiver);
+}
+
+int sub objectCacheFailedWrite(auto receiver) {
+    int first = receiver.next(0);
+    try { set_local_var_value(0, "missing", new ObjectCacheDerived()); }
+    catch (hash<auto> ex) {
+        if (ex.err != "UNKNOWN-VARIABLE") { rethrow; }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub objectCacheFailedAliasWrite(auto receiver) {
+    int first = receiver.next(0);
+    objectCacheInstallReference(receiver);
+    try { objectCacheInstallInvalid(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+string sub objectCacheDeleted(auto receiver) {
+    int first = receiver.next(0);
+    objectCacheDeleteObject(receiver);
+    try { return sprintf("unexpected-%d", receiver.next(0)); }
+    catch (hash<auto> ex) { return sprintf("%d:%s", first, ex.err); }
+}
+
+int sub objectCacheDestructor(auto receiver, auto replacement) {
+    int first = receiver.next(0);
+    ObjectCacheMutator token(replacement);
+    delete token;
+    return first * 100 + receiver.next(0);
+}
+
+int sub objectCacheRecursive(auto receiver, int depth) {
+    int first = receiver.next(0);
+    if (depth) {
+        first += call_function("objectCacheRecursive", new ObjectCacheBase(), depth - 1);
+    } else {
+        objectCacheReplace(new ObjectCacheDerived());
+    }
+    return first + receiver.next(0);
+}
+
+int sub objectCacheWritten(auto receiver) {
+    receiver = new ObjectCacheDerived();
+    return receiver.next(0);
+}
+int sub objectCacheCaptured(auto receiver) {
+    code<int()> read = int sub () { return receiver.next(0); };
+    receiver = new ObjectCacheDerived();
+    return read();
+}
+int sub objectCacheByReference(reference<ObjectCacheBase> receiver) { return receiver.next(0); }
+int sub objectCacheWeak(auto receiver, ObjectCacheBase owner) {
+    receiver := owner;
+    return receiver.next(0);
+}
+int sub objectCacheOptional(*ObjectCacheBase receiver) {
+    int first = receiver.next(0);
+    # Optional parameters keep ordinary reloads after reflective writes.
+    objectCacheReplace(new ObjectCacheDerived());
+    return first * 100 + receiver.next(0);
+}
+int sub objectCacheGeneric(ObjectCacheBox<int> receiver) {
+    int first = int(receiver.value);
+    objectCacheReplaceBox(new ObjectCacheBox<int>(2));
+    return first * 100 + int(receiver.value);
+}
+
+ObjectCacheBase base();
+ObjectCacheDerived derived();
+# Force the ordinary native entry with an observable runtime parameter slot.
+# Private direct-entry parameters retain their separate visibility contract.
+printf("%d:%d:%s:%d:%d:%d\n", call_function("objectCacheStable", base),
+    call_function("objectCacheReference", base), call_function("objectCacheInvalid", base),
+    call_function("objectCacheFailedWrite", base), call_function("objectCacheDestructor", base, derived),
+    call_function("objectCacheRecursive", base, 2));
+printf("%d:%d:%d:%d\n", call_function("objectCacheWritten", base), call_function("objectCacheCaptured", base),
+    call_function("objectCacheByReference", \base), call_function("objectCacheWeak", base, derived));
+*ObjectCacheBase weak := derived;
+printf("%d\n", call_function("objectCacheStable", weak));
+printf("%d\n", call_function("objectCacheStable", new ObjectCacheReplacer()));
+printf("%d\n", call_function("objectCachePassthrough", base).next(0));
+printf("%d:%d:%d\n", call_function("objectCacheOptional", base),
+    call_function("objectCacheGeneric", new ObjectCacheBox<int>(1)),
+    call_function("objectCacheFailedAliasWrite", base));
+printf("%s\n", call_function("objectCacheDeleted", new ObjectCacheBase()));
+printf("object-param-cache: ok\n");
+
+sub objectCacheReplaceThrow() {
+    set_local_var_value(1, "receiver", new ObjectCacheDerived());
+    throw "OBJECT-CACHE-EXPECTED", "replacement before unwinding";
+}
+int sub objectCacheThrow(auto receiver) {
+    int first = receiver.next(0);
+    # The reflecting helper also needs an ordinary frame for depth 1.
+    try { call_function("objectCacheReplaceThrow"); }
+    catch (hash<auto> ex) {
+        if (ex.err != "OBJECT-CACHE-EXPECTED") { rethrow; }
+    }
+    return first * 100 + int(receiver.next(0));
+}
+sub objectCacheReplaceAny(auto replacement) {
+    set_local_var_value(1, "receiver", replacement);
+}
+bool sub objectCacheValues(auto receiver, auto replacement) {
+    if (type(receiver) != "object") { throw "OBJECT-CACHE-ERROR", "initial receiver type"; }
+    if (receiver.next(0) != 1) { throw "OBJECT-CACHE-ERROR", "initial receiver method"; }
+    call_function("objectCacheReplaceAny", replacement);
+    return type(receiver) == type(replacement)
+        && sprintf("%y", receiver) == sprintf("%y", replacement);
+}
+sub objectCacheTick() {}
+bool sub objectCacheNonObject(auto receiver) {
+    string before = sprintf("%y", receiver);
+    objectCacheTick();
+    return before == sprintf("%y", receiver);
+}
+bool sub objectCacheMaybeReceiver(auto receiver) {
+    # A direct receiver use is only a profitability hint. Non-object invocations
+    # must still reject runtime admission, even when this branch is not taken.
+    if (type(receiver) == "object") { return receiver.next(0) == 1; }
+    string before = sprintf("%y", receiver);
+    objectCacheTick();
+    return before == sprintf("%y", receiver);
+}
+int sub objectCacheAddress(auto receiver) {
+    reference<auto> alias = \receiver;
+    alias = new ObjectCacheDerived();
+    return int(receiver.next(0)) + int(receiver.next(0));
+}
+int sub objectCacheHandler(auto receiver) {
+    on_exit {
+        if (receiver.next(0) != 1) { throw "OBJECT-CACHE-ERROR", "handler receiver"; }
+    }
+    return int(receiver.next(0)) + int(receiver.next(0));
+}
+
+if (call_function("objectCacheThrow", new ObjectCacheBase()) != 110
+        || call_function("objectCacheAddress", base) != 20 || call_function("objectCacheHandler", base) != 2
+        || !call_function("objectCacheMaybeReceiver", base)) {
+    throw "OBJECT-CACHE-ERROR", "throw, escaped address or handler result";
+}
+foreach auto value in ((NOTHING, 0, 1 << 50, -(1 << 50), 1.5, 0.0, -0.0,
+        @inf@, -@inf@, @nan@, True, False,
+        "text", (), (1, 2), {}, {"key": 3})) {
+    if (!call_function("objectCacheValues", new ObjectCacheBase(), value)
+            || !call_function("objectCacheNonObject", value)
+            || !call_function("objectCacheMaybeReceiver", value)) {
+        throw "OBJECT-CACHE-ERROR", "non-object reload or rejected admission changed";
+    }
+}
+printf("object-param-extra: ok\n");

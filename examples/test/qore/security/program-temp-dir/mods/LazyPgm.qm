@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module that creates a Program when it is first called and keeps it for all of its callers (see
+# ../program-temp-dir.q): the Program takes no temporary directory from the caller that created it (qore#7656)
+
+%modern
+
+module LazyPgm {
+    version = "1.0";
+    desc = "a module that keeps a Program for all of its callers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+our *Program lazy_pgm;
+
+public namespace LazyPgm {
+    #! returns tmp_location() of the module's Program, which it creates when it is first called
+    public string sub location() {
+        if (!lazy_pgm) {
+            lazy_pgm = new Program();
+            lazy_pgm.loadModule("Util");
+            lazy_pgm.parse("%modern\nstring sub w() { return tmp_location(); }", "lazy");
+        }
+        return lazy_pgm.callFunction("w");
+    }
+}

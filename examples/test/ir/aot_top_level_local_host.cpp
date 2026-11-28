@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     qore_toplevel_local_toplevel_local_script_register(pgm);
     int rc = qore_aot_script_end_batch(pgm);
     if (rc) {
-        printf("registration failed: %s\n", qore_last_error(pgm));
+        printf("registration failed: %s\n", qore_last_error(pgm) ? qore_last_error(pgm) : "(reported above)");
     }
     for (int i = 1; !rc && i < argc; ++i) {
         int call_rc = qore_run_callable(pgm, argv[i], nullptr);

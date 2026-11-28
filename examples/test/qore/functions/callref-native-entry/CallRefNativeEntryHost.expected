@@ -1,0 +1,13 @@
+module's own reference: 6997564
+module's own float reference: 6553500.000
+module's exception: MODULE-CALLREF-ERROR: module x=5 at mod_throw <- mod_exception
+module's reference given back: 6997564
+script's reference called by the module: 6997564
+module's reference called by the script: 23503
+another Program: 13160200
+sandboxed Program's module calls: 13160200
+script's module reference called in the sandboxed Program: 6997564
+sandboxed Program's module reference called by the script: 6997564
+module reference made for a governed call: 6997564
+script's module reference called in a Program with parse restrictions: 6997564
+script's module reference called in a Program without thread control: 6997564

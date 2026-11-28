@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - AOT code generation and the debug IR of compiled closures under a debugger
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotClosureDebugIrTest
+
+#! a closure of AOT code compiled with debugging runs its debug IR while a debugger is attached (qore#7752)
+/** A closure that native code created in a frame that was running when the debugger attached ran its native body
+    under the debugger, which got no step events of its statements; and at -O3 native code called the closures that
+    it created directly.  Compiled with qcc -g, the closures keep their serialized IR, which runs while a debugger is
+    attached, and native code calls them through the runtime, so the worker prints what the AST interpreter prints;
+    compiled without -g, the closures run their native bodies (the results are the same) and the debugger gets the
+    warning of qore#7676.
+*/
+class AotClosureDebugIrTest inherits QUnit::Test {
+    public {
+        const Worker = "closure-steps";
+        const Warning = "warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AotClosureDebugIr", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("closure debug IR", \closureTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    closureTest() {
+        string worker = get_script_dir() + "/" + Worker + ".qr";
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast "
+            + quote(worker), ExecModeHarness::NativeCheck::None);
+        # the steps of the closure created in the frame that was running when the debugger attached (lines 71-77)
+        assertRegex("lines=\\[71, 72, 71, 72, 76, 77, ", ast, "the AST interpreter reports the closures' steps");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        *string sum = (ast =~ x/^(sum=[0-9]+) /m)[0];
+        assertNeq(NOTHING, sum, "the AST interpreter prints the sum");
+        TmpDir tmp("qore-aot-closure-debug-ir-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + Worker + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -g -o " + quote(exe) + " "
+                + quote(worker));
+            assertTrue(is_file(exe), opt + " -g: qcc produced the executable");
+            assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt + " -g");
+
+            # without -g: the same results, with the warning that a debugger can miss events
+            string native = tmp.path + DirSep + Worker + opt + "-native";
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(native) + " "
+                + quote(worker));
+            assertTrue(is_file(native), opt + ": qcc produced the executable");
+            string output = ExecModeHarness::run_any(prefix + quote(native) + " -b");
+            assertRegex("(?m)^" + sum + " ", output, "AOT " + opt + " without -g: results");
+            assertEq(1, (map 1, output.split("\n"), $1.find(Warning) == 0).size(),
+                "AOT " + opt + " without -g: one warning");
+        }
+    }
+}

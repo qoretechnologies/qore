@@ -115,6 +115,7 @@ DLLEXPORT extern QoreCounter tp_thread_counter;
 #include <qore/UnicodeCharacterIterator.h>
 #include <qore/QoreRegexInterface.h>
 #include <qore/Sequence.h>
+#include <qore/QoreSharedObject.h>
 #include <qore/qore-version.h>
 
 //! the complete version string of the qore library
@@ -299,6 +300,12 @@ DLLEXPORT int64 qore_get_module_cleanup_timeout();
 //! context (qore_get_call_program_context()) in every execution mode, as a method runs with its class's (since qore
 //! 3.0; qore#7394)
 #define _QORE_HAS_FUNCTION_OWN_CALL_PROGRAM_CONTEXT 1
+
+//! defined for the C++ API of the objects shared by every Program of the process in qore/QoreSharedObject.h:
+//! qore_caller_creates_shared_objects(), qore_caller_can_share_objects(), qore_share_object(),
+//! qore_object_is_shared(), qore_check_shared_object_change(), qore_check_shared_object_callback() and
+//! qore_update_shared_object() (qore#7669)
+#define _QORE_HAS_SHARED_OBJECT_API 1
 
 //! the least default grace period of the work that the module cleanup hands over to other threads, in milliseconds
 #define QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS 5000

@@ -34,7 +34,7 @@ class TerminalIoCallerTest inherits QUnit::Test {
             "restricted-getopt", "restricted-own-writers", "restricted-host-logger", "restricted-host-stream-logger",
             "restricted-object-host-code", "restricted-object-own-code",
             "sandboxed-direct",
-            "sandboxed-module");
+            "sandboxed-module", "sandboxed-private-window-size");
         #! the only terminal output of the worker before its results: the host's own logger lines
         const HostOutput = "host logger line\nhost stream logger line\nhost code under a restricted object\n";
     }

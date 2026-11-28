@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The scenario of IRInPlaceIntListCompound.qtest: += and -= on an element of a list<int> local, which native code
+# changes in place when the variable alone holds the list and the element and the operand are inline integers, and
+# makes with the generic lvalue path otherwise.  Every tier and every compiled executable must print what the AST
+# interpreter prints.
+
+%modern
+%allow-weak-references
+%allow-debugger
+
+const Wide = 0x7fffffffffff;
+
+# a loop with a native index: the list_mutate kernel of bench/runtime-comparison
+int sub mutateLoop(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        data[i] += 1;
+        sum += data[i];
+    }
+    for (int i = 0; i < count; ++i) {
+        data[i] -= 3;
+        sum += data[i];
+    }
+    return sum;
+}
+
+# constant indexes and the value of the operation
+string sub constantIndex() {
+    list<int> l = (10, 20, 30);
+    l[0] += 5;
+    l[2] -= 7;
+    int r = (l[1] += 3);
+    int s = (l[1] -= 1);
+    return sprintf("%y %d %d", l, r, s);
+}
+
+# a list that another variable holds too is copied first
+string sub sharedList() {
+    list<int> l = (1, 2, 3);
+    list<int> m = l;
+    for (int i = 0; i < 3; ++i) {
+        l[i] += 10;
+    }
+    return sprintf("%y %y", l, m);
+}
+
+# an index at the end appends; past the end the element type rejects the gap; a negative index counts from the end
+string sub outOfRange() {
+    list<int> l = (1, 2);
+    int i = 2;
+    l[i] += 5;
+    string rv = sprintf("%y", l);
+    i = 4;
+    try {
+        l[i] += 5;
+        rv += " no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += sprintf(" %s", ex.err);
+    }
+    i = -1;
+    l[i] += 100;
+    i = -3;
+    l[i] -= 1;
+    return rv + sprintf(" %y", l);
+}
+
+# results and values outside the inline range of integers are stored in nodes
+string sub wideValues() {
+    list<int> l = (Wide, -Wide, 1, Wide + 5, 7);
+    int one = 1;
+    for (int i = 0; i < 2; ++i) {
+        l[0] += one;
+        l[1] -= one;
+    }
+    l[2] += Wide + 10;
+    l[3] -= 2;
+    l[4] += 0x7fffffffffffffff;
+    l[4] += 1;
+    return sprintf("%y", l);
+}
+
+# an operand that is not an inline integer
+string sub otherOperands() {
+    list<int> l = (1, 2, 3, 4);
+    int i = 0;
+    l[i] += 2.5;
+    ++i;
+    l[i] -= 0.5;
+    ++i;
+    l[i] += "7";
+    ++i;
+    auto a = 5;
+    l[i] += a;
+    return sprintf("%y", l);
+}
+
+# a list that a reference, a weak reference or a closure reaches
+string sub otherHolders() {
+    list<int> l = (1, 2, 3);
+    reference<list<int>> r = \l;
+    r[0] += 10;
+    list<int> w := l;
+    w[1] += 20;
+    code c = sub () { l[2] -= 30; };
+    c();
+    return sprintf("%y %y", l, w);
+}
+
+sub changeByReference(reference<list<int>> r, int i) {
+    r[i] += 100;
+}
+
+# a parameter and a list changed through a reference parameter
+string sub parameters(list<int> p, int i) {
+    p[i] += 1;
+    list<int> l = (1, 2, 3);
+    changeByReference(\l, i);
+    l[i] -= 1;
+    return sprintf("%y %y", p, l);
+}
+
+# an exception of the generic path in a try block, and the list afterwards
+string sub inTry() {
+    list<int> l = (5, 6);
+    string rv;
+    for (int i = 0; i < 4; ++i) {
+        try {
+            l[i * 2] += 1;
+            rv += sprintf("%d:ok ", i);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf("%d:%s ", i, ex.err);
+        }
+    }
+    return rv + sprintf("%y", l);
+}
+
+# a list of another element type takes the generic path
+string sub otherTypes() {
+    list<*int> o = (1, NOTHING, 3);
+    int i = 1;
+    o[i] += 2;
+    softlist<int> s = (1, 2);
+    s[0] += 5;
+    list<auto> a = (1, "x");
+    a[0] += 3;
+    return sprintf("%y %y %y", o, s, a);
+}
+
+# a list that another thread holds too
+string sub otherThread() {
+    list<int> l = (1, 2, 3);
+    Queue q();
+    Counter c(1);
+    background sub (list<int> copy) {
+        q.push(copy);
+        c.waitForZero();
+    }(l);
+    list<int> copy = q.get();
+    for (int i = 0; i < 3; ++i) {
+        l[i] += 1;
+    }
+    c.dec();
+    return sprintf("%y %y", l, copy);
+}
+
+
+sub replaceList() {
+    set_local_var_value(1, "l", (41, 42));
+}
+
+# the variable is replaced through reflection between changes
+string sub reflected() {
+    list<int> l = (1, 2);
+    l[0] += 1;
+    list<int> before = get_local_vars(0).l.value;
+    call_function("replaceList");
+    l[1] += 5;
+    return sprintf("%y %y", before, l);
+}
+
+# a list that a weak reference designates, held by a variable that no closure binds
+string sub weakHolder() {
+    list<int> l = (1, 2, 3);
+    list<int> w := l;
+    int i = 1;
+    l[i] += 20;
+    w[0] -= 5;
+    return sprintf("%y %y", l, w);
+}
+
+# the variable of each frame of a recursive function
+int sub recursive(int depth) {
+    list<int> l = (depth, depth);
+    int i = 0;
+    l[i] += depth > 0 ? recursive(depth - 1) : 100;
+    ++i;
+    l[i] -= 1;
+    return l[0] + l[1];
+}
+
+printf("loop: %d %d %d\n", mutateLoop(0, 7), mutateLoop(17, 7), mutateLoop(4096, 65535));
+printf("constant: %s\n", constantIndex());
+printf("shared: %s\n", sharedList());
+printf("range: %s\n", outOfRange());
+printf("wide: %s\n", wideValues());
+printf("operands: %s\n", otherOperands());
+printf("holders: %s\n", otherHolders());
+printf("parameters: %s\n", parameters((1, 2, 3), 1));
+printf("try: %s\n", inTry());
+printf("types: %s\n", otherTypes());
+printf("thread: %s\n", otherThread());
+printf("reflected: %s\n", reflected());
+printf("weak: %s\n", weakHolder());
+printf("recursive: %d\n", recursive(5));

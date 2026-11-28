@@ -414,6 +414,10 @@ qdbg-remote localhost:8001 < commands.txt
     - Data breakpoints, which stop when a value changes
       (<a href="https://github.com/qoretechnologies/qore/issues/5565">issue 5565</a>), jumping to a line and restarting
       a frame (<a href="https://github.com/qoretechnologies/qore/issues/5566">issue 5566</a>) are not supported.
+    - AOT-compiled code gets complete debug support only when it is compiled with <tt>qcc -g</tt>: code compiled
+      without it can miss the entry and exit of calls, some of its functions cannot be stepped, and a warning is
+      printed once when a debugger attaches (see @ref aot_debugging).  The user modules of the %Qore build are
+      compiled without it unless configured with <tt>-DQORE_QMOD_DEBUGGING=ON</tt>.
     - Use <tt>qcc -O0 -g</tt> to step into pure Qore functions. At <tt>-O3</tt>, qcc can replace a call with its
       computed result. A call folded away entirely has no runtime frame or statement events, even with <tt>-g</tt>.
     - In AOT-compiled code, whose calls have no columns, stepping into a call matches the functions that the
@@ -424,8 +428,13 @@ qdbg-remote localhost:8001 < commands.txt
       stops when it runs again.
     - The columns of the debugger count bytes; the clients convert them to characters with the text of the line, and
       count a character as a byte for a source whose text is not available.
-    - A function of AOT-compiled code that is already running when a debugger attaches, and a closure created in it,
-      does not stop at breakpoints or steps, as it continues in its native code; functions that are called after the
-      debugger attached are debugged
-      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>).
+    - A function of AOT-compiled code that is already running when a debugger attaches does not stop at breakpoints
+      or steps, as it continues in its native code; the closures that it creates are debugged when it was compiled
+      with <tt>qcc -g</tt> (<a href="https://github.com/qoretechnologies/qore/issues/7752">issue 7752</a>), and
+      functions that are called after the debugger attached are debugged
+      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>), also when such native code calls
+      them, except for the calls that code compiled at <tt>-O3</tt> made part of the expression that uses their
+      result (as in <tt>f(x).size()</tt> or <tt>g()[1]</tt>), replaced by the value that they return, or replaced by
+      the body of an object's method: they give the debugger no function events in such a running function
+      (<a href="https://github.com/qoretechnologies/qore/issues/7697">issue 7697</a>).
 */

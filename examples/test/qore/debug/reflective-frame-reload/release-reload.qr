@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%allow-debugger
+
+# Each function below keeps an int local "secret" and then changes an lvalue that holds an object: the destructor of the
+# object released replaces "secret" in the function's frame by name, and the function must return the new value, as the
+# AST interpreter does; see AOTReflectiveReleaseReload.qtest and design/aot-reflection-visible-locals.md
+
+#! the value that the destructors assign
+const Replaced = 45;
+
+#! replaces "secret" in the nearest calling frame that has it
+/** The frames are not read with get_local_vars(): a release under the lock of the variable that a reference of the
+    frame refers to (r -= "a") would read the variable through the reference while its lock is held.
+*/
+sub replaceSecret() {
+    for (int frame = 1; frame < 8; ++frame) {
+        try {
+            set_local_var_value(frame, "secret", Replaced);
+            return;
+        } catch (hash<ExceptionInfo> ex) {
+            # the frame has no such local, or a frame index beyond the stack
+        }
+    }
+}
+
+class Reflector {
+    destructor() {
+        replaceSecret();
+    }
+}
+
+class Holder {
+    public {
+        static auto s;
+        static auto sh;
+        static auto sl;
+        auto m;
+    }
+
+    string memberAssign() {
+        int secret = 5;
+        m = 1;
+        return sprintf("%d", secret);
+    }
+
+    string memberDelete() {
+        int secret = 5;
+        delete m;
+        return sprintf("%d", secret);
+    }
+
+    string memberHashElement() {
+        int secret = 5;
+        m.a = 1;
+        return sprintf("%d", secret);
+    }
+
+    string memberParam(int secret) {
+        m = 1;
+        return sprintf("%d", secret);
+    }
+}
+
+our auto g;
+our auto gh;
+our auto gl;
+
+#! returns a hash whose key "a" holds an object
+hash<auto> sub objectHash() {
+    hash<auto!> h = {"b": 1};
+    h.a = new Reflector();
+    return h;
+}
+
+#! returns a list of three elements whose middle element (or the one given) is an object
+list<auto> sub objectList(int pos = 1) {
+    list<auto!> l = (0, 0, 0);
+    l[pos] = new Reflector();
+    return l;
+}
+
+# globals
+string sub globalAssign() { int secret = 5; g = 1; return sprintf("%d", secret); }
+string sub globalDelete() { int secret = 5; delete g; return sprintf("%d", secret); }
+string sub globalRemove() { int secret = 5; remove g; return sprintf("%d", secret); }
+string sub globalRemoveUsed() { int secret = 5; bool removed = exists (remove g); return sprintf("%d", secret); }
+string sub globalCompound() { int secret = 5; g *= 1; return sprintf("%d", secret); }
+string sub globalHashMinus() { int secret = 5; gh -= "a"; return sprintf("%d", secret); }
+string sub globalSplice() { int secret = 5; splice gl, 1, 1; return sprintf("%d", secret); }
+string sub globalExtract() { int secret = 5; extract gl, 1, 1; return sprintf("%d", secret); }
+string sub globalPop() { int secret = 5; pop gl; return sprintf("%d", secret); }
+string sub globalShift() { int secret = 5; shift gl; return sprintf("%d", secret); }
+string sub globalHashElement() { int secret = 5; gh.a = 1; return sprintf("%d", secret); }
+string sub globalHashElementDelete() { int secret = 5; delete gh.a; return sprintf("%d", secret); }
+string sub globalHashElementRemove() { int secret = 5; remove gh.a; return sprintf("%d", secret); }
+string sub globalListElement() { int secret = 5; gl[1] = 1; return sprintf("%d", secret); }
+string sub globalParam(int secret) { g = 1; return sprintf("%d", secret); }
+
+# class statics
+string sub staticAssign() { int secret = 5; Holder::s = 1; return sprintf("%d", secret); }
+string sub staticDelete() { int secret = 5; delete Holder::s; return sprintf("%d", secret); }
+string sub staticRemove() { int secret = 5; remove Holder::s; return sprintf("%d", secret); }
+string sub staticCompound() { int secret = 5; Holder::s *= 1; return sprintf("%d", secret); }
+string sub staticHashMinus() { int secret = 5; Holder::sh -= "a"; return sprintf("%d", secret); }
+string sub staticSplice() { int secret = 5; splice Holder::sl, 1, 1; return sprintf("%d", secret); }
+string sub staticExtract() { int secret = 5; extract Holder::sl, 1, 1; return sprintf("%d", secret); }
+string sub staticPop() { int secret = 5; pop Holder::sl; return sprintf("%d", secret); }
+string sub staticShift() { int secret = 5; shift Holder::sl; return sprintf("%d", secret); }
+string sub staticHashElement() { int secret = 5; Holder::sh.a = 1; return sprintf("%d", secret); }
+string sub staticListElement() { int secret = 5; Holder::sl[1] = 1; return sprintf("%d", secret); }
+string sub staticParam(int secret) { Holder::s = 1; return sprintf("%d", secret); }
+
+# references, to a global or a static
+string sub refAssign(reference<auto> r) { int secret = 5; r = 1; return sprintf("%d", secret); }
+string sub refDelete(reference<auto> r) { int secret = 5; delete r; return sprintf("%d", secret); }
+string sub refRemove(reference<auto> r) { int secret = 5; remove r; return sprintf("%d", secret); }
+string sub refCompound(reference<auto> r) { int secret = 5; r *= 1; return sprintf("%d", secret); }
+string sub refHashMinus(reference<auto> r) { int secret = 5; r -= "a"; return sprintf("%d", secret); }
+string sub refSplice(reference<auto> r) { int secret = 5; splice r, 1, 1; return sprintf("%d", secret); }
+string sub refExtract(reference<auto> r) { int secret = 5; extract r, 1, 1; return sprintf("%d", secret); }
+string sub refPop(reference<auto> r) { int secret = 5; pop r; return sprintf("%d", secret); }
+string sub refShift(reference<auto> r) { int secret = 5; shift r; return sprintf("%d", secret); }
+string sub refHashElement(reference<auto> r) { int secret = 5; r.a = 1; return sprintf("%d", secret); }
+string sub refListElement(reference<auto> r) { int secret = 5; r[1] = 1; return sprintf("%d", secret); }
+string sub refUntyped(reference r) { int secret = 5; r = 1; return sprintf("%d", secret); }
+
+# locals of the frame itself, declared before "secret", so that no earlier call or new object refreshes it
+string sub localAssign() { auto o = new Reflector(); int secret = 5; o = 1; return sprintf("%d", secret); }
+string sub localDelete() { auto o = new Reflector(); int secret = 5; delete o; return sprintf("%d", secret); }
+string sub localRemove() { auto o = new Reflector(); int secret = 5; remove o; return sprintf("%d", secret); }
+string sub localHashElement() {
+    hash<auto> h = objectHash();
+    int secret = 5;
+    h.a = 1;
+    return sprintf("%d", secret);
+}
+string sub localListElement() {
+    list<auto> l = objectList();
+    int secret = 5;
+    l[1] = 1;
+    return sprintf("%d", secret);
+}
+string sub localPop() { list<auto> l = objectList(2); int secret = 5; pop l; return sprintf("%d", secret); }
+string sub localScope() {
+    int secret;
+    {
+        auto o = new Reflector();
+        secret = 5;
+    }
+    return sprintf("%d", secret);
+}
+
+# stores that cannot release an object: these functions need no reflective frame and keep their native entries
+int sub typedHashStore(int count) {
+    hash<string, int> h = {"a": 0};
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        h.a = i;
+        total += h.a;
+    }
+    return total;
+}
+int sub typedListStore(int count) {
+    list<int> l = (0, 0);
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        l[1] = i;
+        total += l[1];
+    }
+    return total;
+}
+int sub scalarLocalStore(int count) {
+    int v = 0;
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        v = i;
+        total += v;
+    }
+    return total;
+}
+
+g = new Reflector(); printf("globalAssign: %s\n", globalAssign());
+g = new Reflector(); printf("globalDelete: %s\n", globalDelete());
+g = new Reflector(); printf("globalRemove: %s\n", globalRemove());
+g = new Reflector(); printf("globalRemoveUsed: %s\n", globalRemoveUsed());
+g = new Reflector(); printf("globalCompound: %s\n", globalCompound());
+gh = objectHash(); printf("globalHashMinus: %s\n", globalHashMinus());
+gl = objectList(); printf("globalSplice: %s\n", globalSplice());
+gl = objectList(); printf("globalExtract: %s\n", globalExtract());
+gl = objectList(2); printf("globalPop: %s\n", globalPop());
+gl = objectList(0); printf("globalShift: %s\n", globalShift());
+gh = objectHash(); printf("globalHashElement: %s\n", globalHashElement());
+gh = objectHash(); printf("globalHashElementDelete: %s\n", globalHashElementDelete());
+gh = objectHash(); printf("globalHashElementRemove: %s\n", globalHashElementRemove());
+gl = objectList(); printf("globalListElement: %s\n", globalListElement());
+g = new Reflector(); printf("globalParam: %s\n", globalParam(5));
+
+Holder::s = new Reflector(); printf("staticAssign: %s\n", staticAssign());
+Holder::s = new Reflector(); printf("staticDelete: %s\n", staticDelete());
+Holder::s = new Reflector(); printf("staticRemove: %s\n", staticRemove());
+Holder::s = new Reflector(); printf("staticCompound: %s\n", staticCompound());
+Holder::sh = objectHash(); printf("staticHashMinus: %s\n", staticHashMinus());
+Holder::sl = objectList(); printf("staticSplice: %s\n", staticSplice());
+Holder::sl = objectList(); printf("staticExtract: %s\n", staticExtract());
+Holder::sl = objectList(2); printf("staticPop: %s\n", staticPop());
+Holder::sl = objectList(0); printf("staticShift: %s\n", staticShift());
+Holder::sh = objectHash(); printf("staticHashElement: %s\n", staticHashElement());
+Holder::sl = objectList(); printf("staticListElement: %s\n", staticListElement());
+Holder::s = new Reflector(); printf("staticParam: %s\n", staticParam(5));
+
+g = new Reflector(); printf("refAssign: %s\n", refAssign(\g));
+g = new Reflector(); printf("refDelete: %s\n", refDelete(\g));
+g = new Reflector(); printf("refRemove: %s\n", refRemove(\g));
+g = new Reflector(); printf("refCompound: %s\n", refCompound(\g));
+gh = objectHash(); printf("refHashMinus: %s\n", refHashMinus(\gh));
+gl = objectList(); printf("refSplice: %s\n", refSplice(\gl));
+gl = objectList(); printf("refExtract: %s\n", refExtract(\gl));
+gl = objectList(2); printf("refPop: %s\n", refPop(\gl));
+gl = objectList(0); printf("refShift: %s\n", refShift(\gl));
+gh = objectHash(); printf("refHashElement: %s\n", refHashElement(\gh));
+gl = objectList(); printf("refListElement: %s\n", refListElement(\gl));
+Holder::s = new Reflector(); printf("refStatic: %s\n", refAssign(\Holder::s));
+g = new Reflector(); printf("refUntyped: %s\n", refUntyped(\g));
+
+printf("localAssign: %s\n", localAssign());
+printf("localDelete: %s\n", localDelete());
+printf("localRemove: %s\n", localRemove());
+printf("localHashElement: %s\n", localHashElement());
+printf("localListElement: %s\n", localListElement());
+printf("localPop: %s\n", localPop());
+printf("localScope: %s\n", localScope());
+
+{
+    Holder holder();
+    holder.m = new Reflector();
+    printf("memberAssign: %s\n", holder.memberAssign());
+    holder.m = new Reflector();
+    printf("memberDelete: %s\n", holder.memberDelete());
+    holder.m = objectHash();
+    printf("memberHashElement: %s\n", holder.memberHashElement());
+    holder.m = new Reflector();
+    printf("memberParam: %s\n", holder.memberParam(5));
+}
+
+printf("scalarStores: %d %d %d\n", typedHashStore(10), typedListStore(10), scalarLocalStore(10));

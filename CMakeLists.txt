@@ -97,6 +97,11 @@ option(QORE_BUILD_AOT_MODULES
        "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
        ON)
 set(QORE_AOT_MODULE_OPT_LEVEL "3" CACHE STRING "Optimization level (0-3) for AOT user modules")
+# qcc -g for the AOT user modules (qore#7676): debug support that costs performance, so never on by default, in any
+# build type
+option(QORE_QMOD_DEBUGGING
+       "Compile the AOT user modules with debugging (qcc -g): their calls report entry and exit to any debugger"
+       OFF)
 
 option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
@@ -1925,6 +1930,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
     lib/QoreIRToLLVMOwnedEntries.cpp
+    lib/QoreAOTStringRuntime.cpp
     lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
@@ -2656,9 +2662,13 @@ if (SINGLE_COMPILATION_UNIT)
     # - QoreIRToLLVMOwnedEntries.cpp: the copies of the AOT fast entries that take their arguments over (issue
     #   #6105), compiled with hidden visibility (below), so that the LLVM templates that it instantiates are not
     #   exported
+    # - QoreAOTStringRuntime.cpp: the AOT calls of the canonical <string>::split() and trim() builtins without an
+    #   argument list (issue #5578); in the SCU, it would change how the compiler inlines the call helpers that it
+    #   shares with the other calls, and so their code
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
         lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
-        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp lib/QoreIRToLLVMOwnedEntries.cpp)
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp lib/QoreIRToLLVMOwnedEntries.cpp
+        lib/QoreAOTStringRuntime.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -3431,7 +3441,13 @@ set(_qcc_format_sources
 #                      by-name calls use frees the entries it replaced
 #                      (qore#7459): libqore's own run-time state; qcc emits
 #                      calls to the same runtime functions either way.
+#   QoreAOTStringRuntime
+#                      the runtime functions that AOT code calls for the
+#                      canonical <string>::split() and trim() calls: it runs
+#                      the calls and emits nothing; their declarations, which
+#                      generated code calls, are in JITRuntime.h.
 set(_qcc_format_excluded_sources
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTStringRuntime.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTMethodDispatchReclaim.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp

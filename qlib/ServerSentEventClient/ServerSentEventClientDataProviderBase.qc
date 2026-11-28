@@ -313,8 +313,8 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        client.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        client.setLogger(logger);
     }
 
     #! Regstiger a child data provider

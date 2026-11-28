@@ -1859,14 +1859,23 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
-    // the location of the closure (see v26), which its signature gets: two lines, the offset and two string refs,
-    // followed by the return type, which the size check above counted before the location was added
+    // the location of the closure's block (see v26), which its debug block gets: two lines, the offset and two string
+    // refs, followed by the location of its signature (see v54, qore#7787), which its signature gets, and the return
+    // type, which the size check above counted before the locations were added
     const QoreProgramLocation* closure_loc = nullptr;
+    const QoreProgramLocation* closure_sig_loc = nullptr;
+    const size_t loc_size = 2 * qore_aot_line_size(ctx.reader) + 8 + 8;
     if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
-        if (!have(2 * qore_aot_line_size(ctx.reader) + 8 + 8 + 4)) {
+        if (!have(loc_size + 4)) {
             return fail("location");
         }
         closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    }
+    if (ctx.reader.getHeader().version >= QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION) {
+        if (!have(loc_size + 4)) {
+            return fail("signature location");
+        }
+        closure_sig_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
     }
 
     bool is_lambda = false, is_in_method = false, needs_type_context = false, defaults_need_object = false;
@@ -2032,9 +2041,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
-        closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
+        closure_sig_has_varargs, closure_class,
+        closure_sig_loc ? closure_sig_loc->getFile() : (closure_loc ? closure_loc->getFile() : nullptr),
+        closure_sig_loc ? closure_sig_loc->start_line : (closure_loc ? closure_loc->start_line : 0),
+        closure_sig_loc ? closure_sig_loc->end_line : (closure_loc ? closure_loc->end_line : 0),
         std::vector<uint8_t>(), ctx.local_owner_pgm);
+    closure_variant->setAOTBlockLocation(closure_loc);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
     }

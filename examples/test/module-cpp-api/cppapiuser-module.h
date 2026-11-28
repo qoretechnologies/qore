@@ -82,5 +82,6 @@ DLLLOCAL int64 cppapiuser_get_owned_probe_destroyed();
 #include "QC_PollableProbe.h"
 #include "QC_MemberWriteProbe.h"
 #include "QC_MemberAccessorProbe.h"
+#include "QC_SharedObjectProbe.h"
 
 #endif // _QORE_CPPAPIUSER_MODULE_H

@@ -116,8 +116,8 @@ printf(\"rv=%s log=%s stepped=%y\\n\", rv, log, r.steps > 0);
         assertEq("rv=kb log=|~k~l|~b~a stepped=True\n", ast_out, "AST destruction order");
 
         foreach bool strip in ((False, True)) {
-            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
-                libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile --compile-debugging%s --output %s "
+                "%s 2>&1", libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
             assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
             string aot_out = run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
             assertEq(ast_out, aot_out, sprintf("the debug IR of the AOT functions destroys the locals as the AST "

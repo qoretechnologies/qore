@@ -551,6 +551,9 @@ public class AsyncApi3Loader {
         @param opts options for the schema
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with JSON module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static AsyncApi3Schema fromString(string asyncapiSpecification, *bool json, *hash<auto> opts) {
         string ser;
@@ -559,8 +562,12 @@ public class AsyncApi3Loader {
         } else {
             ser = json ? "json" : "yaml";
         }
-        return new AsyncApi3Schema(asyncapiSpecification,
-            AsyncApi3Loader::parseSchemaSource(asyncapiSpecification, ser), opts);
+        AsyncApi3Schema rv(asyncapiSpecification, AsyncApi3Loader::parseSchemaSource(asyncapiSpecification, ser),
+            opts);
+        if (!SandboxManager::createsSharedObjects()) {
+            RestSchemaValidator::AbstractObjectBase::transferToCaller(rv, SandboxManager::getImmediateCaller());
+        }
+        return rv;
     }
 
     #! Load <a href="https://www.asyncapi.com/">AsyncApi</a> definition from a file.
@@ -570,10 +577,17 @@ public class AsyncApi3Loader {
 
         @throws EMPTY-SCHEMA-FILE %AsyncApi file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with the json module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static AsyncApi3Schema fromFile(string filepath, *hash<auto> opts) {
         string file_data = ReadOnlyFile::readTextFile(filepath);
-        return new AsyncApi3Schema(file_data, AsyncApi3Loader::parseSchemaContent(filepath, file_data), opts);
+        AsyncApi3Schema rv(file_data, AsyncApi3Loader::parseSchemaContent(filepath, file_data), opts);
+        if (!SandboxManager::createsSharedObjects()) {
+            RestSchemaValidator::AbstractObjectBase::transferToCaller(rv, SandboxManager::getImmediateCaller());
+        }
+        return rv;
     }
 
     #! Load <a href="https://www.asyncapi.com/">AsyncApi</a> definition from a URL or file path.
@@ -584,6 +598,9 @@ public class AsyncApi3Loader {
 
         @throws EMPTY-SCHEMA-FILE %AsyncApi file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with the json module unavailable
+
+        @note a tenant that calls it owns the new schema (see
+        @ref RestSchemaValidator::AbstractObjectBase::transferToCaller() "AbstractObjectBase::transferToCaller()")
     */
     static AsyncApi3Schema fromUrl(string url, *bool json, *hash<auto> opts) {
         if (!exists json) {

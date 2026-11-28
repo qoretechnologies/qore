@@ -160,6 +160,9 @@ struct qore_qf_private {
     //! what text read that is not valid in the encoding gives (the encoding_errors option; qore#6604)
     qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE;
     std::string filename;
+    //! the process's current directory that the file name derives from (a file opened with Dir::openFile() in a Dir
+    //! object whose path derives from it), or empty (qore#7662)
+    std::string cwd_base;
     mutable QoreThreadLock m;
     Queue* event_queue = nullptr;
     //! argument for the event queue
@@ -181,6 +184,29 @@ struct qore_qf_private {
     QoreStatefulTextDecoder decoder;
 
     DLLLOCAL qore_qf_private(const QoreEncoding* cs) : charset(cs) {
+    }
+
+    //! sets the process's current directory that the name of the open file derives from (qore#7662)
+    DLLLOCAL void setCwdBase(const std::string& base) {
+        AutoLocker al(m);
+        if (is_open) {
+            cwd_base = base;
+        }
+    }
+
+    //! returns the name of the file for the code running on the thread, or nullptr if no file is open
+    /** A name that derives from the process's current directory (see setCwdBase()) is given relative to it to code
+        that is not given host directories that it did not give itself (qore#7662)
+    */
+    DLLLOCAL QoreStringNode* getFileNameForCaller() const {
+        AutoLocker al(m);
+        if (filename.empty()) {
+            return nullptr;
+        }
+        if (!cwd_base.empty() && qore_caller_no_host_dirs()) {
+            return new QoreStringNode(qore_path_relative_to_base(filename.c_str(), cwd_base));
+        }
+        return new QoreStringNode(filename.c_str());
     }
 
     //! returns the private implementation of the given file
@@ -237,6 +263,7 @@ struct qore_qf_private {
     */
     DLLLOCAL int close_intern(bool detach = false) {
         filename.clear();
+        cwd_base.clear();
         decoder.reset();
         clearFifoEndRead();
 
@@ -295,6 +322,7 @@ struct qore_qf_private {
             return -1;
         }
         filename = file.filename;
+        cwd_base = file.cwd_base;
         // text from the new target starts in the initial shift state
         decoder.reset();
 

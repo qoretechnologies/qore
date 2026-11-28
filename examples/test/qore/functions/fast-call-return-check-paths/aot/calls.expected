@@ -1,0 +1,5 @@
+warm-up 1200
+checked: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FcrProvider.qm:43; stack: fcr_checked:16 <- fcr_call_checked:33; exceptions: RUNTIME-TYPE-ERROR
+given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FcrProvider.qm:48; stack: fcr_given:22 <- fcr_call_given:34; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+value: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FcrProvider.qm:57; stack: fcr_value_str:30 <- fcr_call_value_str:35; exceptions: RUNTIME-TYPE-ERROR
+value given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; at: FcrProvider.qm:53; stack: fcr_value:26 <- fcr_call_value:36; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR

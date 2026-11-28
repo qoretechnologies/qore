@@ -6,7 +6,9 @@
 # SandboxSerializable); trusted code serializes as before, and a deserialized object is not shared (qore#7673); see
 # shared-object-serialize.qtest.  The objects that are not shared that the tenant serializes are of a trusted class
 # that inherits SandboxSerializable, without which sandboxed code cannot serialize the non-public state of a trusted
-# class (qore#7146)
+# class (qore#7146), and the tenant created them (its sandbox owns them), as the owner rules of tenant isolation
+# refuse it the non-public members of an object that it did not create (qore#6842, qore#7033); the order of the rules
+# is checked at the end: the shared-object rule answers first, then the owner rules
 
 %modern
 %enable-all-warnings
@@ -216,6 +218,15 @@ string sub leaks(object o) {
     }
 }
 
+# an object that the tenant creates: its sandbox owns it (qore#6842)
+object sub create(string cls) {
+    switch (cls) {
+        case \"GuardedOptedIn\": return new GuardedOptedIn();
+        case \"SharedTimeZone\": return new SharedTimeZone();
+    }
+    throw \"UNKNOWN-CLASS\", cls;
+}
+
 # what the tenant gets back from the data that it serializes
 string sub round_trip(object o) {
     try {
@@ -236,6 +247,11 @@ object sub shared(object o) {
     return o;
 }
 
+# an object that the tenant creates
+object sub tenant_object(string cls) {
+    return p.callFunction("create", cls);
+}
+
 # trusted code that serializes the object that it is given
 code deputy = binary sub (object o) { return Serializable::serialize(o); };
 
@@ -245,7 +261,7 @@ foreach string name in (p.callFunction("serialization_names")) {
         p.callFunction("serialize_one", name, shared(new GuardedNoHook())),
         p.callFunction("serialize_one", name, shared(new GuardedHook())),
         p.callFunction("serialize_one", name, shared(new GuardedOptedIn())),
-        p.callFunction("serialize_one", name, new GuardedOptedIn()));
+        p.callFunction("serialize_one", name, tenant_object("GuardedOptedIn")));
 }
 # without SandboxSerializable, the non-public state of a trusted class is not the tenant's to serialize (qore#7146)
 printf("tenant serializes one that is not shared without SandboxSerializable: %s\n",
@@ -271,18 +287,19 @@ printf("tenant round trip with containers left out: %s\n", p.callFunction("round
     GuardedHook hc = Serializable::deserialize(h.serialize());
     printf("trusted code serializes one with serializeMembers(): %s\n", hc.useSecret());
 }
-printf("tenant round trip of one that is not shared: %s\n", p.callFunction("round_trip", new GuardedOptedIn()));
+printf("tenant round trip of one that is not shared: %s\n", p.callFunction("round_trip",
+    tenant_object("GuardedOptedIn")));
 printf("tenant serializes a subclass that serializes a member: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookChild())));
 printf("tenant serializes a subclass with only transient members: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookTransientChild())));
 printf("tenant serializes a shared object of a builtin class with a serializer: %s; one that is not shared: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new SharedTimeZone())),
-    p.callFunction("serialize_one", "Serializable::serialize()", new SharedTimeZone()));
+    p.callFunction("serialize_one", "Serializable::serialize()", tenant_object("SharedTimeZone")));
 StaticHolder::held = shared(new GuardedNoHook());
 printf("tenant serializes a shared object in a static class variable: %s\n", p.callFunction("serialize_static",
     new StaticHolder()));
-StaticHolder::held = new GuardedOptedIn();
+StaticHolder::held = tenant_object("GuardedOptedIn");
 printf("tenant serializes one that is not shared in a static class variable: %s\n",
     p.callFunction("serialize_static", new StaticHolder()));
 remove StaticHolder::held;
@@ -294,3 +311,10 @@ remove StaticHolder::held;
     Box b = Serializable::deserialize(Serializable::serialize(new Box(o)));
     printf("trusted code serializes it in an object: %s\n", b.v.useSecret());
 }
+# the order of the checks: the shared-object rule first, whoever created the object, then the owner rules, which
+# refuse the non-public members of an object that is not shared that the tenant did not create
+printf("order: tenant serializes a shared object of its own: %s; one of the host that is not shared: %s; one of its "
+    "own that is not shared: %s\n",
+    p.callFunction("serialize_one", "Serializable::serialize()", shared(tenant_object("GuardedOptedIn"))),
+    p.callFunction("serialize_one", "Serializable::serialize()", new GuardedOptedIn()),
+    p.callFunction("serialize_one", "Serializable::serialize()", tenant_object("GuardedOptedIn")));

@@ -74,8 +74,13 @@
     QORE_HAVE_DBI_SENSITIVE_DBNAME (#7275), QoreValue::resolveIndirectRef() (#7231),
     QoreHttpClientObject::getProxyURL(int) (#7236), qore_set_module_cleanup_handover_grace(),
     qore_get_module_cleanup_handover_grace() and qore_cleanup_left_library() with their feature macro
-    _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE (#7239), and the ssl_trust_store member of
-    HttpClientConnectionManagerBase::Options (#7248; a member added to a structure of the unreleased 2.3 API);
+    _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE (#7239), the ssl_trust_store member of
+    HttpClientConnectionManagerBase::Options (#7248; a member added to a structure of the unreleased 2.3 API), the
+    enforcement level of sandboxes (QoreSandboxEnforcementLevel, QoreSandboxManager::setEnforcementLevel(),
+    getEnforcementLevel(), isEnforcementLevelFixed() and qore_caller_tenant_isolated()) with its feature macro
+    QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL (#6842), qore_caller_owns_object(), qore_check_caller_owns_object() and
+    qore_check_caller_deletes_object() with their feature macro QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK (#7102, #6842),
+    and qore_transfer_object_to_caller() with its feature macro QORE_HAVE_SANDBOX_OBJECT_TRANSFER (#6842);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() have forms that copy the types to a type_vec_t that the caller gives and return a
     bool (#6419), with their feature macros _QORE_HAS_CODE_PARAM_TYPES_BY_REF and _QORE_HAS_TYPE_ARGUMENTS_BY_REF;

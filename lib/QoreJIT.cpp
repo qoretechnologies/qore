@@ -2619,7 +2619,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         fast_lowering.setBatchCallees(&batch_callee_map);
         fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
         fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
-            nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
+            nullptr, callee_info.return_kind, sig->getReturnTypeInfo(), sig->getParseLocation());
         return fast_lowering.lowerFunction(*callee.ir_func, *module, error);
     };
 
@@ -2926,7 +2926,13 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
             // JIT-compiled code calls into normal Qore functions which manage
             // their own stack locations via CodeEvaluationHelper. Clearing
             // the stack breaks exception call stacks.
-            uint64_t result_bits = fn(xsink);
+            uint64_t result_bits;
+            try {
+                result_bits = fn(xsink);
+            } catch (const std::bad_alloc&) {
+                // native frames were left without their cleanup: the process ends (qore#7466)
+                qore_native_allocation_failure();
+            }
 
             // Reconstruct QoreValue from NaN-boxed bits
             QoreValue result;

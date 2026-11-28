@@ -437,7 +437,7 @@ public class ConfluenceRestClient inherits RestClient::RestClient, ConfluenceRes
     /** The one call the discovery makes; an extension point for reaching Atlassian another way.
     */
     private *hash<auto> discoverSite(string token) {
-        return ConfluenceRestClientBase::discoverSiteOptions(token, getLogger());
+        return ConfluenceRestClientBase::discoverSiteOptions(token, getInternalLogger());
     }
 }
 
@@ -477,7 +477,7 @@ public class ConfluenceRestClientIo inherits RestClientIo::RestClientIo, Conflue
     /** The one call the discovery makes; an extension point for reaching Atlassian another way.
     */
     private *hash<auto> discoverSite(string token) {
-        return ConfluenceRestClientBase::discoverSiteOptions(token, getLogger());
+        return ConfluenceRestClientBase::discoverSiteOptions(token, logger);
     }
 }
 

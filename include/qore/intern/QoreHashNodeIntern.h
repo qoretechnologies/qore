@@ -34,9 +34,15 @@
 #define _QORE_QOREHASHNODEINTERN_H
 
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreAllocFailure.h"
+#include <atomic>
 #include <iterator>
 #include <limits>
 #include <memory>
+
+// returns 0 if the current code may delete the object, otherwise raises an exception and returns -1 (qore#6842); see
+// QoreObjectIntern.h
+DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
 
 #include <unordered_map>
 #include "qore/intern/xxhash.h"
@@ -627,6 +633,11 @@ public:
     }
 };
 
+#ifdef DEBUG
+//! the number of hashes that exist in the process (debug builds only: dbg_live_hash_count(); qore#7763)
+DLLLOCAL extern std::atomic<int64> qore_dbg_live_hashes;
+#endif
+
 class DLLLOCAL qore_hash_private {
 public:
     //! the members in their order
@@ -685,6 +696,9 @@ public:
     QoreSandboxChargeRecord sb;
 
     DLLLOCAL qore_hash_private() {
+#ifdef DEBUG
+        qore_dbg_live_hashes.fetch_add(1, std::memory_order_relaxed);
+#endif
     }
 
 #ifdef DEBUG
@@ -791,7 +805,19 @@ public:
     }
 
     //! returns the member with the key \a key, or nullptr
+    /** GCC passes the fields of the key in registers (an IPA-SRA clone) as long as each caller does nothing with
+        its key but pass it to calls; the find-or-create functions that create the member of their key inline use
+        findMemberForCreate() instead (qore#7763)
+    */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
+        assertNotReleasing();
+        return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
+    }
+
+    //! findMember(const qore_hash_lookup_key&) for the find-or-create functions of QoreHashNode.cpp, which create the
+    //! member of \a key inline when it is not found (createMemberKnownAbsentInline()), so that the other callers
+    //! keep the search with the key in registers (qore#7763)
+    QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMemberForCreate(const qore_hash_lookup_key& key) const {
         assertNotReleasing();
         return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
     }
@@ -987,6 +1013,12 @@ public:
     //! creates the member of the key \a key, which the hash does not have
     DLLLOCAL HashMember* createMemberKnownAbsent(const qore_hash_lookup_key& key);
 
+    //! createMemberKnownAbsent(const qore_hash_lookup_key&), always inlined into the find-or-create functions of
+    //! QoreHashNode.cpp (findCreateMember(const char*, bool&), findCreateMemberFor(), findCreateMemberPrehashed()),
+    //! so that a new member costs no call more than its allocation, whatever the number of the callers (qore#7763);
+    //! defined and used only in QoreHashNode.cpp
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL inline HashMember* createMemberKnownAbsentInline(const qore_hash_lookup_key& key);
+
     //! creates a member with the key of the member \a old of another hash, which this hash does not have, without
     //! hashing the key (qore#7265)
     /** @param old the member of the other hash, whose key map is of the same kind as the key map of this hash (see
@@ -998,6 +1030,13 @@ public:
         calls no function per member but to allocate it
     */
     QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
+#ifdef DEBUG
+        // the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466), as in the other ways to create a
+        // member (qore#7763)
+        if (qore_dbg_hash_member_fails()) {
+            throw std::bad_alloc();
+        }
+#endif
         if (!copy_layout) [[unlikely]] {
             // the key map of this hash has fewer buckets than that of the other hash, or is hardened: the insert
             // checks the chain, or gives the bucket by the keyed hash; the hash is the member hash that insert() takes
@@ -1017,6 +1056,10 @@ public:
 
     //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
     DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
+
+    //! addMemberKnownAbsent(), always inlined into createMemberKnownAbsentInline() (qore#7763); defined and used
+    //! only in QoreHashNode.cpp
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL inline HashMember* addMemberKnownAbsentInline(HashMember* m);
 
     //! sets the value of a new member \a om, which has no value, without type checks; takes over the reference of \a v
     DLLLOCAL void setNewMemberValue(HashMember* om, QoreValue v) {
@@ -1050,6 +1093,12 @@ public:
             return;
         }
 
+        // an object is deleted only if the current code may delete it (not a system constant object); otherwise the
+        // key is left as it is (qore#6842)
+        if (om->val.getType() == NT_OBJECT
+            && qore_check_object_delete(*om->val.get<const QoreObject>(), "delete", xsink)) {
+            return;
+        }
         // the value is taken and the member deleted before the value is released, as releasing it can run code
         // that changes the hash
         AbstractQoreNode* n = om->val.assignNothing();
@@ -1128,6 +1177,12 @@ public:
     DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
         ExceptionSink* xsink);
 
+    //! assigns a key as setKeyValueCanonical() does, taking a reference of its own to \a value, which the caller
+    //! keeps, once the member exists: memory that cannot be allocated for the member or the assignment never leaks
+    //! the value (qore#7466); \a res, if not nullptr, takes a reference to the value stored
+    DLLLOCAL static int setKeyValueCanonicalBorrowed(QoreHashNode& hash, const char* key, const QoreValue& value,
+        ExceptionSink* xsink, QoreValue* res = nullptr);
+
     //! assigns a key as setKeyValueCanonical() does; \a res takes a reference to the value stored after a successful
     //! assignment, which the value type of the hash can convert (the value of an assignment, qore#7589)
     DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
@@ -1185,7 +1240,7 @@ public:
     DLLLOCAL QoreHashNode* copyCheckNewType(const qore_hash_private& other) const {
         // a new value, which can be changed also when this hash was freed (see copyFreedState())
         QoreHashNode* rv = getCopy();
-        copyIntern(*rv->priv);
+        copyInternOrRelease(rv);
         if (hashdecl || other.hashdecl) {
             if (!hashdecl || !other.hashdecl || !hashdecl->equal(other.hashdecl)) {
                 // issue #6023: if one hashdecl inherits the other, the result is a hash of the child, which declares
@@ -1220,7 +1275,7 @@ public:
     DLLLOCAL QoreHashNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
         QoreHashNode* h = new QoreHashNode;
         h->priv->complexTypeInfo = newComplexTypeInfo;
-        copyIntern(*h->priv);
+        copyInternOrRelease(h);
         return h;
     }
 
@@ -1229,22 +1284,24 @@ public:
         // issue #2791: perform type stripping at the source
         if (!strip || (!complexTypeInfo && !hashdecl)) {
             QoreHashNode* h = getCopy();
-            copyIntern(*h->priv);
+            copyInternOrRelease(h);
             copyFreedState(*h->priv);
             return h;
         }
-        assertNotReleasing();
-        QoreHashNode* h = new QoreHashNode;
-        qore_hash_private& hp = *h->priv;
-        bool copy_layout = hp.reserveForCopy(*this);
-        // copy all members to new object
-        for (const HashMember* i : member_list) {
-            HashMember* om = hp.createMemberKnownAbsent(*i, copy_layout);
-            hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
-        }
-        copyFreedState(hp);
-        return h;
+        return copyStripped();
     }
+
+    //! returns a copy without type information (copy() with \a strip); memory that cannot be allocated for a member
+    //! releases the copy (qore#7763)
+    DLLLOCAL QoreHashNode* copyStripped() const;
+
+    //! releases a copy that could not be made (qore#7763)
+    DLLLOCAL static void releaseFailedCopy(QoreHashNode* h) __attribute__((noinline, cold));
+
+    //! copies the members to the new hash \a h as copyIntern() does; memory that cannot be allocated for a member
+    //! releases \a h and the members copied before the exception goes on (qore#7763); out of line, so that the
+    //! handler is not repeated in each caller of copy()
+    DLLLOCAL void copyInternOrRelease(QoreHashNode* h) const;
 
     //! A copy of a freed hash cannot be changed either (qore#7163)
     /** A hash freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
@@ -1284,7 +1341,10 @@ public:
         // copy all members to new object; a copy is not a new holder of the values: a weakly designated container in
         // the hash is shared with the copy, without the share check of a member store (qore#7342)
         for (const HashMember* i : member_list) {
-            h.setNewMemberValue(h.createMemberKnownAbsent(*i, copy_layout), i->val.refSelf());
+            // the member is created before the reference is taken: memory that cannot be allocated for it never
+            // leaks the value (qore#7763)
+            HashMember* om = h.createMemberKnownAbsent(*i, copy_layout);
+            h.setNewMemberValue(om, i->val.refSelf());
         }
     }
 
@@ -1343,44 +1403,66 @@ public:
         return h.release();
     }
 
+    //! finds or creates the member of \a key for the assignment of \a value, which the caller has handed over
+    /** Memory that cannot be allocated for the member (std::bad_alloc) releases the value before the exception goes
+        on, so that a setter that takes the reference to its value never leaks it (qore#7763); never inlined, as
+        findCreateMember() is not, so that the setters that call it stay as small as before and are inlined as before
+    */
+    DLLLOCAL __attribute__((noinline)) HashMember* findCreateMemberFor(const char* key, QoreValue value,
+        ExceptionSink* xsink, bool& created);
+
+    //! creates the member of \a key, which the hash does not have, for the assignment of \a value, which the caller
+    //! has handed over; see findCreateMemberFor()
+    DLLLOCAL __attribute__((noinline)) HashMember* createMemberKnownAbsentFor(const char* key, QoreValue value,
+        ExceptionSink* xsink);
+
+    //! releases a value whose member could not be created (qore#7763)
+    DLLLOCAL static void discardUnstoredValue(QoreValue value, ExceptionSink* xsink) __attribute__((noinline, cold));
+
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, SafeDerefHelper& sdh, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, key);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, val, xsink, created);
+        hash_assignment_priv ha(*this, om, created);
         // in case of assigning keys to an initialized hashdecl, the key may already have a value
         ha.assign(val, sdh, xsink);
     }
 
     DLLLOCAL void setKeyValue(const std::string& key, QoreValue val, SafeDerefHelper& sdh, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, key.c_str());
-        // in case of assigning keys to an initialized hashdecl, the key may already have a value
-        ha.assign(val, sdh, xsink);
+        setKeyValue(key.c_str(), val, sdh, xsink);
     }
 
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, SafeDerefHelper& sdh, ExceptionSink* xsink,
             LexicalSemanticPolicy policy) {
-        hash_assignment_priv ha(*this, key);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, val, xsink, created);
+        hash_assignment_priv ha(*this, om, created);
         ha.assign(val, sdh, xsink, policy);
     }
 
     DLLLOCAL void setKeyValueIntern(const char* key, QoreValue v) {
-        hash_assignment_priv ha(*this, key);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, v, nullptr, created);
+        hash_assignment_priv ha(*this, om, created);
         // in case of assigning keys to an initialized hashdecl, the key may already have a value
         // if the value is an object of a class that throws an exception in the destructor, then a crash will result
         ValueHolder old(ha.swap(v), nullptr);
     }
 
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, key);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, val, xsink, created);
+        hash_assignment_priv ha(*this, om, created);
         ha.assign(val, xsink);
     }
 
     DLLLOCAL void setKeyValueKnownAbsent(const char* key, QoreValue val, ExceptionSink* xsink) {
         // the member is created here, so a rejected assignment removes it again
-        hash_assignment_priv ha(*this, createMemberKnownAbsent(key), true);
+        hash_assignment_priv ha(*this, createMemberKnownAbsentFor(key, val, xsink), true);
         ha.assign(val, xsink);
     }
 
     DLLLOCAL void setKeyValueKnownAbsentIntern(const char* key, QoreValue val) {
-        HashMember* member = createMemberKnownAbsent(key);
+        HashMember* member = createMemberKnownAbsentFor(key, val, nullptr);
         bool scan = qore_store_needs_scan(val);
         member->val = val;
         if (scan) {
@@ -1388,13 +1470,28 @@ public:
         }
     }
 
+    //! sets a new key as setKeyValueKnownAbsentIntern() does, taking a reference of its own to \a val, which the
+    //! caller keeps, once the member exists: of the values of a new hash, only those stored have a reference that
+    //! the hash releases (qore#7763)
+    DLLLOCAL void setKeyValueKnownAbsentInternBorrowed(const char* key, const QoreValue& val) {
+        HashMember* member = createMemberKnownAbsent(key);
+        QoreValue v = val.needsRef() ? val.refSelf() : val;
+        bool scan = qore_store_needs_scan(v);
+        member->val = v;
+        if (scan) {
+            incScanCount(1);
+        }
+    }
+
     DLLLOCAL void setKeyValue(const std::string& key, QoreValue val, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, key.c_str());
-        ha.assign(val, xsink);
+        setKeyValue(key.c_str(), val, xsink);
     }
 
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, qore_object_private* o, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, key, false, o);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, val, xsink, created);
+        hash_assignment_priv ha(*this, om, created);
+        ha.o = o;
         ha.assign(val, xsink);
     }
 
@@ -1527,7 +1624,10 @@ public:
     DLLLOCAL QoreValue swapKeyValue(const char* key, QoreValue val, qore_object_private* o) {
         //printd(0, "qore_hash_private::swapKeyValue() this: %p key: %s val: %p (%s) deprecated API called\n", this, key, val, get_node_type(val));
         //assert(false);
-        hash_assignment_priv ha(*this, key, false, o);
+        bool created;
+        HashMember* om = findCreateMemberFor(key, val, nullptr, created);
+        hash_assignment_priv ha(*this, om, created);
+        ha.o = o;
         return ha.swap(val);
     }
 

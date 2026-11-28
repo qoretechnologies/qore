@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# An object merged into another object with the += operator gives the target object the members of the source object
+# that the merging code may read, as the other reads of a whole object do (issue #7657): code outside of the source
+# object's class merges its public members only, and the code of the class and of a subclass also its private
+# members.  The private:internal members of a class are kept in storage of the class's own, which is not merged into an
+# object of another class.
+
+%new-style
+%strict-args
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ObjectMergePrivateMembersTest
+
+#! the class whose objects are merged
+class Src {
+    public {
+        int pub = 1;
+    }
+
+    private {
+        int priv = 2;
+    }
+
+    private:internal {
+        int internal = 3;
+    }
+
+    #! merges self into the given object in the code of the class
+    mergeSelfInto(object target) {
+        target += self;
+    }
+
+    #! merges another object of the class into the given object in the code of the class
+    static mergeInto(object target, Src src) {
+        target += src;
+    }
+}
+
+#! a subclass, whose code can use the private members of its parent class, but not its private:internal ones
+class SrcSub inherits Src {
+    #! merges another object into the given object in the code of the subclass
+    static mergeIntoSub(object target, Src src) {
+        target += src;
+    }
+}
+
+#! the target objects: a class without declared members, all of whose members are public
+class Bag {
+}
+
+class ObjectMergePrivateMembersTest inherits QUnit::Test {
+    constructor() : QUnit::Test("object merge private members", "1.0", \ARGV) {
+        addTestCase("outside of the class", \outsideTest());
+        addTestCase("in the class", \classTest());
+        addTestCase("in a subclass", \subclassTest());
+        set_return_value(main());
+    }
+
+    #! code outside of the class merges the public members only
+    outsideTest() {
+        object b = new Bag();
+        b += new Src();
+        assertEq(("pub",), keys b, "a function");
+        assertEq(1, b.("pub"));
+
+        object b2 = new Bag();
+        b2 += new SrcSub();
+        assertEq(("pub",), keys b2, "an object of a subclass");
+    }
+
+    #! the code of the class merges the private members of its own objects
+    classTest() {
+        object b = new Bag();
+        (new Src()).mergeSelfInto(b);
+        assertEq(("pub", "priv"), keys b, "self");
+        assertEq(2, b.("priv"));
+
+        object b2 = new Bag();
+        Src::mergeInto(b2, new Src());
+        assertEq(("pub", "priv"), keys b2, "another object of the class");
+    }
+
+    #! the code of a subclass merges the private members of an object of its parent class
+    subclassTest() {
+        object b = new Bag();
+        SrcSub::mergeIntoSub(b, new Src());
+        assertEq(("pub", "priv"), keys b, "an object of the parent class");
+    }
+}

@@ -378,8 +378,10 @@ class LazyValueAppCycleTest inherits QUnit::Test {
         Program tenant(PO_NEW_STYLE, True);
         tenant.parse("%requires DataProvider\n"
             "sub load(string path) { load_module(path); }\n"
-            "int sub id() { return call_static_method(\"LazyValueWorkerCycleModule::WorkerCycle\", \"getId\"); }\n"
-            "string sub read(int id) { try { return DataProviderActionCatalog::getLazyValue(id); }\n"
+            # only the module's code reads its value (qore#6843): the tenant reads it with the module's getter, and
+            # the readers of other Programs with a closure of the module
+            "code sub reader() { return call_static_method(\"LazyValueWorkerCycleModule::WorkerCycle\", \"getReader\"); }\n"
+            "string sub read() { try { return call_static_method(\"LazyValueWorkerCycleModule::WorkerCycle\", \"getValue\"); }\n"
             "    catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
             "auto sub read_app(string app) { try { return map $1.action, DataProviderActionCatalog::getActions(app, False); }\n"
             "    catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", "worker-cycle-tenant");
@@ -389,16 +391,17 @@ class LazyValueAppCycleTest inherits QUnit::Test {
         sm.addFilesystemAllowedPath(normalize_dir(get_script_dir()), QSEC_READ);
         tenant.setSandboxManager(sm);
         tenant.callFunction("load", normalize_dir(get_script_dir()) + "/LazyValueWorkerCycleModule.qm");
-        int id = tenant.callFunction("id");
+        code read_value = tenant.callFunction("reader");
         Queue worker_tids();
         DataProviderActionCatalog::registerLazyAppActions(read_by_worker, sub () {
             worker_tids.push(gettid());
-            DataProviderActionCatalog::getLazyValue(id);
+            # the registration is the test's code: it reads the module's value with the module's own code (qore#6843)
+            read_value();
             LazyValueAppCycleTest::registerAction(read_by_worker, "read");
         });
         Queue results();
         # thread S, which a sandbox governs, builds the value
-        background LazyValueAppCycleTest::run(results, "s", auto sub () { return tenant.callFunction("read", id); });
+        background LazyValueAppCycleTest::run(results, "s", auto sub () { return tenant.callFunction("read"); });
         building.waitForZero();
         # the only worker runs the registration that reads the value, for a sandboxed reader, and waits for S
         background LazyValueAppCycleTest::run(results, "r", auto sub () {
@@ -412,7 +415,7 @@ class LazyValueAppCycleTest inherits QUnit::Test {
         assertEq("SHARED-INIT-CYCLE", r.s);
         # the worker built the value then, and ran the registrations
         assertEq(("read",), r.r);
-        assertEq("private", DataProviderActionCatalog::getLazyValue(id));
+        assertEq("private", read_value());
         assertEq(("needed",), map $1.action, DataProviderActionCatalog::getActions(needed, False));
 %else
         testSkip("the test needs the catalog's test hooks, which only debug builds have");

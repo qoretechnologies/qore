@@ -16,5 +16,6 @@ a scope of another trusted class: SHARED-OBJECT-ERROR, cached: "orig" count: 1
 a closure of the class run while the state is held: SHARED-OBJECT-ERROR, cached: "orig" count: 1
 a tenant replaces the logger of a shared logger wrapper: SHARED-OBJECT-ERROR SHARED-OBJECT-ERROR, host logger kept: True
 a tenant replaces the logger of a logger wrapper that is not shared: changed changed, host logger kept: False
+order: a tenant replaces the logger of a shared logger wrapper of its own: SHARED-OBJECT-ERROR SHARED-OBJECT-ERROR, host logger kept: True; of one of the host that is not shared: SANDBOX-OBJECT-ACCESS-ERROR SANDBOX-OBJECT-ACCESS-ERROR, host logger kept: True
 trusted code updates an object that is not shared: SHARED-OBJECT-ERROR
 trusted code updates a shared object: cached: "unscoped" count: 2

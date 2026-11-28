@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the missing return value check of a function's fast entry and its source location
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires Util
+%requires ../../../ExecModeHarness.qm
+
+%exec-class MissingReturnLocationTest
+
+#! The error of code that ends without a return statement is located at its declaration in every mode (qore#7787)
+/** Code that declares a return type that rejects NOTHING and ends without a return statement raises
+    RUNTIME-TYPE-ERROR ("block missing return statement"), which the AST interpreter locates at the declaration of the
+    code (UserVariantBase::evalIntern()).  Native code that calls a function or a closure directly calls its fast
+    entry, which applies the return type to the missing value itself, and the error had the location of the call in
+    the caller in the JIT and tiered modes and in programs compiled with qcc.
+
+    MissingReturnLocation.q prints every location field of the error for a function with a local object (the shape of
+    the issue), a function without one, a function with an on_exit statement, a function of another return type,
+    methods, a static method, closures and a function called through a call reference (its standard entry), and the
+    results of code whose return type accepts or converts NOTHING; its output must be the one in
+    MissingReturnLocation.expected (the AST interpreter's) in every execution mode, on the IR tier and in programs
+    compiled with qcc -O0 and -O3.
+
+    With the debug library, the fixture also prints the cases whose error the fast entry of native code raised
+    (\c dbg_get_missing_return_coercion_error_count()), which must be those of FastEntryErrors for native execution
+    and none for the AST and IR interpreters, so that each native case is shown to check the fast entry's path.
+*/
+class MissingReturnLocationTest inherits QUnit::Test {
+    public {
+        #! the cases whose error is raised by a fast entry when the fixture runs as native code, by run, separated by
+        #! commas
+        const FastEntryErrors = {
+            "jit": "repro,local object,plain,on_exit,string,local closure",
+            "tiered": "repro,local object,plain,on_exit,string,local closure",
+            # a closure that a compiled program calls where it creates it runs through the runtime's closure call,
+            # whose caller raises the error (execClosureDirect()) at the location of its signature
+            "qcc": "repro,local object,plain,on_exit,string",
+        };
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        # an absolute path, as the source path of a program that qcc compiles is
+        string fixture = normalize_dir(get_script_dir() + "/MissingReturnLocation.q");
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/MissingReturnLocation.expected");
+    }
+
+    constructor() : QUnit::Test("the error of a missing return statement is located at the declaration", "1.0",
+            \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                check(ExecModeHarness::run(command(execution_mode)), FastEntryErrors{execution_mode} ?? "");
+            });
+        }
+        addTestCase("IR tier", sub () {
+            check(ExecModeHarness::run_ir_tier(command("tiered")), "");
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! compares the output, with the path of the fixture replaced, with the expected one
+    /** @param output the output of the fixture
+        @param fast_entry_errors the cases whose error a fast entry of native code must have raised, separated by commas
+    */
+    private check(string output, string fast_entry_errors) {
+        # the line of the cases whose error a fast entry raised, which is not part of the expected output
+        assertTrue(output =~ /^fast entry errors: /m, "the fixture printed the cases whose error a fast entry raised");
+        # an empty list of cases is an empty capture, which is extracted as no value
+        string errors = (output =~ x/^fast entry errors: (.*)$/m)[0] ?? "";
+        output = regex_subst(output, "^fast entry errors: .*\n", "", RE_MultiLine);
+        assertEq(expected, replace(output, fixture, "<fixture>"));
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertEq(fast_entry_errors, errors, "the cases whose error a fast entry raised");
+        } else {
+            assertEq("not counted", errors);
+        }
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/missing-return-location";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the program must also end normally: a crash after its last line fails the test
+        # the module loader's warnings are not output of the program (qore#7805)
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "the exit status of the compiled program; output: " + r.out);
+        assertEq("", r.stderr, "stderr");
+        check(r.stdout, FastEntryErrors.qcc);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

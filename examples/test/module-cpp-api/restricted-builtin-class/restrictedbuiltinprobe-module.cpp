@@ -7,7 +7,11 @@
 
     <tt>RestrictedBuiltinProbe::make()</tt> creates such a class for the calling Program and returns an object of it
     that has no Program of its own (a system object), so that only the source Program of its class tells whose class
-    it is.
+    it is.  Its methods \c touch() (in the \c UNCONTROLLED_API domain), \c fsTouch() (\c FILESYSTEM) and
+    \c mixedTouch() (both) return @ref True: the uncontrolled API of an object of the class that a Program gives to
+    code restricted from it is a capability of that Program, while its other domains are checked against that code
+    (qore#7543).  The class <tt>RestrictedBuiltinProbe::StaticProbe</tt>, which no Program owns, has the same
+    \c touch() method.
 
     Qore Programming Language
 
@@ -37,15 +41,60 @@ namespace {
 //! the namespace of the module, copied into each Program that loads it
 QoreNamespace ProbeNs("RestrictedBuiltinProbe");
 
+//! the private data of the objects of the class, which its methods need
+class ProbeData : public AbstractPrivateData {
+};
+
+//! the method of the class, in the UNCONTROLLED_API domain as the methods of the classes of language bridges are
+QoreValue ProbeClass_touch(const QoreMethod& meth, const void* ptr, QoreObject* self, AbstractPrivateData* pd,
+        const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return true;
+}
+
+//! a method of the class in the FILESYSTEM domain, which it does not use
+QoreValue ProbeClass_fsTouch(const QoreMethod& meth, const void* ptr, QoreObject* self, AbstractPrivateData* pd,
+        const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return true;
+}
+
+//! a method of the class in both the UNCONTROLLED_API and the FILESYSTEM domains
+QoreValue ProbeClass_mixedTouch(const QoreMethod& meth, const void* ptr, QoreObject* self, AbstractPrivateData* pd,
+        const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return true;
+}
+
+//! the class of the module that no Program owns (a builtin class of a binary module)
+QoreClass* StaticProbeClass = nullptr;
+
+//! the constructor of the class that no Program owns
+void StaticProbe_constructor(const QoreMethod& meth, const void* ptr, QoreObject* self, const QoreListNode* args,
+        RuntimeConfig& rc, ExceptionSink* xsink) {
+    self->setPrivate(StaticProbeClass->getID(), new ProbeData);
+}
+
 //! returns an object of a builtin class created for the calling Program
 QoreValue f_make(const void* ptr, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     // the class keeps the calling Program as its source Program; the object holds the class
     QoreClassHolder cls(new QoreBuiltinClass(getProgram(), "ProbeClass", "RestrictedBuiltinProbe::ProbeClass"));
-    return new QoreObject(cls, nullptr);
+    QoreClass* c = cls;
+    c->addMethod(nullptr, "touch", (q_external_method_t)ProbeClass_touch, Public, QCF_NO_FLAGS,
+        QDOM_UNCONTROLLED_API, boolTypeInfo);
+    c->addMethod(nullptr, "fsTouch", (q_external_method_t)ProbeClass_fsTouch, Public, QCF_NO_FLAGS, QDOM_FILESYSTEM,
+        boolTypeInfo);
+    c->addMethod(nullptr, "mixedTouch", (q_external_method_t)ProbeClass_mixedTouch, Public, QCF_NO_FLAGS,
+        QDOM_UNCONTROLLED_API | QDOM_FILESYSTEM, boolTypeInfo);
+    c->initializeBuiltin();
+    return new QoreObject(cls, nullptr, new ProbeData);
 }
 
 void restrictedbuiltinprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     ProbeNs.addBuiltinVariant(nullptr, "make", f_make, QCF_NO_FLAGS, QDOM_DEFAULT, objectTypeInfo);
+    // a builtin class of the module, which no Program owns, with a method in the UNCONTROLLED_API domain
+    StaticProbeClass = new QoreClass("StaticProbe", "RestrictedBuiltinProbe::StaticProbe");
+    StaticProbeClass->addConstructor(nullptr, (q_external_constructor_t)StaticProbe_constructor);
+    StaticProbeClass->addMethod(nullptr, "touch", (q_external_method_t)ProbeClass_touch, Public, QCF_NO_FLAGS,
+        QDOM_UNCONTROLLED_API, boolTypeInfo);
+    ProbeNs.addSystemClass(StaticProbeClass);
 }
 
 void restrictedbuiltinprobe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

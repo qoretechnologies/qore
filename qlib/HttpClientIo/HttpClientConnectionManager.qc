@@ -6320,8 +6320,16 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Sets the logger for this connection manager
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the logger
+        of a connection manager that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+    */
     setLogger(*LoggerInterface logger) {
+        # restricted code that does not own the manager cannot reconfigure it (qore#7830)
         checkStateCaller("set the logger of");
+        # the manager can be shared by the clients of several owners (issue 6842)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         self.logger = logger;
     }
 

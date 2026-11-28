@@ -285,7 +285,16 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
         #   started with a module directory of library code, as a module's initialization runs once in a process
+        # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
+        #   execution mode, under a small stack rlimit, as the checks are of the start of the process
+        # - module-hash-deps and module-deps-hash (#7796): their checks load modules from source and compiled with qcc
+        #   in child processes that set their own execution modes, as a module is loaded once in a process
+        # - qcc-require-cycles (#7808): its checks compile modules with qcc and load them from source and AOT in child
+        #   processes that set their own execution modes
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/qore/misc/module-loader/qcc-require-cycles.qtest",
+                                 "examples/test/qore/misc/module-loader/module-hash-deps.qtest",
+                                 "examples/test/module-cpp-api/module-deps/module-deps-hash.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",

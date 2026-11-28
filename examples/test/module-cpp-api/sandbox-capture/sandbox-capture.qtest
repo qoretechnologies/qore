@@ -48,6 +48,12 @@ class SandboxCaptureApiTest inherits QUnit::Test {
         list<int> handles = ();
         #! a system-policy capability that checks a path with a capture applied and with its policy manager
         code system_check;
+        #! the sandbox root of tenant R, a directory whose name no other path of the test contains
+        string root;
+        #! the name of the root
+        string root_name;
+        #! a Program whose sandbox confines it to the root
+        Program tenant_r;
     }
 
     constructor() : QUnit::Test("SandboxCaptureApiTest", "1.0", \ARGV) {
@@ -74,6 +80,14 @@ class SandboxCaptureApiTest inherits QUnit::Test {
         tenant_b_ref = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
         tenant_b_ref.setSandboxManager(sm_b);
         tenant_b_ref.parse("%modern\ncode sub ref(object o) { return \\o.capture(); }", "tenant-b-ref");
+        root_name = sprintf("sbx-root-7507-%d-%d", getpid(), now_us().getEpochSeconds());
+        root = realpath(dir.path) + DirSep + root_name;
+        mkdir(root);
+        SandboxManager sm_r();
+        sm_r.setFilesystemSandboxRoot(root);
+        tenant_r = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant_r.setSandboxManager(sm_r);
+        tenant_r.parse(code, "tenant-r");
         # registered during trusted initialization, as system-policy capabilities must be
         system_check = SandboxManager::createSystemPolicyCall(hash<auto> sub (int h, string path) {
             hash<auto> rv;
@@ -105,6 +119,7 @@ class SandboxCaptureApiTest inherits QUnit::Test {
             \testCaptureCapabilityScope());
         addTestCase("work run for a capture runs for the restrictions of the capturing code",
             \testCallerRestrictions());
+        addTestCase("the denial names the sandbox root only to unrestricted code", \testRootInDenial());
         set_return_value(main());
     }
 
@@ -398,5 +413,80 @@ class SandboxCaptureApiTest inherits QUnit::Test {
         assertFalse(sb_capture_has_policy(h), "the system policy applies");
         sb_capture_check_read(h, secret);
         sb_capture_applied_check_read(h, secret);
+    }
+
+    #! the denial of a path outside the sandbox root names the root, a directory of the host, to the unrestricted host
+    #! alone: not to the code that the policy governs nor to code restricted from external information (qore#7507)
+    testRootInDenial() {
+        int h = tenant_r.callFunction("call", \sb_capture());
+        handles += h;
+        string outside = realpath(dir.path) + DirSep + "public";
+        # the unsandboxed host that checks the captured policy itself
+        assertThrows(DeniedErr, sprintf("Access to '%s' denied: path is outside sandbox root '%s'", outside, root),
+            \sb_capture_check_read(), (h, outside), "the host gets the root");
+        # the code that the policy governs
+        *hash<ExceptionInfo> ex = tenant_r.callFunction("call", *hash<ExceptionInfo> sub () {
+            try {
+                sb_capture_check_read(h, outside);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex;
+            }
+        });
+        checkRootDenial(ex, outside, "sandboxed");
+        # unsandboxed code restricted from external information, in each execution mode
+        foreach hash<auto> m in ({"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED}.pairIterator()) {
+            Program p(PO_MODERN | PO_NO_EXTERNAL_INFO);
+            p.setExecMode(m.value);
+            p.parse(sprintf("%%requires cppapiuser
+our *hash<ExceptionInfo> err;
+try {
+    sb_capture_check_read(%d, %y);
+} catch (hash<ExceptionInfo> ex) {
+    err = ex;
+}
+*hash<ExceptionInfo> sub get() {
+    return err;
+}
+", h, outside), "no-external-info-" + m.key);
+            p.run();
+            checkRootDenial(p.callFunction("get"), outside, "no external info " + m.key);
+        }
+    }
+
+    #! checks a denial of \a outside that does not name the root, in any string of the exception
+    private checkRootDenial(*hash<ExceptionInfo> ex, string outside, string label) {
+        assertEq(DeniedErr, ex.err, label);
+        assertEq(sprintf("Access to '%s' denied: path is outside the sandbox root", outside), ex.desc, label);
+        list<string> found = ();
+        int strings = findRoot(ex, label, \found);
+        assertGt(5, strings, label + ": the strings checked");
+        assertEq((), found, label + ": the root is not named");
+    }
+
+    #! adds each string in the value that names the root to \a found; returns the strings checked
+    private int findRoot(auto v, string label, reference<list<string>> found) {
+        switch (v.typeCode()) {
+            case NT_STRING:
+                if (v.find(root_name) >= 0) {
+                    found += sprintf("%s: %y", label, v);
+                }
+                return 1;
+            case NT_HASH: {
+                int rv = 0;
+                foreach hash<auto> i in (v.pairIterator()) {
+                    rv += findRoot(i.key, label + " key", \found);
+                    rv += findRoot(i.value, label + "." + i.key, \found);
+                }
+                return rv;
+            }
+            case NT_LIST: {
+                int rv = 0;
+                foreach auto e in (v) {
+                    rv += findRoot(e, label, \found);
+                }
+                return rv;
+            }
+        }
+        return 0;
     }
 }

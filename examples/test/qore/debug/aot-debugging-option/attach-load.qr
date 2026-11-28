@@ -1,0 +1,34 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# attaches a debugger to its Program before or after it loads DbgOptMod (ARGV[0]: attach-first or load-first),
+# attaches it again, and calls the module: aot-debugging-option.qtest checks that the code of the module, which runs
+# in the module's own Program, gives no warning of qore#7676
+%modern
+%allow-debugger
+
+class Debugger inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) {}
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+Debugger debugger();
+ProgramControl pc = ProgramControl::getProgram();
+string order = ARGV[0] ?? "load-first";
+if (order == "attach-first") {
+    debugger.addProgram(pc);
+    load_module("DbgOptMod");
+} else {
+    load_module("DbgOptMod");
+    debugger.addProgram(pc);
+}
+# a debugger that attaches again gets no second warning
+debugger.removeProgram(pc);
+debugger.addProgram(pc);
+printf("%s: %d\n", order, call_function("DbgOptMod::dbgOptAdd", 2, 3));
+debugger.removeProgram(pc);

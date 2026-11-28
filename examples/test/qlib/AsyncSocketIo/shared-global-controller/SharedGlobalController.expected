@@ -3,8 +3,8 @@ its own setLogger(): SANDBOX-REGISTRATION-ERROR, the tenant's logger is set: Fal
 the inherited LoggerWrapper::setLogger() through Reflection: SHARED-OBJECT-ERROR, the tenant's logger is set: False
 Reflection NormalMember::setValue() of the private member: REFLECTION-ACCESS-ERROR, the tenant's logger is set: False
 delete: SHARED-OBJECT-ERROR, the tenant's logger is set: False
-the tenant uses the host's logger: no exception, info enabled: False; host level: WARN, messages: 0
-the tenant uses the host's logger through a copy: no exception, copy shared: False; host level: WARN, messages: 0
+the tenant uses the host's logger: setLevel(): SHARED-OBJECT-ERROR, info() and log(): no exception, info enabled: False; host level: WARN, messages: 0
+the tenant uses the host's logger through a copy: no exception, copy shared: False, copy owned: False, the copy has the host's logger: False, setLevel() on the copy: SANDBOX-OBJECT-ACCESS-ERROR, setLogger() on the copy: SANDBOX-REGISTRATION-ERROR, LoggerWrapper::setLogger() on the copy: SANDBOX-OBJECT-ACCESS-ERROR, info() through the copy: no exception; host level: WARN, messages: 0
 the tenant calls isLogger() with the host's logger: False
 the host's code logs for the tenant: messages: 0
 the host logs through the wrapper: messages: 1, uses its logger: True

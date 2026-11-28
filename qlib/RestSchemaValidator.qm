@@ -442,6 +442,39 @@ public namespace RestSchemaValidator {
             }
         }
 
+        #! Hands a schema that a loader created for the code of a tenant that called it to that code, which then owns it
+        /** An object that library code creates while it serves sandboxed code is owned by no sandbox (see
+            @ref sandbox_object_ownership), so the tenant could not delete the schema that it loaded or give it a
+            logger.  The schema is handed over with
+            @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()" only if the
+            loader's immediate caller is the restricted code of a tenant at the enforcement level of tenant isolation:
+            not if it is library code, which may keep the schema for other callers, nor trusted code, whose schemas
+            are shared.  Only the schema object is handed over, not the objects that it holds.  Fails closed: if the
+            schema cannot be handed over, it stays owned by no sandbox.
+
+            @param schema the schema that the loader created in this call
+            @param caller the immediate caller of the loader, as
+            @ref Qore::SandboxManager::getImmediateCaller() "SandboxManager::getImmediateCaller()" returned it in the
+            loader's own code
+
+            @since RestSchemaValidator 2.5
+        */
+        static transferToCaller(object schema, *hash<ImmediateCallerInfo> caller) {
+            if (!caller || caller.library || !caller.restricted || SandboxManager::createsSharedObjects()
+                || !SandboxManager::isTenantIsolated()) {
+                return;
+            }
+            try {
+                SandboxManager::transferObjectToCaller(schema);
+            } catch (hash<ExceptionInfo> ex) {
+                # the caller cannot own objects (sandboxed code that no sandbox manager governs): the schema stays
+                # owned by no sandbox
+                if (ex.err != "SANDBOX-ACCESS-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+
         #! Initialize
         /**
             @param oh deserialized hash from the source schema description

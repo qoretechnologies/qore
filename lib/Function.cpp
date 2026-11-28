@@ -1884,10 +1884,23 @@ static bool is_caller_judged_uncontrolled_api(const QoreFunction* func, const Ab
 
     @return 0 if the call may proceed, -1 if it is refused (INVALID-FUNCTION-ACCESS raised)
 */
-static int check_sandbox_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
-        ExceptionSink* xsink) {
-    assert(variant);
-    if (variant->isUser() || !(variant->getFunctionality() & QDOM_UNCONTROLLED_API)) {
+//! the part of check_sandbox_uncontrolled_api() for a builtin variant of the uncontrolled-API or external-information
+//! domain: out of line, so that the frame of the per-call code that calls it does not grow (qore#7678)
+static QORE_INTERN_NOINLINE int check_sandbox_restricted_builtin(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, int64 functionality, ExceptionSink* xsink) {
+    // a function of the external-information domain called by the code of a host Program that runs for a borrower
+    // restricted from external information is refused as it is for the borrower, also when the call was resolved
+    // when the code was parsed (qore#7678); not the destructor of a builtin class (see below)
+    if ((functionality & QDOM_EXTERNAL_INFO) && qore_lent_program_refuses_external_info_builtin()
+            && !dynamic_cast<const DestructorMethodFunction*>(func)) {
+        std::string class_path = func->classPath();
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "the code of a Program called for code restricted from "
+            "external information cannot access builtin %s '%s%s%s(%s)'; functional domain: EXTERNAL_INFO",
+            !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
+            !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
+        return -1;
+    }
+    if (!(functionality & QDOM_UNCONTROLLED_API)) {
         return 0;
     }
     if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
@@ -1910,6 +1923,19 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
         !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
         !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
     return -1;
+}
+
+static QORE_INTERN_ALWAYS_INLINE int check_sandbox_uncontrolled_api(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+    assert(variant);
+    if (variant->isUser()) {
+        return 0;
+    }
+    int64 functionality = variant->getFunctionality();
+    if (!(functionality & (QDOM_UNCONTROLLED_API | QDOM_EXTERNAL_INFO))) {
+        return 0;
+    }
+    return check_sandbox_restricted_builtin(func, variant, functionality, xsink);
 }
 
 #ifdef DEBUG
@@ -2010,9 +2036,14 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     qore_dbg_runtime_chosen_variant = false;
 #endif
     QoreSandboxProvenanceHelper::set(self);
-    // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
-    if (getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
-        return;
+    // only for a receiver with provenance, which the call applied as a frame: no other work on the common path
+    if (getContext()) [[unlikely]] {
+        // the receiver's provenance does not count for a builtin method that serializes it (qore#7146)
+        qore_mark_serializing_receiver_call(static_cast<const QoreSandboxProvenanceHelper&>(*this), func);
+        // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+        if (qore_sandbox_check_isolation(xsink, "calling a method")) {
+            return;
+        }
     }
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
@@ -2083,7 +2114,8 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     // receiver that is current; the parameter types of the candidates are substituted with the callee's receiver,
     // which the search takes as an argument (qore#5892)
     bool runtime_resolved = !variant;
-    if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy)) {
+    if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy,
+            self)) {
         return;
     }
     if (receiver_type_info) {
@@ -2219,9 +2251,9 @@ struct CallerReceiverScope {
 template <bool LexicalInvocation>
 __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantRetry(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-        LexicalSemanticPolicy invocation_policy, bool explicit_type_args) {
+        LexicalSemanticPolicy invocation_policy, bool explicit_type_args, const QoreObject* self) {
     CallerReceiverScope caller_receiver(explicit_type_args && restore_receiver_type_info, old_receiver_type_info);
-    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy, self);
 }
 
 CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArguments(const QoreFunction* func,
@@ -2279,7 +2311,7 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
                 explicit_type_param_instantiation = runtime_get_type_param_instantiation();
             }
             int find_rc = findVariantRetry<LexicalInvocation>(func, variant, cctx, invocation_policy,
-                old_explicit_inst);
+                old_explicit_inst, self);
             if (closure_type_args) {
                 explicit_type_param_instantiation = old_explicit_inst;
             }
@@ -2381,7 +2413,7 @@ __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const
 template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-        LexicalSemanticPolicy invocation_policy) {
+        LexicalSemanticPolicy invocation_policy, const QoreObject* self) {
     // the class context given for the call, which is none for qore_no_class_ctx() (a call reference created with no
     // class context), otherwise the class context of the code that makes the call
     const qore_class_private* class_ctx = qc ? (cctx ? qore_given_class_ctx(cctx) : runtime_get_class()) : nullptr;
@@ -2420,9 +2452,13 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         ClassAccess va = mv->getAccess();
         // the access that a variant of a parent class has in a method whose abstract variant it implements is checked
         // when the variant is selected (skip_method_variant()): the variant object is also in the parent class's
-        // method, from which the selection may have taken it (qore#7277)
+        // method, from which the selection may have taken it (qore#7277); a private variant of a class that trusted
+        // code declared is private:internal for the code of a class that sandboxed code declared (qore#6843)
         if ((va > Public && !class_ctx) || (va == Internal
-            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
+            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))
+            || (va == Private && qore_class_private::sandboxDeniesPrivateAccess(
+                qore_class_private::get(*mv->getClass()), class_ctx)
+                && !qore_class_private::runtimeTakeSandboxSuperCall(variant, self))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
                 qore_class_private::get(*mv->getClass())->memberDiagnosticName(), func->getName(),
                 mv->getSignature()->getSignatureText());
@@ -2441,7 +2477,7 @@ const AbstractQoreFunctionVariant* CodeEvaluationHelper::findFilteredVariant(con
 
 int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx) {
-    return findVariantImpl<false>(func, variant, cctx, {});
+    return findVariantImpl<false>(func, variant, cctx, {}, nullptr);
 }
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
@@ -3530,8 +3566,13 @@ static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctio
     if (mf->hasImplementedVariantAccess()) {
         va = mf->getVariantAccess(v, va);
     }
-    // skip if the variant is not accessible
-    return ((!class_ctx && va > Public) || (va == Internal && !internal_access));
+    // skip if the variant is not accessible; a private variant of a class that trusted code declared is
+    // private:internal for the code of a class that sandboxed code declared (qore#6843)
+    // (except in the call of a base class's version of a method by its override, see QoreSandboxSuperCallHelper)
+    return ((!class_ctx && va > Public) || (va == Internal && !internal_access)
+        || (va == Private && class_ctx
+            && qore_class_private::sandboxDeniesPrivateAccess(mvb->getClassPriv(), class_ctx)
+            && !qore_class_private::isSandboxSuperCallVariant(v)));
 }
 
 static const QoreParameterizedClassTypeInfo* get_receiver_owner_type_info(const QoreTypeInfo* receiver_type_info,
@@ -4805,17 +4846,38 @@ int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* 
     checked against the restrictions of the caller (of the creator for a call through a call reference, which has no
     \a user_dom_code_pgm), as the domains declared on a user variant are.
 
-    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program) or that is
-    made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function and a
-    variant that module code may call without the restrictions it inherits from its caller
+    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program \a pgm) or
+    that is made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function
+    and a variant that module code may call without the restrictions it inherits from its caller
     (QCF_CALLER_RESTRICTION_RELIEF, which only static builtin methods have) are checked as before.
+
+    The uncontrolled API domain of a builtin method of a class that is owned by the Program the call runs in (\a pgm;
+    see qore_class_private::ownedByProgramForCall()) is not checked against the caller: such a class was created for
+    that Program at run time (QoreBuiltinClass(QoreProgram*, ...), or a builtin class added to a namespace of the
+    Program, as the classes of the Python objects and Java classes of a language bridge module are), so its methods
+    run that Program's foreign code, and its objects that the caller holds are
+    capabilities of that Program, as the objects of the Qore classes of that Program are (qore#5521); the domain is
+    checked against the options of that Program, as before qore#7543.  A sandbox that governs the caller still refuses
+    uncontrolled APIs to it (check_sandbox_uncontrolled_api()), and the other domains of such a method are checked
+    against the caller.  The builtin classes that no Program owns (the classes of the library and of binary modules,
+    which the Qore classes of qore#7543 inherit) are checked against the caller.
 */
 static QORE_INTERN_NOINLINE int64 qore_get_entered_builtin_method_denied_domains(
         const AbstractQoreFunctionVariant* variant, int64 vflags, const QoreParseOptions& user_dom_po,
-        const QoreProgram* user_dom_code_pgm) {
+        const QoreProgram* user_dom_code_pgm, const QoreProgram* pgm) {
     assert(vflags);
-    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF) || !variant->getClass()) {
+    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)) {
         return QDOM_DEFAULT;
+    }
+    const QoreClass* cls = variant->getClass();
+    if (!cls) {
+        return QDOM_DEFAULT;
+    }
+    if ((vflags & QDOM_UNCONTROLLED_API) && qore_class_private::get(*cls)->ownedByProgramForCall(pgm)) {
+        vflags &= ~QDOM_UNCONTROLLED_API;
+        if (!vflags) {
+            return QDOM_DEFAULT;
+        }
     }
     return user_dom_code_pgm
         ? qore_denied_domains(vflags, qore_relieve_module_declared_domains(user_dom_po, user_dom_code_pgm))
@@ -4834,7 +4896,8 @@ static QORE_INTERN_NOINLINE int64 qore_get_runtime_variant_denied_domains(const 
     // a call that did not enter another Program has the Program of the code that makes it (pgm is not nullptr, so a
     // call through a call reference, which has no user_dom_code_pgm, is included; qore#7543)
     if (user_dom_code_pgm != pgm && user_dom_po) {
-        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm);
+        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm,
+            pgm);
     }
     return denied;
 }
@@ -8104,7 +8167,11 @@ StatementBlock* UserVariantBase::getAOTClosureDebugBlock() const {
     if (!pgm || !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return nullptr;
     }
-    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
+    // the location of the closure's block, which the AOT image records apart from the location of its signature
+    // (qore#7787)
+    const QoreProgramLocation* loc = is_closure
+        ? static_cast<const UserClosureVariant*>(this)->getAOTBlockLocation() : nullptr;
+    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(loc ? loc : signature.getParseLocation());
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
@@ -8167,6 +8234,36 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, cons
     }
     jit_compile_state.store(2, std::memory_order_relaxed);
     current_tier.store(TIER_JIT, std::memory_order_release);
+}
+
+const QoreAOTCallRefEntry* UserVariantBase::lookupAOTCallRefEntry() const {
+    // read only after hasCachedFunction() (the acquire load of the tier, which the registration of the function
+    // published it with)
+    AotFunctionPtr fn = cached_aot_fn;
+    if (!fn) {
+        return nullptr;
+    }
+    // a lookup that found nothing is made again only once more entries have been registered
+    if (aot_callref_miss_generation.load(std::memory_order_acquire) == qore_aot_callref_registration_generation()) {
+        return nullptr;
+    }
+    uint32_t generation = 0;
+    const QoreAOTCallRefEntry* entry = qore_aot_find_callref_entry(fn, generation);
+    // an entry whose number of parameters is not the variant's is not taken (it cannot be the function's)
+    if (entry && entry->nparams != signature.numParams()) {
+        entry = nullptr;
+    }
+    if (!entry) {
+        aot_callref_miss_generation.store(generation, std::memory_order_release);
+        return nullptr;
+    }
+    // published once: a thread that lost the race returns the entry that the winner published, which is the same
+    const QoreAOTCallRefEntry* published = nullptr;
+    if (!aot_callref_entry.compare_exchange_strong(published, entry, std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
+        return published;
+    }
+    return entry;
 }
 
 bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) const {
@@ -8275,6 +8372,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
             ir->needs_call_frame = true;
+            ir->reflective_frame = true;
             if (!ir->ir_only_locals.empty() || !ir->reference_slot_locals.empty()
                     || !ir->real_reference_locals.empty()) {
                 ir->ir_only_locals.clear();
@@ -8406,6 +8504,31 @@ bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSin
     setCachedIR(ir.release());
     aot_lazy_closure_ir.reset();
     has_aot_lazy_closure_ir.store(false, std::memory_order_release);
+    return true;
+}
+
+bool UserVariantBase::materializeAOTClosureDebugIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_lazy_closure_ir_mutex);
+    if (getCachedIR()) {
+        return true;
+    }
+    if (!aot_closure_debug_ir) {
+        return false;
+    }
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_closure_ir(
+        *aot_closure_debug_ir, const_cast<UserVariantBase*>(this), xsink, error);
+    if (!ir) {
+        if (!*xsink) {
+            xsink->raiseException("AOT-CLOSURE-IR-ERROR",
+                "could not materialize the debug IR of closure '%s': %s",
+                name ? name : "<closure>", error.empty() ? "unknown error" : error.c_str());
+        }
+        return false;
+    }
+    // the native body keeps running without a debugger: the IR is not promoted to the IR tier
+    setCachedIR(ir.release(), false);
+    aot_closure_debug_ir.reset();
     return true;
 }
 
@@ -8954,6 +9077,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // get_local_vars() and set_local_var_value() can access them
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
         func->needs_call_frame = true;
+        func->reflective_frame = true;
         if (!func->ir_only_locals.empty() || !func->reference_slot_locals.empty()
                 || !func->real_reference_locals.empty()) {
             func->ir_only_locals.clear();
@@ -9988,6 +10112,46 @@ QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink*
     completed = !es->isPending();
 }
 
+//! returns the declared return type of a tiered call's body, or nullptr if it has no type to check
+static const QoreTypeInfo* qore_tiered_return_type(const UserSignature& signature) {
+    const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
+        ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
+        : signature.getReturnTypeInfo();
+    return rt && QoreTypeInfo::hasType(rt) ? rt : nullptr;
+}
+
+//! checks the value that the body of a tiered call (native or in the IR interpreter) returned against its declared
+//! return type, as ReturnStatement::execImpl() checks it, unless an exception is pending or the body returned no value
+/** Called with the function's runtime location, before the caller's is restored and before the body's locals are
+    released, as the AST interpreter checks the value in the return statement: the exception has the location of the
+    return in the function (qore#7762).  A body that returned no value is checked by
+    qore_check_tiered_missing_return() once its locals have been released, as the AST interpreter checks it
+*/
+static void qore_check_tiered_return_value(const UserSignature& signature, QoreValue& val, ExceptionSink* xsink) {
+    if (*xsink || val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_tiered_return_type(signature)) {
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+}
+
+//! checks a body of a tiered call that returned no value against its declared return type (a missing return
+//! statement), as the AST interpreter checks it after the body has ended and its locals have been released, unless an
+//! exception is pending; the exception has the location of the function's declaration
+static void qore_check_tiered_missing_return(const UserSignature& signature, QoreValue& val, ExceptionSink* xsink) {
+    if (*xsink || !val.isNothing()) {
+        return;
+    }
+    if (const QoreTypeInfo* rt = qore_tiered_return_type(signature)) {
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+        if (*xsink) {
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    }
+}
+
 template <typename Completion>
 QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
@@ -10078,6 +10242,11 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                     name ? name : "<fn>");
             }
 
+            // the value is checked against the declared return type with the function's runtime location, before
+            // it is restored: the exception has the location of the return in the function, as in the AST
+            // interpreter (qore#7762)
+            qore_check_tiered_return_value(signature, val, xsink);
+
             swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
             for (int i = static_cast<int>(ir->ast_visible_body_locals.size()) - 1; i >= 0; --i) {
@@ -10098,22 +10267,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
         signature.selfid->uninstantiateSelf();
     }
 
-    if (!*xsink) {
-        const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-            ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-            : signature.getReturnTypeInfo();
-        if (rt && QoreTypeInfo::hasType(rt)) {
-            if (val.isNothing()) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
-        }
-    }
+    qore_check_tiered_missing_return(signature, val, xsink);
     return val;
 }
 
@@ -10202,6 +10356,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             tier = TIER_AST;
         } else {
             if (materializeAOTDebugIR(name, xsink)) {
+                tier = TIER_IR;
+            } else if (*xsink) {
+                return QoreValue();
+            } else if (materializeAOTClosureDebugIR(name, xsink)) {
+                // a closure created by native code runs its debug IR too (qore#7752)
                 tier = TIER_IR;
             } else if (*xsink) {
                 return QoreValue();
@@ -10321,6 +10480,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 } catch (const QoreJITException&) {
                     result_bits = 0;
+                } catch (const std::bad_alloc&) {
+                    // native frames were left without their cleanup: the process ends (qore#7466)
+                    qore_native_allocation_failure();
                 }
 
                 // Check for JIT guard failure requesting deopt to AST.
@@ -10360,6 +10522,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
                     val = std::bit_cast<QoreValue>(result_bits);
                 }
+
+                // the value is checked against the declared return type with the function's runtime location, before
+                // it is restored: the exception has the location of the return in the function, as in the AST
+                // interpreter (qore#7762)
+                qore_check_tiered_return_value(signature, val, xsink);
 
                 // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
@@ -10406,22 +10573,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             }
         }
 
-        if (!*xsink) {
-            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-                : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
-        }
+        qore_check_tiered_missing_return(signature, val, xsink);
         return val;
     }
 
@@ -10513,6 +10665,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = QoreValue();
                 }
 
+                // the value is checked against the declared return type with the function's runtime location, before
+                // it is restored: the exception has the location of the return in the function, as in the AST
+                // interpreter (qore#7762)
+                qore_check_tiered_return_value(signature, val, xsink);
+
                 // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
@@ -10558,22 +10715,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             attemptJITCompilation();
         }
 
-        if (!*xsink) {
-            const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
-                ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
-                : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
-        }
+        qore_check_tiered_missing_return(signature, val, xsink);
         return val;
     }
 

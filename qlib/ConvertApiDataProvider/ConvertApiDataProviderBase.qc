@@ -112,8 +112,8 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
         be read, and the REST client logs its requests
     */
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Returns the supported reference data types for this provider

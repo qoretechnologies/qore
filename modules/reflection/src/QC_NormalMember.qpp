@@ -95,6 +95,10 @@ auto NormalMember::getValue(object obj) [flags=RET_VALUE_ONLY] {
     if (check_member(caller, obj, m->name.c_str(), m->cls, xsink)) {
         return QoreValue();
     }
+    // a non-public member of an object only for the code that owns the object (qore#7033)
+    if (m->getAccess() > Public && qore_check_caller_owns_object(*obj, "read a non-public member of", xsink)) {
+        return QoreValue();
+    }
 
     return obj->getReferencedMemberNoMethod(m->name.c_str(), m->cls, xsink);
 }
@@ -137,6 +141,10 @@ nothing NormalMember::setValue(object obj, auto val) {
     }
 
     if (check_member(caller, obj, m->name.c_str(), m->cls, xsink)) {
+        return QoreValue();
+    }
+    // a non-public member of an object only for the code that owns the object (qore#6842)
+    if (m->getAccess() > Public && qore_check_caller_owns_object(*obj, "change a non-public member of", xsink)) {
         return QoreValue();
     }
 

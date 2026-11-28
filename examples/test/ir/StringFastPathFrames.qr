@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# exceptions raised by the string builtins that the IR interpreter and JIT and AOT code call through fast paths and
+# fusions; each exception and its whole call stack is printed and compared with the AST interpreter's
+# (StringFastPathFrames.qtest)
+
+%modern
+string sub f_tolower(string s) { return tolower(s); }
+string sub f_toupper(string s) { return toupper(s); }
+string sub f_lwr(string s) { return s.lwr(); }
+string sub f_upr(string s) { return s.upr(); }
+string sub f_substr(string s) { return s.substr(1, 2); }
+string sub f_substr1(string s) { return s.substr(1); }
+int sub f_find(string s, string p) { return s.find(p); }
+int sub f_rfind(string s, string p) { return s.rfind(p); }
+bool sub f_starts(string s, string p) { return s.startsWith(p); }
+bool sub f_ends(string s, string p) { return s.endsWith(p); }
+bool sub f_contains(string s, string p) { return s.contains(p); }
+int sub f_length(string s) { return s.length(); }
+int sub f_flength(string s) { return length(s); }
+int sub f_strlen(string s) { return strlen(s); }
+bool sub f_lwr_contains(string s, string p) { return s.lwr().contains(p); }
+int sub f_lwr_length(string s) { return s.lwr().length(); }
+int sub f_lwr_size(string s) { return s.lwr().size(); }
+bool sub f_lwr_eq(string s, string p) { return s.lwr() == p; }
+string sub f_cat_substr(string a, string b) { return (a + b).substr(1, 2); }
+bool sub f_cat_contains(string a, string b, string p) { return (a + b).contains(p); }
+string sub f_opt_lwr(*string s) { return s.lwr(); }
+string sub f_opt_substr(*string s) { return s.substr(1, 2); }
+int sub f_opt_find(*string s, string p) { return s.find(p); }
+int sub f_toint(string s) { return s.toInt(); }
+int sub f_len_plus(string s) { return s.length() + 1; }
+int sub f_call_len_plus(string s) { return f_len_plus(s) * 2; }
+bool sub f_pipe(string a, string b, string p) { return (a + b).substr(1).lwr().contains(p); }
+int sub f_cat_length(string a, string b) { return (a + b).length(); }
+bool sub f_upr_starts(string s, string p) { return s.upr().startsWith(p); }
+int sub f_lwr_find(string s, string p) { return s.lwr().find(p); }
+bool sub f_lwr_lt(string s, string p) { return s.lwr() < p; }
+# the functions that the lowering makes as calls of pseudo-methods, alone and with operands that a fusion could take
+string sub f_fsubstr(string s) { return substr(s, 1, 2); }
+int sub f_findex(string s, string p) { return index(s, p); }
+int sub f_frindex(string s, string p) { return rindex(s, p); }
+int sub f_findex_off(string s, string p, int o) { return index(s, p, o); }
+string sub f_fsubstr_cat(string a, string b) { return substr(a + b, 1, 2); }
+int sub f_findex_cat(string a, string b, string p) { return index(a + b, p); }
+int sub f_findex_lwr(string s, string p) { return index(tolower(s), p); }
+# integer arguments outside the inline range, explicit offsets, upr() consumers, the converted operand on the right
+string sub f_substr_big(string s) { return s.substr(1, 9223372036854775807); }
+int sub f_find_off(string s, string p, int o) { return s.find(p, o); }
+int sub f_rfind_off(string s, string p, int o) { return s.rfind(p, o); }
+int sub f_upr_rfind(string s, string p) { return s.upr().rfind(p); }
+bool sub f_ne_upr(string s, string p) { return p != s.upr(); }
+# a case conversion consumer that is a call of index(); a loop-invariant call; a callee that a summary could take; the
+# result of a call consumed by index()
+int sub f_findex_dot_lwr(string s, string p) { return index(s.lwr(), p); }
+int sub f_findex_loop(string s, string p) { int t = 0; for (int i = 0; i < 3; ++i) { t += index(s, p); } return t; }
+int sub f_findex_callee(string s, string p) { return index(s, p); }
+int sub f_findex_caller(string s, string p) { return f_findex_callee(s, p) + 1; }
+string sub f_ret(string s) { return s; }
+int sub f_findex_ret(string s, string p) { return index(f_ret(s), p); }
+string sub f_fsubstr_ret(string s) { return substr(f_ret(s), 1, 2); }
+# an exception pending when the fast path runs
+string sub f_pending(string s) {
+    on_error {
+        string l = s.lwr();
+    }
+    throw "PENDING", "pending";
+}
+
+sub show(string name, code c) {
+    try {
+        auto value = c();
+        # a string result is printed as its bytes: it can be text that is not valid in its encoding
+        printf("%s: %y\n", name, value.typeCode() == NT_STRING ? binary(value) : value);
+    } catch (hash<ExceptionInfo> ex) {
+        # the exception without its call stack, then every frame of the call stack; an AOT executable records its
+        # sources by their absolute paths and no columns, and the statement IDs are those of the AST interpreter's
+        # statements only, so these are left out
+        # a chained exception follows the exception
+        *hash<ExceptionInfo> e = ex;
+        string label = name;
+        while (e) {
+            printf("%s: %y\n", label, e - ("callstack", "next") + {"file": basename(e.file)});
+            foreach hash<CallStackInfo> frame in (e.callstack) {
+                printf("  %d: %y\n", $#, frame - ("statementid", "start_column", "end_column")
+                    + {"file": basename(frame.file)});
+            }
+            e = e.next;
+            label = "  next";
+        }
+    }
+}
+string bad = binary_to_string(<41ff42ff43>, "UTF-8");
+string ascii = convert_encoding("abc", "ASCII");
+show("tolower", auto sub () { return f_tolower(bad); });
+show("toupper", auto sub () { return f_toupper(bad); });
+show("lwr", auto sub () { return f_lwr(bad); });
+show("upr", auto sub () { return f_upr(bad); });
+show("substr", auto sub () { return f_substr(bad); });
+show("substr1", auto sub () { return f_substr1(bad); });
+show("find", auto sub () { return f_find(ascii, "日"); });
+show("find-bad", auto sub () { return f_find(bad, "B"); });
+show("rfind", auto sub () { return f_rfind(ascii, "日"); });
+show("rfind-bad", auto sub () { return f_rfind(bad, "B"); });
+show("starts", auto sub () { return f_starts(ascii, "日"); });
+show("ends", auto sub () { return f_ends(ascii, "日"); });
+show("contains", auto sub () { return f_contains(ascii, "日"); });
+show("length", auto sub () { return f_length(bad); });
+show("flength", auto sub () { return f_flength(bad); });
+show("strlen", auto sub () { return f_strlen(bad); });
+show("lwr-contains", auto sub () { return f_lwr_contains(bad, "b"); });
+show("lwr-contains-p", auto sub () { return f_lwr_contains(ascii, "日"); });
+show("lwr-length", auto sub () { return f_lwr_length(bad); });
+show("lwr-size", auto sub () { return f_lwr_size(bad); });
+show("lwr-eq", auto sub () { return f_lwr_eq(bad, "x"); });
+show("cat-substr", auto sub () { return f_cat_substr(ascii, "日"); });
+show("cat-substr-bad", auto sub () { return f_cat_substr(bad, "x"); });
+show("cat-contains", auto sub () { return f_cat_contains(ascii, "日", "x"); });
+show("cat-contains-p", auto sub () { return f_cat_contains(ascii, "x", "日"); });
+show("opt-lwr", auto sub () { return f_opt_lwr(bad); });
+show("opt-substr", auto sub () { return f_opt_substr(bad); });
+show("opt-find", auto sub () { return f_opt_find(ascii, "日"); });
+show("toint", auto sub () { return f_toint(bad); });
+show("len-plus", auto sub () { return f_call_len_plus(bad); });
+show("pipe", auto sub () { return f_pipe(bad, "x", "b"); });
+show("pipe-p", auto sub () { return f_pipe(ascii, "x", "日"); });
+show("cat-length", auto sub () { return f_cat_length(bad, "x"); });
+show("upr-starts", auto sub () { return f_upr_starts(ascii, "日"); });
+show("lwr-find", auto sub () { return f_lwr_find(ascii, "日"); });
+show("lwr-lt", auto sub () { return f_lwr_lt(bad, "x"); });
+show("fsubstr", auto sub () { return f_fsubstr(bad); });
+show("findex", auto sub () { return f_findex(ascii, "日"); });
+show("findex-bad", auto sub () { return f_findex(bad, "B"); });
+show("frindex", auto sub () { return f_frindex(ascii, "日"); });
+show("findex-off", auto sub () { return f_findex_off(ascii, "日", 1); });
+show("fsubstr-cat", auto sub () { return f_fsubstr_cat(bad, "x"); });
+show("findex-cat", auto sub () { return f_findex_cat(ascii, "x", "日"); });
+show("findex-lwr", auto sub () { return f_findex_lwr(bad, "b"); });
+show("findex-lwr-p", auto sub () { return f_findex_lwr(ascii, "日"); });
+show("substr-big", auto sub () { return f_substr_big(bad); });
+show("find-off", auto sub () { return f_find_off(ascii, "日", 1); });
+show("rfind-off", auto sub () { return f_rfind_off(bad, "B", 3); });
+show("upr-rfind", auto sub () { return f_upr_rfind(ascii, "日"); });
+show("ne-upr", auto sub () { return f_ne_upr(bad, "x"); });
+show("findex-dot-lwr", auto sub () { return f_findex_dot_lwr(bad, "b"); });
+show("findex-dot-lwr-p", auto sub () { return f_findex_dot_lwr(ascii, "日"); });
+show("findex-loop", auto sub () { return f_findex_loop(ascii, "日"); });
+show("findex-caller", auto sub () { return f_findex_caller(ascii, "日"); });
+show("findex-ret", auto sub () { return f_findex_ret(ascii, "日"); });
+show("fsubstr-ret", auto sub () { return f_fsubstr_ret(bad); });
+show("pending", auto sub () { return f_pending(bad); });
+# closures and nested closures: the function and the method forms
+code cl_findex = int sub (string s, string p) { return index(s, p); };
+code cl_find = int sub (string s, string p) { return s.find(p); };
+code cl_lwr = string sub (string s) { return s.lwr(); };
+code cl_nested_findex = int sub (string s, string p) {
+    code inner = int sub (string s2) { return index(s2, p); };
+    return inner(s);
+};
+code cl_nested_lwr = string sub (string s) {
+    code inner = string sub (string s2) { return s2.lwr(); };
+    return inner(s);
+};
+code cl_try = string sub (string s) {
+    try {
+        return index(binary_to_string(<61ff62>, "UTF-8"), "b").toString() + substr(s, 0, 1);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+};
+show("cl-findex", auto sub () { return cl_findex(ascii, "日"); });
+show("cl-find", auto sub () { return cl_find(ascii, "日"); });
+show("cl-lwr", auto sub () { return cl_lwr(bad); });
+show("cl-nested-findex", auto sub () { return cl_nested_findex(ascii, "日"); });
+show("cl-nested-lwr", auto sub () { return cl_nested_lwr(bad); });
+show("cl-try", auto sub () { return cl_try("a"); });

@@ -35,6 +35,8 @@
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QC_SandboxManager.h"
 #include "qore/intern/CallReferenceNode.h"
 
 #include <atomic>
@@ -598,6 +600,47 @@ hashdecl SandboxConfigInfo {
     /** @since %Qore 3.0
     */
     bool uncontrolled_api_policy;
+    //! The enforcement level of the sandbox (see SandboxManager::setEnforcementLevel())
+    /** @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+        @since %Qore 3.0
+    */
+    int enforcement_level;
+}
+
+//! The code that made the call immediately before the running code (see SandboxManager::getImmediateCaller())
+/** @since %Qore 3.0
+*/
+hashdecl ImmediateCallerInfo {
+    //! the ID of the %Program whose code is the immediate caller
+    /** For code compiled in another %Program than the one that it runs in, the %Program that compiled it
+    */
+    int program_id;
+    //! the name of the module whose code is the immediate caller, if it is the code of a registered user module
+    *string module;
+    //! @ref True "True" if the immediate caller is the code of a library module (from a trusted module directory)
+    bool library;
+    //! @ref True "True" if the immediate caller is restricted code
+    /** The code of a %Program that is not a module's and has a restriction or a sandbox, of code compiled in such a
+        %Program, or of a module that is not library code (loaded by its path) whose %Program has one; or any code if,
+        while it or the running code ran, a closure or call reference that restricted or sandboxed code created was
+        called, or a method of an object that code restricted from the file system, the network or external
+        information created (an object of code that only a sandbox governs does not count)
+    */
+    bool restricted;
+    //! the number of the immediate caller's frame
+    /** Frames are counted from the start of the thread, one for each call between the code of different %Programs:
+        the number stays the same while the frame is on the stack
+    */
+    int frame;
+    //! the outermost frame of the run of trusted code that ends with the immediate caller
+    /** @ref nothing if the immediate caller is restricted.  Trusted code is the code of library modules and of
+        %Programs that have no restriction and no sandbox; the run ends below a frame of other code, below a frame in
+        which a closure or call reference that restricted or sandboxed code created (or a method of an object that code
+        restricted from a domain that a host grant lends created) was called, and where the caller is not known (see
+        SandboxManager::getImmediateCaller())
+    */
+    *int trusted_frame;
 }
 
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
@@ -638,6 +681,20 @@ const QSEC_NET_UNIX = QSEC_NET_UNIX;
 
 //! All network protocols
 const QSEC_NET_ALL = QSEC_NET_ALL;
+///@}
+
+/** @defgroup sandbox_enforcement_levels Sandbox Enforcement Level Constants
+    The enforcement levels of a sandbox (see @ref Qore::SandboxManager::setEnforcementLevel()
+    "SandboxManager::setEnforcementLevel()" and @ref sandbox_enforcement_level)
+
+    @since %Qore 3.0
+*/
+///@{
+//! Code safety: the policy, limits and functional-domain checks of the sandbox only (no owner rules)
+const QSEL_CODE_SAFETY = QSEL_CODE_SAFETY;
+
+//! Tenant isolation (the default): the checks of @ref QSEL_CODE_SAFETY and the owner rules of the sandbox
+const QSEL_TENANT_ISOLATION = QSEL_TENANT_ISOLATION;
 ///@}
 
 //! Unified sandbox manager combining filesystem, network, and resource controls
@@ -1443,6 +1500,77 @@ bool SandboxManager::getUncontrolledApiPolicy() [flags=RET_VALUE_ONLY] {
     return sm->getUncontrolledApiPolicy();
 }
 
+//! Sets the enforcement level of the sandbox
+/** The enforcement level decides what the sandbox keeps apart besides the functional domains of the code that it
+    governs (see @ref sandbox_enforcement_level):
+    - @ref QSEL_TENANT_ISOLATION (the default of a new manager): the policy, limits and functional-domain checks of the
+      sandbox, and the owner rules, which keep the code that the sandbox governs from changing or reading the state of
+      objects that its sandbox did not create, for the code of a tenant that must be isolated from the host and from
+      other tenants;
+    - @ref QSEL_CODE_SAFETY: the policy, limits and functional-domain checks only, for code that the host trusts and
+      runs in a sandbox to keep it from mistakes, or for interrupts and limits.
+
+    When more than one sandbox governs code, the strictest level of them applies.
+
+    Raising the level to @ref QSEL_TENANT_ISOLATION is always allowed, and fixes it: the level can never be lowered
+    again.  Lowering it to @ref QSEL_CODE_SAFETY is allowed only to the creator of the manager: trusted code, or the
+    code of the %Program whose code created the manager (as for the other changes that lift a restriction, see
+    @ref Qore::SandboxManager "SandboxManager"); never to code that the manager governs, and only while the level has
+    not been fixed.
+
+    @param level @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+# a sandbox for interrupting and limiting code that the host trusts
+SandboxManager sm();
+sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR the level was lowered by code that the manager governs, by code that is not trusted
+    and whose %Program did not create the manager, or after the level was fixed
+    @throw SANDBOX-ENFORCEMENT-LEVEL-ERROR invalid level
+
+    @see
+    - getEnforcementLevel()
+    - isEnforcementLevelFixed()
+    - isTenantIsolated()
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setEnforcementLevel(int level) [flags=NAMED_ARGS] {
+    if (level != QSEL_CODE_SAFETY && level != QSEL_TENANT_ISOLATION) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "invalid sandbox enforcement level " QLLD
+            "; expecting QSEL_CODE_SAFETY (%d) or QSEL_TENANT_ISOLATION (%d)", level, QSEL_CODE_SAFETY,
+            QSEL_TENANT_ISOLATION);
+        return QoreValue();
+    }
+    sm->setEnforcementLevel(static_cast<QoreSandboxEnforcementLevel>(level), xsink);
+}
+
+//! Returns the enforcement level of the sandbox
+/** @return @ref QSEL_TENANT_ISOLATION (the default) or @ref QSEL_CODE_SAFETY
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getEnforcementLevel() [flags=RET_VALUE_ONLY] {
+    return static_cast<int64>(sm->getEnforcementLevel());
+}
+
+//! Returns @ref True if the enforcement level of the sandbox can no longer be lowered
+/** @return @ref True once the level was raised to @ref QSEL_TENANT_ISOLATION with setEnforcementLevel()
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::isEnforcementLevelFixed() [flags=RET_VALUE_ONLY] {
+    return sm->isEnforcementLevelFixed();
+}
+
 //! Returns the filesystem security configuration
 /** @return a @ref FilesystemSecurityConfigInfo hash with the current filesystem security configuration
 
@@ -2225,6 +2353,38 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns @ref True if the owner rules apply to the calling code
+/** The owner rules keep the code of a sandbox at the enforcement level @ref QSEL_TENANT_ISOLATION from changing or
+    reading the state of objects that its sandbox did not create (see @ref sandbox_enforcement_level).  They apply if
+    the calling code is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") and a sandbox that governs it has the level
+    @ref QSEL_TENANT_ISOLATION: the strictest level of the governing sandboxes (of the call stack, of the objects and
+    callbacks that the code runs, of the thread's start and of a sandboxed caller that the code acts for) decides.  It
+    fails closed: sandboxed code that no sandbox manager governs is isolated.
+
+    Library code uses it to apply a rule that only isolates tenants from each other, and that code that the host
+    trusts and runs in a sandbox only for code safety must not be subject to.
+
+    It reveals only whether the calling code is isolated, so it is not restricted itself.
+
+    @return @ref True if the owner rules apply to the calling code, @ref False if it is trusted or every sandbox that
+    governs it has the level @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+if (SandboxManager::isTenantIsolated()) {
+    throw "TENANT-ERROR", "tenant code cannot share this object";
+}
+    @endcode
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isTenantIsolated() [flags=RET_VALUE_ONLY] {
+    return qore_caller_tenant_isolated();
+}
+
 //! Returns @ref True if a sandbox governs the Program of the class of the given object
 /** The Program of the class is the Program whose code declares the class or one of its base classes, wherever the
     class is used (also when it was imported into another Program, see
@@ -2487,6 +2647,81 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     return !qore_caller_is_sandboxed();
 }
 
+//! Returns @ref True if the current thread's code may change the given object as its owner
+/** Code that is trusted may change any object; code that is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") may change an object only if its sandbox created
+    it: if every sandbox manager that governs the code also governed the creation of the object (see
+    @ref sandbox_object_ownership).  The check fails closed: sandboxed code that no sandbox manager governs, and code
+    whose sandbox cannot be resolved, owns no object.
+
+    A setter that replaces state that other code relies on, such as the logger of an object that is shared with other
+    code, uses checkObjectOwnedByCaller() to refuse a caller that does not own the object; trusted infrastructure that
+    changes such state only as a side effect of an operation that it performs for its caller, such as passing a logger
+    on to a child object that it did not create, uses this method to leave the change out.
+
+    It reveals only whether the calling code created the object, so it is not restricted itself.
+
+    @param obj the object to check
+
+    @return @ref True if the code is trusted or its sandbox created \a obj, @ref False if not
+
+    @par Example:
+    @code{.py}
+if (logger && SandboxManager::isObjectOwnedByCaller(child)) {
+    child.setLogger(logger);
+}
+    @endcode
+
+    @see checkObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isObjectOwnedByCaller(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_caller_created_object(*obj);
+}
+
+//! Refuses a change to the given object by sandboxed code whose sandbox did not create it
+/** Decides as isObjectOwnedByCaller() does, and raises an exception if the calling code may not change \a obj as
+    its owner.  A @ref sandbox_shared_objects "shared object" is checked first, as for checkSharedObjectChange():
+    code that is restricted or acts for restricted code cannot change it, also if its sandbox created it, so such a
+    change is refused with \c SHARED-OBJECT-ERROR, the more specific error, whoever created the object (see
+    @ref sandbox_object_check_order).
+
+    @param obj the object to check
+    @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
+
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code tried to change a shared object
+    @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change an object that
+    its sandbox did not create
+
+    @par Example:
+    @code{.py}
+setLogger(*LoggerInterface logger) {
+    SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
+    self.logger = logger;
+}
+    @endcode
+
+    @see isObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkObjectOwnedByCaller(object obj, string what) {
+    const qore_object_private* opriv = qore_object_private::get(*obj);
+    if (!opriv->isShared() && qore_caller_owns_object(*obj)) {
+        return QoreValue();
+    }
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the shared-object rule (qore#6843) first, as for a deletion, then the owner rule (qore#6842)
+    if (opriv->checkSharedOwnerChange(str->c_str(), xsink)) {
+        return QoreValue();
+    }
+    qore_check_caller_owns_object(*obj, str->c_str(), xsink);
+}
+
 //! Returns @ref True if what the current thread's code creates may be shared by every %Program of the process
 /** Trusted infrastructure that marks the objects it creates for the calling code as shared or not uses it: an object
     that code which no restricting sandbox governs creates may be shared by every %Program (in a constant or a static
@@ -2531,7 +2766,9 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
       \c remove and \c delete), a write through a reference to the member, and the \c += operator with a hash on the
       object raise a \c SHARED-OBJECT-ERROR exception before anything is changed; reading the members, also through a
       reference, is not affected
-    - cannot delete the object with the \c delete operator (\c SHARED-OBJECT-ERROR)
+    - cannot delete the object with the \c delete operator or with the functions and methods that delete an object or
+      take it over for their caller (\c SHARED-OBJECT-ERROR), also if its sandbox created the object: this rule is
+      checked before the owner rules of tenant isolation (see @ref sandbox_object_check_order)
     - cannot copy the object (\c SHARED-OBJECT-ERROR), also not with Reflection, unless a class of the copy (the
       object's class or one of its base classes) declares a \c copy() method in %Qore code, which resets what its
       class guards for a shared object: the copy has copies of all members, also the private ones; a class that guards
@@ -2952,6 +3189,151 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
     return static_cast<int64>(id);
 }
 
+//! Hands an object that trusted code created to the sandboxed code that it serves, which then owns it
+/** An object is owned by a sandbox if sandboxed code created it, or if the code of a class that trusted code declared
+    created it directly in a method of an object that the sandbox owns while it served that sandbox; an object that
+    trusted code creates while it serves sandboxed code is governed by that code's sandbox but owned by none (see
+    @ref sandbox_object_ownership).
+    Trusted code that creates an object for the sandboxed code that it serves, such as a factory or host code that
+    configures the object for its caller, hands it to that code with this method; the transfer is one-way.
+
+    Only an object that was created while the caller was served (whose provenance names the caller's sandbox) can be
+    transferred, so that an object that exists already, such as a shared object, is never handed to a sandbox by
+    mistake; to give the caller such an object, create a new object while serving the caller and transfer that (a copy
+    of such an object cannot be transferred either, as it keeps the provenance of the object that it copies).  Only
+    sandboxed code at the @ref sandbox_enforcement_level "enforcement level" of tenant isolation owns objects: an
+    object cannot be transferred to code that only sandboxes at the level of code safety govern.  The object is then
+    owned by the sandboxes that govern the caller.
+
+    @param obj the object to hand over
+
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed, a sandbox owns \a obj already, no sandboxed caller is
+    served, no sandbox at the enforcement level of tenant isolation governs the caller, or \a obj was not created while
+    the caller was served
+
+    @par Example:
+    @code{.py}
+AbstractDataProvider prov = factory.create(opts);
+SandboxManager::transferObjectToCaller(prov);
+prov.setLogger(logger);
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::transferObjectToCaller(object obj) {
+    qore_transfer_object_to_caller(*obj, xsink);
+}
+
+//! Returns the code that made the call immediately before the running code
+/** The running code is the code that calls this method; its immediate caller is the code of the nearest frame below
+    it on the thread's call stack whose %Program is another one.  For library module code that asks, this is the code
+    that called into the module: the module's own functions and methods that called one another to reach the running
+    code are not frames.  Unlike getCallerProgramId() and
+    isCallerRestricted(), which answer for the nearest %Program that is not a module's, it tells module code that
+    serves the caller (also other library module code, which it names) from the code of the caller itself, such as a
+    callback, a logger appender or an event listener that the caller supplied and that the module code called.
+
+    A closure runs in the %Program that compiled it and a call reference runs the code of its target, so the closure of
+    restricted code that module code calls is the immediate caller of the library code that the closure calls, as
+    restricted code.  In addition, the immediate caller is restricted if a closure or call reference that restricted
+    or sandboxed code created (also one of library module code that restricted code created) was called while the
+    immediate caller's code or the running code ran: library code reached through a callback that restricted code
+    chose is never called by the module code that called the callback.  An object runs its class's code: a method of a
+    library module's class is that module's code, but calling a method of an object that code restricted from the
+    file system, the network or external information created (domains that a host grant lends, so such an object was
+    created outside any grant) makes the calling code restricted as well.  The provenance of a reference or object
+    counts for the code that calls it, not for the code that it reaches: library code that restricted code reaches
+    through a call reference is that library's code, as when restricted code calls it directly
+    (isImmediateCallerModule() returns @ref True for it), while the run of trusted code (\c trusted_frame) ends at the
+    code that called the reference.
+
+    The frames are the calls between the code of different %Programs, which every execution mode records, also for
+    the code of AOT-compiled modules; calls within a %Program are not frames, so the method costs the calls nothing.
+    The immediate caller is unknown, and the method returns @ref nothing, where the walk reaches the start of the
+    thread, the initialization of library code or a trusted build (whose caller is never known, see
+    getCallerProgramId()), or the start of work that the thread runs for other code (a thread pool task, for example),
+    before it finds another %Program's code.  An unknown immediate caller must be treated as restricted code.
+
+    It reveals only what is on the current thread's call stack, so it is not restricted itself.
+
+    @return the immediate caller, or @ref nothing if it is unknown
+
+    @par Example:
+    @code{.py}
+# a capability handed to the next client created in this thread is taken only by code that the trusted code that
+# granted it called itself, never by a callback of restricted code that runs meanwhile
+*hash<ImmediateCallerInfo> caller = SandboxManager::getImmediateCaller();
+if (caller && !caller.restricted && caller.trusted_frame <= grant_frame) {
+    take(grant);
+}
+    @endcode
+
+    @see isImmediateCallerModule()
+
+    @since %Qore 3.0
+*/
+static *hash<ImmediateCallerInfo> SandboxManager::getImmediateCaller() [flags=RET_VALUE_ONLY] {
+    QoreImmediateCallerInfo info;
+    if (qore_get_immediate_caller(info)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclImmediateCallerInfo, xsink), xsink);
+    h->setKeyValue("program_id", static_cast<int64>(info.pgm_id), xsink);
+    if (info.module_name) {
+        h->setKeyValue("module", new QoreStringNode(*info.module_name), xsink);
+    }
+    h->setKeyValue("library", info.library_module, xsink);
+    h->setKeyValue("restricted", info.restricted, xsink);
+    h->setKeyValue("frame", info.frame, xsink);
+    if (info.trusted_frame >= 0) {
+        h->setKeyValue("trusted_frame", info.trusted_frame, xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
+}
+
+//! Returns @ref True if the immediate caller of the running code is the unrestricted code of the given library module
+/** See getImmediateCaller() for the immediate caller.  Library code uses it to hand a capability only to the code of
+    a given module: it returns @ref True only if the immediate caller is known, is the code of the library module
+    (a module loaded from a trusted module directory) registered with the given name, and is not restricted (see
+    @ref ImmediateCallerInfo::restricted "ImmediateCallerInfo::restricted": its code did not call a closure or call
+    reference of restricted code, or a method of an object of code restricted from a lent domain, for the running
+    code).  The code that called the module's code is not considered: the module's code that restricted code
+    reaches, directly or through a call reference that it created, is the module's code (getImmediateCaller() tells
+    with \c trusted_frame whether the module's code was reached from trusted code only).
+
+    It reveals only what is on the current thread's call stack, so it is not restricted itself.
+
+    @param module the name of the module
+
+    @return @ref True if the immediate caller is the unrestricted code of the library module \a module
+
+    @par Example:
+    @code{.py}
+# only the code of the ConnectionProvider module may take the token
+if (!SandboxManager::isImmediateCallerModule("ConnectionProvider")) {
+    throw "PERMISSION-DENIED", "the token is handed only to the ConnectionProvider module";
+}
+    @endcode
+
+    @see getImmediateCaller()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isImmediateCallerModule(string module) [flags=RET_VALUE_ONLY] {
+    QoreImmediateCallerInfo info;
+    if (qore_get_immediate_caller(info) || info.restricted || !info.library_module || !info.module_name) {
+        return false;
+    }
+    TempEncodingHelper str(module, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return *info.module_name == str->c_str();
+}
+
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
 /** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
     that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as
@@ -3151,6 +3533,30 @@ if (!SandboxManager::callerMayReceiveHostSecrets()) {
 */
 static bool SandboxManager::callerMayReceiveHostSecrets() [flags=RET_VALUE_ONLY] {
     return qore_caller_may_receive_host_secrets();
+}
+
+//! Returns the temporary directory of the %Program of the calling code, if the host gave it one
+/** The %Program of the calling code is found past the code of modules, which acts for its caller, as for
+    callerMayReadExternalInfo(): library code that creates temporary files for its caller
+    (@ref Util::tmp_location() "tmp_location()", @ref FsUtil::TmpDir "TmpDir") uses the directory of the caller's
+    %Program, also for the temporary files that it creates for itself while such code calls it
+
+    @return the directory set with @ref Qore::Program::setTempDir() "Program::setTempDir()" for the %Program of the
+    calling code (or taken from the %Program that created it), or @ref nothing if it has none
+
+    @par Example:
+    @code{.py}
+*string dir = SandboxManager::callerTempDir();
+    @endcode
+
+    @note Not restricted: it returns only the directory that the host chose for the calling code
+
+    @see @ref sandbox_temp_dir
+
+    @since %Qore 3.0
+*/
+static *string SandboxManager::callerTempDir() [flags=RET_VALUE_ONLY] {
+    return qore_get_caller_temp_dir();
 }
 
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions

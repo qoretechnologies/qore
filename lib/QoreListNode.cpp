@@ -773,6 +773,23 @@ int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
     return priv->pushNative(val, xsink);
 }
 
+int qore_list_private::raiseGrowFailure(ExceptionSink* xsink) {
+    if (!xsink) {
+        qore_throw_bad_alloc();
+    }
+    qore_raise_allocation_failure(xsink, "the growth of a list");
+    return -1;
+}
+
+int qore_list_private::pushCanonicalRaising(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
+    if (list.priv->checkValid(xsink)) {
+        // the value is owned by the list whatever the outcome, so a rejected value is released here
+        val.discard(xsink);
+        return -1;
+    }
+    return list.priv->pushRaising(val, nullptr, xsink);
+}
+
 int qore_list_private::pushCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
     if (list.priv->checkValid(xsink)) {
         // the value is owned by the list whatever the outcome, so a rejected value is released here
