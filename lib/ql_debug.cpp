@@ -31605,6 +31605,239 @@ public:
     }
 };
 
+//! Each datagram of a batch is sent to the address of its own path, and the datagrams without one to the address
+//! given to the send (qore#7847)
+/** A server connection writes datagrams for more than one path in a batch (the PATH_CHALLENGE of a path being
+    validated beside the datagrams of its current path); they were all sent to the address of the last one written.
+*/
+static void ut_quic_send_batch_paths(UnitTestCounters& c) {
+    // three receivers: two paths, and the address of the datagrams without a path
+    int rfd[3] = {-1, -1, -1};
+    int sfd = socket(AF_INET, SOCK_DGRAM, 0);
+    ON_BLOCK_EXIT([&rfd, sfd] () {
+        qore_quic_test_set_send_hook({});
+        qore_quic_test_batch_path_fail = 0;
+        for (int fd : rfd) {
+            if (fd >= 0) {
+                ::close(fd);
+            }
+        }
+        if (sfd >= 0) {
+            ::close(sfd);
+        }
+    });
+    struct sockaddr_in raddr[3] = {};
+    // a datagram that is not delivered fails the test at once instead of blocking it
+    struct timeval tv = {2, 0};
+    for (int i = 0; i < 3; ++i) {
+        rfd[i] = socket(AF_INET, SOCK_DGRAM, 0);
+        raddr[i].sin_family = AF_INET;
+        raddr[i].sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t rlen = sizeof(raddr[i]);
+        if (rfd[i] < 0 || sfd < 0 || ::bind(rfd[i], reinterpret_cast<struct sockaddr*>(&raddr[i]), sizeof(raddr[i]))
+                || getsockname(rfd[i], reinterpret_cast<struct sockaddr*>(&raddr[i]), &rlen)
+                || setsockopt(rfd[i], SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
+            UT_ASSERT(c, false, "QUIC batch paths: the UDP sockets are made");
+            return;
+        }
+    }
+    const struct sockaddr* path_a = reinterpret_cast<const struct sockaddr*>(&raddr[0]);
+    const struct sockaddr* path_b = reinterpret_cast<const struct sockaddr*>(&raddr[1]);
+    const struct sockaddr* other = reinterpret_cast<const struct sockaddr*>(&raddr[2]);
+    socklen_t alen = sizeof(struct sockaddr_in);
+
+    // returns the first byte of each datagram that receiver i gets, up to n of them; the source address of the last
+    // one is stored in *src if given
+    auto receive = [&rfd](int i, int n, struct sockaddr_in* src = nullptr) -> std::string {
+        std::string rv;
+        for (int got = 0; got < n; ++got) {
+            char buf[16];
+            struct sockaddr_in from = {};
+            socklen_t fromlen = sizeof(from);
+            if (recvfrom(rfd[i], buf, sizeof(buf), 0, reinterpret_cast<struct sockaddr*>(&from), &fromlen) <= 0) {
+                break;
+            }
+            if (src) {
+                *src = from;
+            }
+            rv += buf[0];
+        }
+        return rv;
+    };
+    // true if receiver i has no datagram waiting
+    auto nothing_waiting = [&rfd](int i) -> bool {
+        char buf[16];
+        return recv(rfd[i], buf, sizeof(buf), MSG_DONTWAIT) < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+    };
+    // adds a datagram for a path (current: the connection's path when written), or without one if to is nullptr
+    auto add = [alen](QuicPacketBatch& batch, char tag, const struct sockaddr* to, bool current = false,
+            const struct sockaddr* from = nullptr) {
+        uint8_t data[] = {static_cast<uint8_t>(tag), 'q'};
+        if (to) {
+            batch.addPacket(data, sizeof(data), to, alen, from, from ? alen : 0, current);
+        } else {
+            batch.addPacket(data, sizeof(data));
+        }
+    };
+    // the datagram of the sender's socket whose send fails (1 = the first of the next send), and its error
+    int calls = 0;
+    int fail_call = 0;
+    int fail_error = 0;
+    qore_quic_test_set_send_hook([sfd, &calls, &fail_call, &fail_error] (int fd) -> int {
+        return fd == sfd && ++calls == fail_call ? fail_error : 0;
+    });
+    auto fail_at = [&calls, &fail_call, &fail_error](int call, int err) {
+        calls = 0;
+        fail_call = call;
+        fail_error = err;
+    };
+
+    // a: the current path, b: a path being validated (its PATH_CHALLENGE), then the current path again, and a
+    // datagram without a path
+    fail_at(0, 0);
+    QuicPacketBatch batch;
+    add(batch, '1', path_a, true);
+    add(batch, '2', path_b);
+    add(batch, '3', path_a, true);
+    add(batch, '4', path_a, true);
+    add(batch, '5', nullptr);
+    UT_ASSERT(c, batch.size() == 5 && batch.paths.size() == 2, "QUIC batch paths: the two paths are recorded once");
+    UT_ASSERT(c, sendQuicPacketsBatch(sfd, batch, other, alen) == 5, "QUIC batch paths: all datagrams are sent");
+    UT_ASSERT(c, receive(0, 3) == "134", "QUIC batch paths: the datagrams of path a are sent to it");
+    UT_ASSERT(c, receive(1, 1) == "2", "QUIC batch paths: the PATH_CHALLENGE of path b is sent to path b");
+    UT_ASSERT(c, receive(2, 1) == "5", "QUIC batch paths: a datagram without a path is sent to the given address");
+
+    // the datagrams kept for a later send keep their paths: removeFront(), addPacketFrom() and swap()
+    batch.removeFront(1);
+    QuicPacketBatch kept;
+    for (int i = 0; i < batch.size(); ++i) {
+        kept.addPacketFrom(batch, i);
+    }
+    QuicPacketBatch sent;
+    sent.swap(kept);
+    UT_ASSERT(c, kept.empty() && sent.size() == 4 && sent.packetPath(1)->current && !sent.packetPath(0)->current,
+        "QUIC batch paths: the kept datagrams are moved with their paths");
+    UT_ASSERT(c, sendQuicPacketsBatch(sfd, sent, other, alen) == 4, "QUIC batch paths: the kept datagrams are sent");
+    UT_ASSERT(c, receive(1, 1) == "2", "QUIC batch paths: a kept datagram goes to its own path");
+    UT_ASSERT(c, receive(0, 2) == "34", "QUIC batch paths: the kept datagrams of path a go to it");
+    UT_ASSERT(c, receive(2, 1) == "5", "QUIC batch paths: a kept datagram without a path goes to the given address");
+
+#ifdef __linux__
+    // a path's local address is the source of its datagrams (127.0.0.2: on Linux, any loopback address can be one)
+    {
+        struct sockaddr_in local = {};
+        local.sin_family = AF_INET;
+        local.sin_addr.s_addr = htonl(INADDR_LOOPBACK + 1);
+        QuicPacketBatch b;
+        add(b, 'L', path_a, true, reinterpret_cast<const struct sockaddr*>(&local));
+        struct sockaddr_in src = {};
+        UT_ASSERT(c, sendQuicPacketsBatch(sfd, b, other, alen) == 1 && receive(0, 1, &src) == "L"
+            && src.sin_addr.s_addr == htonl(INADDR_LOOPBACK + 1),
+            "QUIC batch paths: a datagram is sent from its path's local address");
+    }
+#endif
+
+    // a hard error for a path that is not the connection's loses that path's datagrams only; the others are sent
+    {
+        fail_at(2, EPERM);
+        QuicPacketBatch b;
+        add(b, '7', path_a, true);
+        add(b, '8', path_b);
+        add(b, '9', path_a, true);
+        int stop = -1;
+        UT_ASSERT(c, sendQuicPacketsBatch(sfd, b, other, alen, nullptr, 0, &stop) == 3 && !stop,
+            "QUIC batch paths: an error for another path loses its datagram, and the send goes on");
+        UT_ASSERT(c, receive(0, 2) == "79" && nothing_waiting(1),
+            "QUIC batch paths: the datagrams of the connection's path are sent");
+    }
+
+    // also when the system call of the other path's run sent part of it
+    {
+        fail_at(3, EPERM);
+        QuicPacketBatch b;
+        add(b, 'p', path_b);
+        add(b, 'q', path_b);
+        add(b, 'r', path_b);
+        add(b, 's', path_a, true);
+        int stop = -1;
+        UT_ASSERT(c, sendQuicPacketsBatch(sfd, b, other, alen, nullptr, 0, &stop) == 4 && !stop,
+            "QUIC batch paths: the rest of another path's run is lost after a partial send");
+        UT_ASSERT(c, receive(1, 2) == "pq" && receive(0, 1) == "s",
+            "QUIC batch paths: the datagrams sent before the error and of the connection's path arrive");
+    }
+
+    // EAGAIN and ENOBUFS for another path keep its datagrams and those after it for the next send
+    for (int err : {EAGAIN, ENOBUFS}) {
+        fail_at(2, err);
+        QuicPacketBatch b;
+        add(b, 'e', path_a, true);
+        add(b, 'f', path_b);
+        add(b, 'g', path_a, true);
+        int stop = -1;
+        UT_ASSERT(c, sendQuicPacketsBatch(sfd, b, other, alen, nullptr, 0, &stop) == 1 && stop == err,
+            "QUIC batch paths: a transient error for another path keeps the datagrams from it on");
+        UT_ASSERT(c, receive(0, 1) == "e" && nothing_waiting(1),
+            "QUIC batch paths: the datagrams before the transient error are sent");
+    }
+
+    // a partial send of a run of the connection's path stops the send with the error, the rest being kept
+    {
+        fail_at(2, EAGAIN);
+        QuicPacketBatch b;
+        add(b, 'u', path_a, true);
+        add(b, 'v', path_a, true);
+        add(b, 'w', path_a, true);
+        int stop = -1;
+        UT_ASSERT(c, sendQuicPacketsBatch(sfd, b, other, alen, nullptr, 0, &stop) == 1 && stop == EAGAIN,
+            "QUIC batch paths: a partial send of the connection's path is reported");
+        UT_ASSERT(c, receive(0, 1) == "u", "QUIC batch paths: the datagram sent before the partial send arrives");
+    }
+
+    // a hard error for the connection's path ends the send with the error, also after another path's datagrams
+    // were sent
+    {
+        fail_at(2, EPERM);
+        QuicPacketBatch b;
+        add(b, 'a', path_b);
+        add(b, 'b', path_a, true);
+        add(b, 'c', path_a, true);
+        int stop = -1;
+        errno = 0;
+        int rv = sendQuicPacketsBatch(sfd, b, other, alen, nullptr, 0, &stop);
+        UT_ASSERT(c, rv == -1 && errno == EPERM,
+            "QUIC batch paths: an error for the connection's path is reported at once");
+        UT_ASSERT(c, receive(1, 1) == "a", "QUIC batch paths: the datagram before the error was sent");
+    }
+    fail_at(0, 0);
+
+    // a datagram whose path cannot be recorded is not added
+    {
+        QuicPacketBatch b;
+        add(b, 'x', path_a, true);
+        size_t bytes = b.buf.size();
+        qore_quic_test_batch_path_fail = 1;
+        bool thrown = false;
+        try {
+            add(b, 'y', path_b);
+        } catch (const std::bad_alloc&) {
+            thrown = true;
+        }
+        UT_ASSERT(c, thrown && b.size() == 1 && b.buf.size() == bytes && b.pkt_paths.size() == 1
+            && b.paths.size() == 1,
+            "QUIC batch paths: a datagram whose path cannot be recorded leaves the batch unchanged");
+        add(b, 'z', path_b);
+        UT_ASSERT(c, b.size() == 2 && sendQuicPacketsBatch(sfd, b, other, alen) == 2
+            && receive(0, 1) == "x" && receive(1, 1) == "z", "QUIC batch paths: the batch is usable after the failure");
+    }
+
+    // a cleared batch has no path left
+    sent.clear();
+    add(sent, '6', nullptr);
+    UT_ASSERT(c, !sent.hasPaths() && sendQuicPacketsBatch(sfd, sent, other, alen) == 1,
+        "QUIC batch paths: a cleared batch has no path");
+    UT_ASSERT(c, receive(2, 1) == "6", "QUIC batch paths: the datagram of the cleared batch goes to the given address");
+}
+
 //! The datagrams that sendQuicPacketsBatch() counts as sent and does not send are taken back on every return
 /** The datagrams are counted before they are sent, for the QUIC test clock (see qore_quic_test_advance_clock()).  A
     send that failed with nothing sent returned without taking them back, so the clock waited for datagrams that were
@@ -32451,6 +32684,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     QoreCaresCheckTest::run(c);
     QuicPacketPacingTest::run(c);
     QuicStatelessResetTest::run(c);
+    ut_quic_send_batch_paths(c);
     ut_quic_send_batch_take_back(c);
     ut_quic_send_keeping_unsent(c);
 #ifndef _Q_WINDOWS

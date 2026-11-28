@@ -37,6 +37,7 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <new>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -56,26 +57,69 @@ constexpr int QUIC_COMMON_MAX_SEND_BATCH = 64;
 //! Maximum QUIC packet length (UDP payload)
 constexpr size_t QUIC_COMMON_MAX_PKTLEN = 1500;
 
+//! The network path of a datagram in a QuicPacketBatch: the address it is sent to, and the local address it is sent
+//! from
+/** @since %Qore 3.0
+*/
+struct QuicPacketPath {
+    //! the destination address
+    struct sockaddr_storage remote;
+    //! the length of \c remote
+    socklen_t remotelen = 0;
+    //! the source address, or none (\c locallen 0)
+    struct sockaddr_storage local;
+    //! the length of \c local, or 0 for none
+    socklen_t locallen = 0;
+    //! true if this was the connection's current path when its datagrams were written (see sendQuicPacketsBatch())
+    bool current = false;
+
+    //! Returns true if this is the path of the given addresses and kind
+    DLLLOCAL bool equals(const struct sockaddr* r, socklen_t rlen, const struct sockaddr* l, socklen_t llen,
+            bool cur) const {
+        return current == cur && remotelen == rlen && locallen == llen && !memcmp(&remote, r, rlen)
+            && (!llen || !memcmp(&local, l, llen));
+    }
+};
+
+#ifdef DEBUG
+//! Debug-only, for tests: the number of new paths that QuicPacketBatch::addPacket() records after which recording the
+//! next new path fails with std::bad_alloc (a path already in the batch is not counted), or 0 for none; per thread
+DLLLOCAL inline thread_local int qore_quic_test_batch_path_fail = 0;
+#endif
+
 //! Flat packet buffer for batched QUIC packet I/O
 /** Eliminates per-packet heap allocations by storing all packets in a single
     contiguous buffer.  The buffer and offset vector grow as needed and are
     reused across calls.  After warmup, writePackets() + sendQuicPacketsBatch()
     require zero heap allocations per poll cycle.
 
+    A datagram can have a path of its own (a server connection writes datagrams for more than one path: the
+    PATH_CHALLENGE of a path being validated, the PATH_RESPONSE to a probe, and the datagrams of its current path):
+    sendQuicPacketsBatch() sends it to the address of that path, and a datagram without one to the address given to
+    it (qore#7847).
+
     @since %Qore 3.0
 */
 struct QuicPacketBatch {
+    //! the index of a datagram without a path of its own in \c pkt_paths
+    static constexpr uint16_t NoPath = 0xffff;
+
     //! Flat buffer holding all packet data end-to-end
     std::vector<uint8_t> buf;
     //! Per-packet start offsets and lengths (grows dynamically)
     std::vector<uint32_t> pkt_offsets;
     std::vector<uint16_t> pkt_lengths;
+    //! Per-packet index in \c paths, or NoPath
+    std::vector<uint16_t> pkt_paths;
+    //! The distinct paths of the datagrams of the batch (usually one)
+    std::vector<QuicPacketPath> paths;
 
     //! Reserve typical capacity on construction (avoids first-use realloc)
     DLLLOCAL QuicPacketBatch() {
         buf.reserve(8 * QUIC_COMMON_MAX_PKTLEN);
         pkt_offsets.reserve(QUIC_COMMON_MAX_SEND_BATCH);
         pkt_lengths.reserve(QUIC_COMMON_MAX_SEND_BATCH);
+        pkt_paths.reserve(QUIC_COMMON_MAX_SEND_BATCH);
     }
 
     //! Append a packet to the batch
@@ -87,9 +131,75 @@ struct QuicPacketBatch {
                 len, QUIC_COMMON_MAX_PKTLEN);
             len = QUIC_COMMON_MAX_PKTLEN;
         }
-        pkt_offsets.push_back(static_cast<uint32_t>(buf.size()));
-        pkt_lengths.push_back(static_cast<uint16_t>(len));
-        buf.insert(buf.end(), data, data + len);
+        // the per-packet vectors stay the same size: what an allocation failure added is removed before it is
+        // rethrown
+        size_t count = pkt_offsets.size();
+        size_t bytes = buf.size();
+        try {
+            pkt_offsets.push_back(static_cast<uint32_t>(bytes));
+            pkt_lengths.push_back(static_cast<uint16_t>(len));
+            pkt_paths.push_back(NoPath);
+            buf.insert(buf.end(), data, data + len);
+        } catch (...) {
+            pkt_offsets.resize(count);
+            pkt_lengths.resize(count);
+            pkt_paths.resize(count);
+            buf.resize(bytes);
+            throw;
+        }
+    }
+
+    //! Append a packet that is sent to the given address, from the given local address if \a local_len is not 0
+    /** @param current true if the address is that of the connection's current path when the packet is written
+
+        The batch is unchanged if an allocation fails.
+    */
+    DLLLOCAL void addPacket(const uint8_t* data, size_t len, const struct sockaddr* remote, socklen_t remote_len,
+            const struct sockaddr* local, socklen_t local_len, bool current = false) {
+        addPacket(data, len);
+        if (!remote_len || remote_len > sizeof(struct sockaddr_storage)
+                || local_len > sizeof(struct sockaddr_storage)) {
+            return;
+        }
+        try {
+            pkt_paths.back() = pathIndex(remote, remote_len, local, local_len, current);
+        } catch (...) {
+            // the packet just added is removed: none of its vectors allocates when it shrinks
+            buf.resize(pkt_offsets.back());
+            pkt_offsets.pop_back();
+            pkt_lengths.pop_back();
+            pkt_paths.pop_back();
+            throw;
+        }
+    }
+
+    //! Append packet @p i of @p other, with its path
+    DLLLOCAL void addPacketFrom(const QuicPacketBatch& other, int i) {
+        const QuicPacketPath* path = other.packetPath(i);
+        if (path) {
+            addPacket(other.packetData(i), other.packetLen(i), reinterpret_cast<const struct sockaddr*>(&path->remote),
+                path->remotelen, reinterpret_cast<const struct sockaddr*>(&path->local), path->locallen,
+                path->current);
+        } else {
+            addPacket(other.packetData(i), other.packetLen(i));
+        }
+    }
+
+    //! Returns the index of packet @p i's path in \c paths, or NoPath if it has none
+    DLLLOCAL uint16_t packetPathIndex(int i) const {
+        assert(i >= 0 && i < static_cast<int>(pkt_paths.size()));
+        return pkt_paths[i];
+    }
+
+    //! Returns the path of packet @p i, or nullptr if it has none (it is sent to the address given for the batch)
+    DLLLOCAL const QuicPacketPath* packetPath(int i) const {
+        uint16_t p = packetPathIndex(i);
+        return p == NoPath ? nullptr : &paths[p];
+    }
+
+    //! Returns true if a datagram of the batch has a path of its own
+    DLLLOCAL bool hasPaths() const {
+        return !paths.empty();
     }
 
     //! Get pointer to packet data by index
@@ -108,6 +218,8 @@ struct QuicPacketBatch {
         buf.clear();
         pkt_offsets.clear();
         pkt_lengths.clear();
+        pkt_paths.clear();
+        paths.clear();
     }
 
     //! Remove the first @a count packets (already sent)
@@ -135,9 +247,11 @@ struct QuicPacketBatch {
         for (int i = 0; i < remaining; ++i) {
             pkt_offsets[i] = pkt_offsets[i + count] - byte_start;
             pkt_lengths[i] = pkt_lengths[i + count];
+            pkt_paths[i] = pkt_paths[i + count];
         }
         pkt_offsets.resize(remaining);
         pkt_lengths.resize(remaining);
+        pkt_paths.resize(remaining);
     }
 
     //! Returns true if no packets are buffered
@@ -150,6 +264,37 @@ struct QuicPacketBatch {
         buf.swap(other.buf);
         pkt_offsets.swap(other.pkt_offsets);
         pkt_lengths.swap(other.pkt_lengths);
+        pkt_paths.swap(other.pkt_paths);
+        paths.swap(other.paths);
+    }
+
+private:
+    //! Returns the index of the given path in \c paths, adding it if it is not there
+    DLLLOCAL uint16_t pathIndex(const struct sockaddr* remote, socklen_t remote_len, const struct sockaddr* local,
+            socklen_t local_len, bool current) {
+        // the datagrams of a path come one after the other: the last path is checked first
+        for (size_t i = paths.size(); i > 0; --i) {
+            if (paths[i - 1].equals(remote, remote_len, local, local_len, current)) {
+                return static_cast<uint16_t>(i - 1);
+            }
+        }
+#ifdef DEBUG
+        if (qore_quic_test_batch_path_fail && !--qore_quic_test_batch_path_fail) {
+            throw std::bad_alloc();
+        }
+#endif
+        // a batch has fewer datagrams than NoPath, so it cannot have that many paths
+        assert(paths.size() < NoPath);
+        paths.emplace_back();
+        QuicPacketPath& path = paths.back();
+        memcpy(&path.remote, remote, remote_len);
+        path.remotelen = remote_len;
+        if (local_len) {
+            memcpy(&path.local, local, local_len);
+        }
+        path.locallen = local_len;
+        path.current = current;
+        return static_cast<uint16_t>(paths.size() - 1);
     }
 };
 
@@ -360,10 +505,11 @@ private:
 };
 #endif
 
-//! Batch-send UDP datagrams from a QuicPacketBatch
+//! Sends the datagrams [@p begin, @p end) of a QuicPacketBatch to one address
 /** Uses sendmmsg() on Linux for efficiency; falls back to sendmsg()/sendto()
     loop on macOS/FreeBSD.  Uses stack-allocated mmsghdr/iovec arrays (no heap
     allocations) since batch size is bounded by QUIC_COMMON_MAX_SEND_BATCH.
+    sendQuicPacketsBatch() calls it for each run of datagrams of the same path.
 
     When @a local_addr is provided (non-null, non-wildcard), attaches a cmsg
     control message to each outgoing packet to pin the source IP address.
@@ -377,14 +523,16 @@ private:
     sockets already have the correct source IP from connect().
 
     @param fd socket file descriptor
-    @param batch the packet batch to send
+    @param batch the packet batch
+    @param begin the index of the first datagram to send
+    @param end the index after the last datagram to send
     @param addr destination address, or nullptr for connected UDP sockets
     @param addrlen destination address length, or 0 for connected UDP sockets
     @param local_addr per-session local address for source IP pinning, or nullptr
     @param local_addrlen local address length, or 0
     @param stop_error if not nullptr, receives the error that stopped a send after some of the datagrams were sent,
     or 0 if all were sent or the system call took fewer without an error (qore#7414)
-    @return number of messages sent, or -1 on error (errno set)
+    @return number of messages of the range sent, or -1 on error (errno set)
 
     @note in a debug build, the test hook of qore_quic_test_set_send_hook() is called once before each datagram is
     sent, on every platform; when it returns an error, the datagrams before it are sent, and the send stops with that
@@ -392,10 +540,9 @@ private:
 
     @since %Qore 3.0
 */
-inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
+inline int sendQuicPacketsRange(int fd, const QuicPacketBatch& batch, int begin, int end,
                                 const struct sockaddr* addr, socklen_t addrlen,
-                                const struct sockaddr* local_addr = nullptr,
-                                socklen_t local_addrlen = 0, int* stop_error = nullptr) {
+                                const struct sockaddr* local_addr, socklen_t local_addrlen, int* stop_error) {
     if (stop_error) {
         *stop_error = 0;
     }
@@ -406,7 +553,8 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     bool use_cmsg = local_addr && buildSendCmsg(local_addr, local_addrlen,
                                                  cmsg_template, cmsg_len);
 
-    int total = batch.size();
+    // offset counts the datagrams of the range from begin
+    int total = end - begin;
     int offset = 0;
 #ifdef DEBUG
     // the datagrams are counted as sent before they are sent, and those not sent are taken back on every return
@@ -440,8 +588,8 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         memset(msgs, 0, sizeof(struct mmsghdr) * batch_size);
 
         for (int i = 0; i < batch_size; ++i) {
-            iovecs[i].iov_base = const_cast<uint8_t*>(batch.packetData(offset + i));
-            iovecs[i].iov_len = batch.packetLen(offset + i);
+            iovecs[i].iov_base = const_cast<uint8_t*>(batch.packetData(begin + offset + i));
+            iovecs[i].iov_len = batch.packetLen(begin + offset + i);
             msgs[i].msg_hdr.msg_name = const_cast<struct sockaddr*>(addr);
             msgs[i].msg_hdr.msg_namelen = addrlen;
             msgs[i].msg_hdr.msg_iov = &iovecs[i];
@@ -515,8 +663,8 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         if (use_cmsg) {
             // Use sendmsg() to attach cmsg for source address pinning
             struct iovec iov;
-            iov.iov_base = const_cast<uint8_t*>(batch.packetData(offset));
-            iov.iov_len = batch.packetLen(offset);
+            iov.iov_base = const_cast<uint8_t*>(batch.packetData(begin + offset));
+            iov.iov_len = batch.packetLen(begin + offset);
 
             struct msghdr msg{};
             msg.msg_name = const_cast<struct sockaddr*>(addr);
@@ -532,7 +680,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
             } while (sent < 0 && errno == EINTR);
         } else {
             do {
-                sent = sendto(fd, batch.packetData(offset), batch.packetLen(offset), 0,
+                sent = sendto(fd, batch.packetData(begin + offset), batch.packetLen(begin + offset), 0,
                               addr, addrlen);
             } while (sent < 0 && errno == EINTR);
         }
@@ -549,9 +697,99 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         ++offset;
     }
 #endif
+    return offset;
+}
+
+//! Batch-send UDP datagrams from a QuicPacketBatch
+/** Sends each datagram that has a path of its own (QuicPacketBatch::packetPath()) to the address of its path, from
+    its local address when it has one (otherwise from @p local_addr), and the others to @p addr; the datagrams of a
+    path that follow one another are sent with one call of sendQuicPacketsRange() (qore#7847)
+
+    The datagrams of a path that was not the connection's current path when they were written (QuicPacketPath::current:
+    a PATH_CHALLENGE to a path being validated, a PATH_RESPONSE to a probe) that cannot be sent because of an error
+    other than EAGAIN, EWOULDBLOCK and ENOBUFS (an unreachable network, a packet filter) are counted as sent and lost,
+    as on the way, and the send goes on with the next datagrams: the address is the peer's or the network's, and an
+    error for it must not stop the datagrams of the connection's path.  Such an error for the current path, or for the
+    datagrams without a path, ends the send with -1 and the error in errno, also when datagrams before them were
+    sent.
+
+    @param fd socket file descriptor
+    @param batch the packet batch to send
+    @param addr destination address of the datagrams without a path, or nullptr for connected UDP sockets
+    @param addrlen destination address length, or 0 for connected UDP sockets
+    @param local_addr per-session local address for source IP pinning, or nullptr
+    @param local_addrlen local address length, or 0
+    @param stop_error if not nullptr, receives the error that stopped a send after some of the datagrams were sent,
+    or 0 if all were sent or the system call took fewer without an error (qore#7414)
+    @return number of messages sent, or -1 on error (errno set)
+
+    @since %Qore 3.0
+*/
+inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
+                                const struct sockaddr* addr, socklen_t addrlen,
+                                const struct sockaddr* local_addr = nullptr,
+                                socklen_t local_addrlen = 0, int* stop_error = nullptr) {
+    int total = batch.size();
+    if (!batch.hasPaths()) {
+        return sendQuicPacketsRange(fd, batch, 0, total, addr, addrlen, local_addr, local_addrlen, stop_error);
+    }
+    if (stop_error) {
+        *stop_error = 0;
+    }
+    int sent_total = 0;
+    for (int begin = 0; begin < total;) {
+        uint16_t p = batch.packetPathIndex(begin);
+        int end = begin + 1;
+        while (end < total && batch.packetPathIndex(end) == p) {
+            ++end;
+        }
+        const QuicPacketPath* path = batch.packetPath(begin);
+        const struct sockaddr* to = addr;
+        socklen_t tolen = addrlen;
+        const struct sockaddr* from = local_addr;
+        socklen_t fromlen = local_addrlen;
+        if (path) {
+            to = reinterpret_cast<const struct sockaddr*>(&path->remote);
+            tolen = path->remotelen;
+            if (path->locallen) {
+                from = reinterpret_cast<const struct sockaddr*>(&path->local);
+                fromlen = path->locallen;
+            }
+        }
+        int stop = 0;
+        int n = sendQuicPacketsRange(fd, batch, begin, end, to, tolen, from, fromlen, &stop);
+        int err = n < 0 ? errno : stop;
+        bool hard = err && err != EAGAIN && err != EWOULDBLOCK && err != ENOBUFS;
+        if (hard && path && !path->current) {
+            // an error for the address of a path that is not the connection's loses its datagrams only
+            sent_total += end - begin;
+            begin = end;
+            continue;
+        }
+        if (n < 0) {
+            // an error for the connection's path is reported at once, also after datagrams of other paths were sent
+            if (!sent_total || hard) {
+                errno = err;
+                return -1;
+            }
+            // the datagrams before this range were sent: the send stops with this error, as within a range
+            if (stop_error) {
+                *stop_error = errno;
+            }
+            return sent_total;
+        }
+        sent_total += n;
+        if (n < end - begin || stop) {
+            if (stop_error) {
+                *stop_error = stop;
+            }
+            return sent_total;
+        }
+        begin = end;
+    }
     // Callers should check: return value < batch.size() means some packets were not sent; ngtcp2 has counted them
     // as sent, so they are kept and sent again (see sendQuicPacketsKeepingUnsent())
-    return offset;
+    return sent_total;
 }
 
 //! The delay before QUIC datagrams whose send failed with ENOBUFS are sent again (qore#7414)
@@ -628,7 +866,7 @@ enum class QuicSendResult {
     @param batch the datagrams to send; keeps those not sent
     @param backoff the delay of the sends that failed with ENOBUFS
     @param now the current QUIC timestamp (QuicSession::timestamp())
-    @param addr destination address, or nullptr for connected UDP sockets
+    @param addr destination address of the datagrams without a path of their own, or nullptr for connected UDP sockets
     @param addrlen destination address length, or 0 for connected UDP sockets
     @param local_addr per-session local address for source IP pinning, or nullptr
     @param local_addrlen local address length, or 0
