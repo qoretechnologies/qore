@@ -994,9 +994,11 @@ string sub client_ca_edit(object c, string url, string file) {
         string url = sprintf("http://127.0.0.1:%d", plain_port);
         HttpConnection http("h", "h", url);
         assertEq("DONE", p.callFunction("mgr_request", http, url), "the lent connection, " + mode);
-        # its manager is created for the restricted code, which may not create one
-        assertRegex("^PERMISSION-DENIED: the calling code may not create an HTTP client connection manager",
-            p.callFunction("copy_request", http, url), "a copy that the restricted code made, " + mode);
+        # refused by the copy itself, which checks its target against its creator's before it creates the manager
+        # (qore#7862): the copy's creator is the restricted code, so it may connect to no target; the manager's own
+        # refusal to be created for restricted code is the second defence (connection-creator-domains.qtest)
+        assertRegex(LentTargetDenied, p.callFunction("copy_request", http, url),
+            "a copy that the restricted code made, " + mode);
         # its synchronous client, which is checked against the creator proof, is refused: the copy has none (qore#7302)
         assertEq("OK", p.callFunction("use_http_conn_sync", http), "the lent connection's synchronous client, " + mode);
         assertRegex(LentTargetDenied, p.callFunction("copy_sync", http),
