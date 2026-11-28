@@ -8326,6 +8326,38 @@ QoreProgram* qore_builtin_caller_program() {
     return own->getProgram();
 }
 
+bool qore_caller_of_builtin_caller_is_library_code() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the frame of the builtin, which records the Program of the code that calls it: the method that checks, which
+    // must be library code itself
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return false;
+    }
+    const QoreProgram* method_pgm = own->getProgram();
+    if (!qore_program_is_library_module(method_pgm)) {
+        return false;
+    }
+    // the call of the method, whose frame records the Program of its call site: the code that called the method, which
+    // must be the user code of a library module's Program (a builtin that calls the method, such as
+    // call_object_method(), records the Program of the code that called it, so it is the borrower's when the
+    // borrower called it)
+    const QoreStackLocation* method_call = own->getNext();
+    if (!method_call || method_call->getCallType() != CT_USER
+        || !qore_program_is_library_module(method_call->getProgram())) {
+        return false;
+    }
+    // not code that restricted code created and that runs here, nor a class that restricted code declared
+    // (qore#7202): such code is restricted wherever its code runs
+    if (qore_foreign_calling_code_program() || qore_calling_class_is_restricted()) {
+        return false;
+    }
+    return true;
+}
+
 bool qore_innermost_frame_is_builtin() {
     ThreadData* td = thread_data.get();
     if (!td) {
