@@ -560,6 +560,11 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         code recv_data_callback = sub (auto d) {
             if (exists d) {
                 if (chunked) {
+                    # the response header announces a chunked response before any data arrives: the response is a
+                    # list from its first item, as in sendAndDecodeResponse() (qore#7891)
+                    if (!rmd) {
+                        rmd = ();
+                    }
                     rmd += d;
                 } else if (exists rmd) {
                     # Second data item received — switch to list accumulation mode

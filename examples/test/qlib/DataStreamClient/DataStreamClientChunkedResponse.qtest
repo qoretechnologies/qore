@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - DataStream requests over HTTP/2 (TLS) and HTTP/3 (QUIC) connections
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  qoretechnologies/qore#7891: DataStreamClient::sendDataStream() with DataStream v1 over HTTP/1.1 got a chunked
+    response, which the response header announces before any data arrives, as a string of the items concatenated
+    instead of a list of them.
+
+    qoretechnologies/qore#7892: with an explicit http_version of 2.0 or 3.0, DataStreamClient used DataStream v1, which
+    has no chunk boundaries over HTTP/2 and HTTP/3: the items of a stream arrived as one.  The Connect protocol is used
+    whenever the HTTP version is 2 or 3, given or negotiated; DataStream v1 is used with HTTP/1.1.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires RestHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires DataStreamClient
+%requires QUnit
+%requires ../../TestCertificates.qm
+
+%exec-class DataStreamClientChunkedResponseTest
+
+#! Answers a POST stream with \c count items, after reading the items of the request
+class ItemsStreamHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        int count;
+        int sent = 0;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+        count = ah.count.toInt();
+    }
+
+    private nothing recvDataImpl(auto data) {
+    }
+
+    private auto sendDataImpl() {
+        if (sent < count) {
+            return {"n": ++sent};
+        }
+    }
+}
+
+#! Answers a GET stream with two strings, which arrive as one if the chunk boundaries are lost
+class StringsStreamHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<string> items = ("test", "-string");
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    private nothing recvDataImpl(auto data) {
+    }
+
+    private auto sendDataImpl() {
+        return shift items;
+    }
+}
+
+#! Answers a POST stream with the items of the request
+class EchoStreamHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<auto> received = ();
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    private nothing recvDataImpl(auto data) {
+        received += data;
+    }
+
+    private auto sendDataImpl() {
+        return shift received;
+    }
+}
+
+class StreamRestHandler inherits RestHandler::RestHandler {
+    constructor() : RestHandler(NOTHING) {
+    }
+
+    removeRootPath(reference<string> path) {
+        path = regex_subst(path, "^/?ds", "");
+    }
+
+    AbstractRestStreamRequestHandler streamPostItems(hash<auto> cx, *hash<auto> ah) {
+        return new ItemsStreamHandler(cx, ah);
+    }
+
+    AbstractRestStreamRequestHandler streamGetStrings(hash<auto> cx, *hash<auto> ah) {
+        return new StringsStreamHandler(cx, ah);
+    }
+
+    AbstractRestStreamRequestHandler streamPostEcho(hash<auto> cx, *hash<auto> ah) {
+        return new EchoStreamHandler(cx, ah);
+    }
+}
+
+class DataStreamClientChunkedResponseTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+        *int tls_port;
+        *int quic_port;
+    }
+
+    constructor() : Test("DataStreamClientChunkedResponseTest", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("ds", "/ds", NOTHING, new StreamRestHandler(), NOTHING, False);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        try {
+            quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            # HTTP/3 is tested where QUIC is available
+        }
+        server.waitForAsyncIo();
+
+        addTestCase("HTTP/1.1: a chunked DataStream response to sendDataStream() is a list", \chunkedListTest());
+        addTestCase("HTTP/2 negotiated: the items of a stream keep their boundaries", \negotiatedStreamTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    #! returns a sender of the given items
+    private static code sender(list<auto> items) {
+        return auto sub () {
+            return shift items;
+        };
+    }
+
+    private string getUrl(string http_version) {
+        if (http_version == "3.0") {
+            if (!quic_port) {
+                testSkip("QUIC is not available");
+            }
+            return sprintf("https://127.0.0.1:%d", quic_port);
+        }
+        return sprintf("https://127.0.0.1:%d", tls_port);
+    }
+
+    chunkedListTest() {
+        DataStreamClient client({"url": sprintf("http://127.0.0.1:%d", port), "http_version": "1.1"});
+        on_exit client.disconnect();
+        foreach int count in ((3, 1, 0)) {
+            hash<auto> info;
+            hash<auto> rv = client.sendDataStream(sender(({"x": 1},)), "POST", "/ds?action=items;count=" + count,
+                30s, \info);
+            assertEq(200, rv.status_code, count + " item(s): the request succeeds");
+            assertEq("chunked", (rv.headers ?? rv)."transfer-encoding", count + " item(s): the response is chunked");
+            if (count) {
+                list<auto> expected = ();
+                for (int i = 1; i <= count; ++i) {
+                    expected += {"n": i};
+                }
+                assertEq(expected, rv.body, count + " item(s): the response is a list");
+            } else {
+                # an empty chunked response has no body, as with sendAndDecodeResponse()
+                assertNothing(rv.body, "0 items: no body");
+            }
+        }
+    }
+
+    givenVersionSendTest(string http_version) {
+        DataStreamClient client({"url": getUrl(http_version), "http_version": http_version,
+            "ssl_verify_cert": False});
+        on_exit client.disconnect();
+        hash<auto> rv = client.sendDataStream(sender(({"x": 1},)), "POST", "/ds?action=items;count=3", 30s);
+        assertEq(200, rv.status_code, "the request succeeds");
+        assertEq(({"n": 1}, {"n": 2}, {"n": 3}), rv.body, "the items of the response");
+        assertEq(DataStreamClient::DataStreamProtocol::Connect, client.getDetectedProtocol(),
+            "the Connect protocol is used");
+    }
+
+    givenVersionStreamTest(string http_version) {
+        DataStreamClient client({"url": getUrl(http_version), "http_version": http_version,
+            "ssl_verify_cert": False});
+        on_exit client.disconnect();
+        checkStreams(client, http_version);
+    }
+
+    negotiatedStreamTest() {
+        DataStreamClient client({"url": getUrl("2.0"), "ssl_verify_cert": False});
+        on_exit client.disconnect();
+        checkStreams(client, "negotiated");
+    }
+
+    private checkStreams(DataStreamClient client, string label) {
+        # a GET stream
+        list<auto> received = ();
+        *string err;
+        client.recvDataStream(sub (auto d) { received += d; }, sub (*string e) { err = e; }, "GET",
+            "/ds?action=strings", NOTHING, 30s);
+        assertNothing(err, label + ": GET: no error");
+        assertEq(("test", "-string"), received, label + ": GET: each item arrives as itself");
+
+        # a POST stream echoed back
+        received = ();
+        client.sendRecvDataStream(sender(("test", "-string", "!")), sub (auto d) { received += d; },
+            sub (*string e) { err = e; }, "POST", "/ds?action=echo", 30s);
+        assertNothing(err, label + ": POST: no error");
+        assertEq(("test", "-string", "!"), received, label + ": POST: each item arrives as itself");
+        # DataStream v1 has no item boundaries over HTTP/2 and HTTP/3: whether the items of a stream stay apart then
+        # depends on how the server's writes reach the client, so the protocol used is what the test checks
+        assertEq(DataStreamClient::DataStreamProtocol::Connect, client.getDetectedProtocol(),
+            label + ": the Connect protocol is used");
+    }
+}
