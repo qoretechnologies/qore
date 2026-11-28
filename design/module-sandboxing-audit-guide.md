@@ -436,6 +436,56 @@ as do the registries, lookups, resolvers, serializers, codecs, schemas and type 
 which use `DataProvider::checkSharedRegistration()` / `mayRegisterShared()` or a check of their own (qore#6747; see
 `examples/test/runner/test_shared_registry_checks.py`).
 
+#### Secrets of lent objects
+
+A class that a host creates and lends to restricted code (a client, a connection manager, a connection) holds secrets
+that the host gave it: tokens, passwords, headers with credentials, a URL with a password, proxy credentials.  The
+borrower uses the object but must not read them.  The library's own code that acts for the borrower (a data provider
+that signs a request with the token of the client that it was given) must read them.  The two cannot be told apart by
+`SandboxManager::getCallerProgramId()` or `isRestricted()`, which look through module frames to the borrower, and a
+token class that the modules share would be nameable by the borrower too.
+
+The method that gives a secret calls `SandboxManager::checkSecretAccess(owner, what)` first, with the program id of
+the object's owner (`SandboxManager::getCallerProgramId()` in the constructor; copies and objects that a connection
+creates for a borrower take the owner of the original or of the connection's creator):
+
+```
+private:internal *int owner = SandboxManager::getCallerProgramId();
+
+string getToken() {
+    SandboxManager::checkSecretAccess(owner, "token");
+    return token;
+}
+```
+
+It raises `PERMISSION-DENIED` unless the caller of the method is the owner, is not restricted and not a tenant (a
+governing sandbox with an isolation domain), or is the code of a library module (a module from a trusted module
+directory; a module that restricted code loaded by its own path is not).  The caller is read from the call stack,
+never from a file name: a call through `call_object_method()`, a call reference, or a closure of the borrower is
+the borrower's code and is refused.  It is not lifted by a policy barrier or a capability.  It fails closed: a
+thread entry, or a frame that records no library Program, is refused.
+
+The check cannot tell that library code forwards a call that the borrower chose: the rule of qore#7601 applies, a
+module must not call a callable that its caller supplied, with arguments that its caller supplied, in a way that
+reaches a protected value, and it must not return a closure or call reference of its own that reaches a protected
+value (it is library code when the borrower calls it).  Do-not examples:
+
+```
+# a public method of a library class: the borrower names the method, and the module calls it as library code
+string call(object client, string method) {
+    return call_object_method(client, method);   # reaches getToken() with the module as its caller
+}
+```
+
+```
+# a closure of the module that reads the secret, handed to the borrower, runs as library code when the borrower calls it
+code getSigner(object client) {
+    return string sub () { return client.getToken(); }
+}
+```
+
+Give the borrower the operation (`client.request(...)`) and not the means to ask the client for anything.
+
 #### Process-wide state built on first use
 
 A module that builds process-wide state lazily, the first time a caller needs it (`static *T v; ... v ?? (v =
