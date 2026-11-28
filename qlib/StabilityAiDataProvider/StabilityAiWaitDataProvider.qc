@@ -64,8 +64,10 @@ public class StabilityAiWaitDataProvider inherits StabilityAiDataProviderCommon 
                 throw "STABILITYAI-JOB-TIMEOUT", "job wait deadline expired before the status request",
                     {"job_id": job, "last_status": last_status};
             }
+            # the request deadline bounds the whole request, the connection included; the connect timeout is the
+            # connection manager's, which the private copy of the client shares with every other client of it, so it is
+            # not changed for one wait (qore#7837)
             client.setTimeout(min(30000, remaining));
-            client.setConnectTimeout(min(10000, remaining));
             try {
                 last_status = getter.doRequest({"job_id": job});
             } catch (hash<ExceptionInfo> ex) {

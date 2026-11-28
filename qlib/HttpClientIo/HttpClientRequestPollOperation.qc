@@ -634,8 +634,8 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                         stream.setRequestDeadline(getDeadlineUs());
                         # the cookie jar supplies the cookies for each target
                         # the body is decoded unless the stream is handed over
-                        stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,
-                            \auth_state, !opts.keep_stream), opts.body_streaming, rf.getBody(), io_notifier);
+                        stream.startStreaming(rf.getMethod(), target, HttpClientIoSocketAccess::prepareRequestHeaders(mgr, rf,
+                            auth, \auth_state, !opts.keep_stream), opts.body_streaming, rf.getBody(), io_notifier);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "HTTPCLIENT-NOT-READY") {
                             # the connection reported itself ready and refused the request; retry the acquisition
@@ -742,9 +742,10 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         response.processed = True;
         # cookies set by a response are stored before a redirect is followed
-        mgr.storeStateCookies(auth_state, rf, response.headers);
+        HttpClientIoSocketAccess::storeStateCookies(mgr, auth_state, rf, response.headers);
         # an authentication challenge is answered once for each request; the body of the response is discarded
-        if (mgr.processAuthChallenge(response.status_code, response.headers, auth, \auth_state)) {
+        if (HttpClientIoSocketAccess::processAuthChallenge(mgr, response.status_code, response.headers, auth,
+                \auth_state)) {
             redirecting = True;
             auth_retry = True;
             body_chunks = ();
