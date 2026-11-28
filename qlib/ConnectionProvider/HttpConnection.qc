@@ -630,9 +630,10 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     */
     private checkLentAsyncTarget() {
         # the target only (scheme, host and port): the credentials and path, which the calling code can set, are not
-        # given to the check (qore#7236)
-        HTTPClient sc(getConnectionOptions());
-        checkBorrowerTarget(sc.getURL(UC_TARGET), sc.getProxyURL(UC_TARGET));
+        # given to the check (qore#7236); the manager is created from the url and the proxy option (see
+        # getAsyncImpl()), which are checked, and no client is created from the connection's options here (qore#7499)
+        *string proxy = opts.proxy.val() ? getLentTargetUrl(opts.proxy) : NOTHING;
+        checkBorrowerTarget(getLentTargetUrl(url), proxy);
     }
 
     #! Returns an async HTTP connection manager
