@@ -238,6 +238,19 @@ qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QOR
 set(QORE_CATALOG_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore/i18n CACHE PATH
     "Install directory for native Qore i18n catalogs")
 
+# The install destinations of the modules and catalogs, relative to the install prefix where the absolute directories
+# above are below the configured prefix, so that "cmake --install --prefix <dir>" relocates the installation; a
+# directory configured outside the prefix stays absolute (qore#7849).  The absolute directories stay the paths compiled
+# into the library and written to QoreConfig.cmake: a relocated installation runs with QORE_MODULE_DIR and QORE_LIBDIR.
+include(${CMAKE_SOURCE_DIR}/cmake/QoreInstallRelativeDir.cmake)
+qore_install_relative_dir(QORE_INSTALL_MODULE_DIR "${MODULE_DIR}")
+qore_install_relative_dir(QORE_INSTALL_MODULE_VER_DIR "${MODULE_VER_DIR}")
+qore_install_relative_dir(QORE_INSTALL_USER_MODULE_VER_DIR "${USER_MODULE_VER_DIR}")
+qore_install_relative_dir(QORE_CATALOG_INSTALL_DIR "${QORE_CATALOG_DIR}")
+# the install directory of the binary modules of the source tree (the macros of QoreMacros.cmake); an external module
+# gets the absolute one from QoreConfig.cmake
+set(QORE_MODULES_DIR "${QORE_INSTALL_MODULE_DIR}")
+
 get_module_api_versions()
 
 set(LIBQORE_QPP_SRC
@@ -2839,8 +2852,10 @@ string(CONCAT _QORE_AOT_CONFIG_BASE
 )
 qore_generate_aot_link_config("${CMAKE_BINARY_DIR}/aot-link.conf" "${_QORE_AOT_CONFIG_BASE}"
     "${_QORE_AOT_DYN_LIBS}" "${_QORE_AOT_STATIC_LIBS}")
-install(FILES "${CMAKE_BINARY_DIR}/aot-link.conf"
-        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/qore")
+# installed by a script that names the library directory of the install-time prefix in the file (qore#7849)
+install(CODE "set(QORE_AOT_LINK_CONF_SOURCE \"${CMAKE_BINARY_DIR}/aot-link.conf\")
+set(QORE_AOT_LINK_CONF_LIBDIR \"${CMAKE_INSTALL_LIBDIR}\")")
+install(SCRIPT cmake/QoreInstallAOTLinkConfig.cmake)
 
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
@@ -3669,35 +3684,35 @@ qore_dist(${VERSION})
 
 # prepare installation targets
 install(PROGRAMS ${QORE_BIN_FILES}
-        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 install(TARGETS qore qcc qpp libqore
-        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${QCC_FORMAT_STAMP}
-        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 #install(TARGETS qore qpp qr libqore
-#        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
-#        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreEnsureDepfile.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
     tools/qore-qo-source-parse-defines tools/qore-qo-batch-bootstrap
     tools/qore-qo-incremental-plan tools/qore-qo-prune tools/qore-qo-lock
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(DIRECTORY include/qore
-        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
         PATTERN intern EXCLUDE
         PATTERN minitest.hpp EXCLUDE
@@ -3706,11 +3721,11 @@ install(DIRECTORY include/qore
         PATTERN slist_include.h EXCLUDE
         PATTERN qore-version.h EXCLUDE)
 install(FILES ${CMAKE_BINARY_DIR}/include/qore/qore-version.h
-        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 file(GLOB QORE_MAN_PAGES man/*.1)
 install(FILES ${QORE_MAN_PAGES}
-        DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1
+        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES
             doxygen/Doxyfile.in
@@ -3724,7 +3739,7 @@ install(FILES
             doxygen/Qore-Q.ico
             doxygen/header_template.html
             doxygen/footer_template.html
-        DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 # prepare documentation targets
@@ -3733,7 +3748,7 @@ if (DOXYGEN_FOUND)
     # External module documentation needs the language reference index, without
     # installing the complete HTML documentation. It exists after building docs.
     install(FILES ${CMAKE_BINARY_DIR}/qore.tag
-            DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/qore
             OPTIONAL COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
     # documentation
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/footer_template.html ${CMAKE_BINARY_DIR}/doxygen/footer_template.html @ONLY)
@@ -3930,8 +3945,9 @@ endif()
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
 # NOTE: anything below will be installed into versioned dirs!
-set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
-set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
+# relative to the install prefix (qore#7849)
+set(QORE_USER_MODULES_DIR ${QORE_INSTALL_USER_MODULE_VER_DIR})
+set(QORE_AOT_MODULES_DIR ${QORE_INSTALL_MODULE_VER_DIR})
 # modules must go after docs target - it's depending on it
 
 # qlib modules + their documentation
