@@ -21,7 +21,8 @@
     queued: with a worker running, the worker takes it when it is free; with none, a worker is started for it when one
     may start again: by the next item queued, or, in the controller's I/O thread, when a thread has ended (and been
     joined) or the default thread stack size has changed.  Work that still waits when the controller stops is released
-    by the stop, and the process ends normally.
+    by the stop, and the process ends normally; a callback item records its Program, so the Program's end releases it
+    while the Program exists, and the destructors of the objects that it holds run (qore#7842).
 
     The starts are made to fail with dbg_async_io_fail_callback_worker_starts() (debug builds), so that no start
     succeeds before the case allows it.  Each case runs a child process, whose callback workers are only those it
@@ -49,7 +50,6 @@ class CapturingLogger inherits LoggerInterfaceBase {
     }
 }
 
-# the first item that waits can be the release of references that a callback had, before the callback itself
 # makes callback worker starts fail (a debug build's test hook, guarded by the child's own code; the test is skipped
 # in a release build)
 sub fail_starts(int count, bool enqueue_only = False, int after = 0) {
@@ -57,6 +57,21 @@ sub fail_starts(int count, bool enqueue_only = False, int after = 0) {
         ? call_function(\"dbg_async_io_fail_callback_worker_starts\", count, enqueue_only, after) : NOTHING;
 }
 
+# held by a callback: its destructor runs when the callback is released
+class ReleaseSignal {
+    destructor() {
+        print(\"released\\n\");
+    }
+    touch() {
+    }
+}
+
+code sub make_cb(Queue q, string label) {
+    ReleaseSignal sig();
+    return sub () { sig.touch(); q.push(label); };
+}
+
+# the first item that waits can be the release of references that a callback had, before the callback itself
 const NoWorker = \"no callback worker runs, and none could be started; the callback\";
 const Busy = \"a callback worker could not be started; the callback (type=callback owner=-) is queued for the \"
     \"workers running\";
@@ -110,7 +125,8 @@ sub main() {
         # start again, only the starts made when work is queued fail, so that only the event starts one
         bool event = (mode == \"thread-end\" || mode == \"stderr-thread-end\" || mode == \"stack-size\");
         fail_starts(1000, event);
-        AsyncIoController::addTimerDelay(0s, sub () { q.push(\"first\"); });
+        AsyncIoController::addTimerDelay(0s, mode == \"shutdown-destructor\" ? make_cb(q, \"first\")
+            : sub () { q.push(\"first\"); });
         if (logger) {
             printf(\"log: %%s\\n\", logged(log_q, NoWorker));
         }
@@ -136,12 +152,15 @@ sub main() {
                 printf(\"after the next callback: %%y\\n\", sort((q.get(60s), q.get(60s))));
                 break;
             case \"shutdown\":
-                # the callback still waits when the controller stops at the end of the process: the stop releases it
+            case \"shutdown-destructor\":
+                # the callback still waits when the controller stops at the end of the process: the stop releases it;
+                # the Program of the callback releases it when it ends, so the destructors of the objects that it holds
+                # run in the Program (qore#7842)
                 print(\"ending\\n\");
                 break;
         }
     }
-    if (mode != \"shutdown\") {
+    if (mode !~ /^shutdown/) {
         fail_starts(0);
         if (logger) {
             AsyncIoController::setLogger();
@@ -175,6 +194,7 @@ main();
         addTestCase("no worker can start, no logger: the failure is reported on stderr", \testStderr());
         addTestCase("a worker runs: the callback is queued for it and runs; the failed start is logged", \testBusy());
         addTestCase("the callback that waits when the controller stops is released by the stop", \testShutdown());
+        addTestCase("the callback that waits when its Program ends is released in the Program", \testShutdownDestructor());
         set_return_value(main());
     }
 
@@ -250,5 +270,13 @@ main();
         # the process ends normally (run() checks the exit status and that nothing is unhandled): the stop releases the
         # callback that waits, which is never run
         assertEq(waited("ending\n"), rv.out);
+    }
+
+    #! a callback item records its Program, whose end releases it while the Program exists: the destructor of an object
+    #! that the callback holds runs, instead of failing with PROGRAM-ERROR after the Program was deleted (qore#7842)
+    testShutdownDestructor() {
+        hash<auto> rv = run("shutdown-destructor");
+        assertEq(waited("ending\n") + "released\n", rv.out);
+        assertEq(-1, rv.err.find("PROGRAM-ERROR"), sprintf("no PROGRAM-ERROR: %y", rv.err));
     }
 }

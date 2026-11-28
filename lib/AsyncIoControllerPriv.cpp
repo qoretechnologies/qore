@@ -1181,6 +1181,18 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
     return nullptr;
 }
 
+QoreProgram* AsyncIoDeferredRelease::getUdataProgram() const {
+    switch (udata.getType()) {
+        case NT_RUNTIME_CLOSURE:
+        case NT_FUNCREF:
+            return udata.get<const ResolvedCallReferenceNode>()->getProgram();
+        case NT_OBJECT:
+            return udata.get<const QoreObject>()->getProgram();
+        default:
+            return nullptr;
+    }
+}
+
 void AsyncIoDeferredRelease::setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx) {
     module_cleanup_delegate = async_io_module_cleanup_delegate(ctx);
     module_cleanup_canceled = async_io_module_cleanup_canceled(ctx);
@@ -2914,6 +2926,29 @@ static bool qore_dbg_take_callback_worker_start_failure(bool retry) {
 }
 #endif
 
+//! returns the Program whose end releases the queued item: the Program that it holds (an operation's, a release's, a
+//! task's), or else the Program of the code of a callback (a timer's) or of a timer's user data that it releases, which
+//! the item does not hold, as nothing enters the Program for it (the callback enters it itself), but which the end of
+//! the Program releases while the Program exists, with the objects that it holds, whose destructors must run in it;
+//! otherwise the controller's stop() released it after the Program was deleted (qore#7842)
+static QoreProgram* aio_item_teardown_program(const QoreCallDispatcher::AsyncWorkItem& item) {
+    if (item.pgm) {
+        return item.pgm;
+    }
+    if (item.type == QoreCallDispatcher::DT_CALLBACK && item.callback) {
+        return item.callback->getProgram();
+    }
+    // a timer's user data (a callback or an object), released after the timer
+    if (item.type == QoreCallDispatcher::DT_RELEASE && item.release) {
+        return item.release->getUdataProgram();
+    }
+    return nullptr;
+}
+
+static bool aio_queued_item_of_program(const QoreCallDispatcher::AsyncWorkItem& item, const QoreProgram* pgm) {
+    return pgm && aio_item_teardown_program(item) == pgm;
+}
+
 bool QoreCallDispatcher::startWorkerLocked(std::string& error, bool retry) {
     ++active_workers;
     ExceptionSink xsink;
@@ -3028,8 +3063,10 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         // connection, a scan of the garbage collector), nor on a worker that can run after the Program's threads were
         // waited for; the thread that cancels the Program's work releases it in the Program (with its parse options,
         // counted in its threads), before its threads are waited for (clearProgramShuttingDown())
-        if (!stopping && item.type == DT_RELEASE && item.pgm && shutting_down_programs.count(item.pgm)) {
-            parked_program_releases[item.pgm].push_back(std::move(item));
+        // the Program whose end releases the item, which it may not hold (qore#7842)
+        QoreProgram* teardown_pgm = shutting_down_programs.empty() ? nullptr : aio_item_teardown_program(item);
+        if (!stopping && item.type == DT_RELEASE && teardown_pgm && shutting_down_programs.count(teardown_pgm)) {
+            parked_program_releases[teardown_pgm].push_back(std::move(item));
             return;
         }
 
@@ -3044,7 +3081,7 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         // which is fine because the strong ref was taken at submit time and the
         // destructor chain runs while the program is still in its
         // post-cancelByProgram / pre-data-clearance window.
-        bool pgm_shutting_down_now = item.pgm && shutting_down_programs.count(item.pgm) > 0;
+        bool pgm_shutting_down_now = teardown_pgm && shutting_down_programs.count(teardown_pgm) > 0;
 
         // Reject enqueues for owners whose teardown is already in progress.  A
         // worker would discard such an item anyway (see the owner_shutting_down
@@ -3519,7 +3556,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
         size_t release_count = 0;
         size_t other_count = 0;
         for (const auto& qi : async_queue) {
-            if (qi.pgm == pgm) {
+            if (aio_queued_item_of_program(qi, pgm)) {
                 if (!stopping && qi.type == DT_RELEASE) {
                     ++release_count;
                 } else {
@@ -3548,7 +3585,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
         // rationale (workerLoop+0x3c6 SIGSEGV on stale spop_obj).
         auto it = async_queue.begin();
         while (it != async_queue.end()) {
-            if (it->pgm == pgm) {
+            if (aio_queued_item_of_program(*it, pgm)) {
                 // active_per_owner is incremented at enqueue time; the matching
                 // decrement must happen here for drained items, or waitForOwnerIdle()
                 // would hang on items that will never be popped.
@@ -3567,7 +3604,7 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
                 // Program, with its parse options and counted in its threads, by clearProgramShuttingDown(), not here
                 // in the calling thread outside the Program (qore#7226); the memory was reserved above
                 if (parked && it->type == DT_RELEASE) {
-                    parked->push_back(std::move(*it));
+                    parked->push_back(std::move(*it));  // parked under pgm: the item's teardown Program
                 } else {
                     drained.push_back(std::move(*it));
                 }

@@ -199,6 +199,10 @@ struct AsyncIoDeferredRelease {
     //! Returns the program the released objects belong to, if known
     DLLLOCAL QoreProgram* getProgram() const;
 
+    //! Returns the Program of the timer's user data (a callback or an object), whose end releases it, or nullptr
+    //! (qore#7842)
+    DLLLOCAL QoreProgram* getUdataProgram() const;
+
     //! Releases all references in order and clears them
     DLLLOCAL void release(ExceptionSink* xsink);
 };
