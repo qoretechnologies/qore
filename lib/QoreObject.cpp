@@ -2950,18 +2950,15 @@ int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, c
     return -1;
 }
 
-bool qore_object_private::hasSandboxProvenance() const {
-    const QoreSandboxContext* p = sandbox_provenance;
-    return p && (p->manager || p->policy_manager || p->provenance_manager || p->provenance_policy_manager);
-}
-
 bool qore_object_private::callerReadsNonPublicMembersIntern() const {
     // the code of a class that trusted code declared, or of a trusted Program that is not a library module's (such as
-    // the host's), reads the objects that trusted code created as it did before the rule, also for a sandboxed caller;
-    // an object that sandboxed code created only for the caller that owns it, so that trusted code cannot show a
-    // sandboxed caller the state of another sandbox's objects.  A builtin class (such as Serializable) and library code
-    // read for their caller, which decides
-    if (!hasSandboxProvenance()) {
+    // the host's), reads the objects of trusted code as it did before the rule, also for a sandboxed caller; an object
+    // that a sandbox owns only for that sandbox, so that trusted code cannot show a sandboxed caller the state of
+    // another sandbox's objects.  The owner decides, not the creation provenance: an object that trusted code created
+    // while it served sandboxed code is governed by that code's sandbox but owned by no sandbox, so it is an object of
+    // trusted code, which its own class reads as a whole (qore#7921).  A builtin class (such as Serializable) and
+    // library code read for their caller, which decides
+    if (!getSandboxOwner()) {
         const qore_class_private* class_ctx = runtime_get_class();
         if (class_ctx && !class_ctx->sys) {
             if (!class_ctx->isSandboxedCode()) {
