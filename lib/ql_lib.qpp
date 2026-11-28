@@ -722,8 +722,9 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
 
     @param command the command to execute with %system() (3)
 
-    @return the exit code of the process executed, or -1 if the process did not exit normally or could not be waited
-    for
+    @return the exit status of the command; for a command that a signal ended, 128 + the number of the signal, as a
+    shell reports it, whatever \c /bin/sh runs it (some shells, such as busybox \c sh, run the last command in
+    their own process, which the signal then ends); -1 if the process could not be waited for
 
     @throw SYSTEM-ERROR the command contains a NUL character (\c arg is \c EINVAL), the process to execute the
     command could not be started, or the thread that waits for it could not be started (the process is then killed)
@@ -748,8 +749,11 @@ int rc = system("ls -l");
     - backquote()
     - @ref backquote_operator "the backquote operator"
 
-    @since %Qore 3.0 a command with a NUL character raises \c SYSTEM-ERROR; previously the command was cut at the NUL
-    character
+    @since
+    - %Qore 3.0 a command with a NUL character raises \c SYSTEM-ERROR; previously the command was cut at the NUL
+      character
+    - %Qore 3.0 a command that a signal ended gives 128 + the number of the signal also where \c /bin/sh runs the
+      last command in its own process (busybox \c sh); previously -1 there
  */
 int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
     // the command is passed to the shell as a C string, which would be cut at a NUL character
@@ -775,7 +779,7 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
             xsink) != QoreChildWaitResult::EXITED) {
             return -1;
         }
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return qore_child_exit_code(status);
     };
 #endif
 
@@ -867,7 +871,13 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
     // the command gets a copy of the environment, which must not change while it is copied; the C library's
     // system() copies it and waits for the command, so the environment cannot change until the command exits
     QoreEnvironmentReadLock env_lock;
-    return system(command->c_str());
+    int status = system(command->c_str());
+#if !defined(_Q_WINDOWS) && defined(HAVE_SYS_WAIT_H)
+    // the wait status of the shell, as the other paths give it; -1 if the command could not be run
+    return status == -1 ? -1 : qore_child_exit_code(status);
+#else
+    return status;
+#endif
 #else
     return missing_function_error("system", xsink);
 #endif

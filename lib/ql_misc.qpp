@@ -2193,7 +2193,10 @@ nothing parseURL() [flags=RUNTIME_NOOP] {
 //! Executes a process and returns a string of the output (stdout only)
 /**
     @param command The shell command to execute as a subprocess
-    @param return_code an optional reference to an integer to return the return code of the process
+    @param return_code an optional reference to an integer that receives the exit status of the command; for a command
+    that a signal ended, 128 + the number of the signal, as a shell reports it, whatever \c /bin/sh runs it (some
+    shells, such as busybox \c sh, run the last command in their own process, which the signal then ends); -1 if the
+    process could not be waited for, or if the wait was cancelled
 
     @return The stdout of the shell command that was executed
 
@@ -2226,6 +2229,8 @@ string files = backquote("ls", \rc);
     - %Qore 0.8.8 the \a rc argument was added
     - %Qore 3.0 a command with a NUL character raises \c BACKQUOTE-ERROR; previously the command was cut at the NUL
       character
+    - %Qore 3.0 a command that a signal ended gives 128 + the number of the signal in \a return_code also where
+      \c /bin/sh runs the last command in its own process (busybox \c sh); previously -1 there
 */
 string backquote(string command, *reference<int> return_code) [dom=EXTERNAL_PROCESS;flags=NAMED_ARGS] {
     // the command is passed to the shell as a C string, which would be cut at a NUL character

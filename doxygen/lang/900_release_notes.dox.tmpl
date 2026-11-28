@@ -102,6 +102,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Command Ended by a Signal Gives 128 + the Signal Everywhere
+    @ref Qore::backquote() "backquote()" and @ref Qore::system() "system()" give a command that a signal ended
+    128 + the number of the signal, as a shell reports it, also on systems whose \c /bin/sh runs the last command in its
+    own process (busybox \c sh, Alpine), where they gave -1 before (<a href="https://github.com/qoretechnologies/qore/issues/7912">issue 7912</a>).
+
     @par Data Provider Labels Are in Sentence Case
     @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" renders a display name
     in sentence case in English and without a locale (ex: \c "max_tokens_per_request" -> \c "Max tokens per request"),

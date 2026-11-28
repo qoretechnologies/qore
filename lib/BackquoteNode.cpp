@@ -540,7 +540,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         switch (qore_wait_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid, status, wait_errno,
             "BACKQUOTE-ERROR", xsink)) {
             case QoreChildWaitResult::EXITED:
-                rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+                rc = qore_child_exit_code(status);
                 return s.release();
             case QoreChildWaitResult::WAIT_FAILED:
                 rc = -1;
@@ -642,7 +642,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         switch (qore_wait_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid, status, wait_errno,
             "BACKQUOTE-ERROR", xsink)) {
             case QoreChildWaitResult::EXITED:
-                rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+                rc = qore_child_exit_code(status);
                 return s.release();
             case QoreChildWaitResult::WAIT_FAILED:
                 rc = -1;
@@ -698,8 +698,10 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     // wait for child process to terminate and close pipe
     rc = pclose(p);
 #ifdef HAVE_SYS_WAIT_H
-    if (WIFEXITED(rc))
-        rc = WEXITSTATUS(rc);
+    // the status of the shell, as the other paths give it; -1 if the wait failed
+    if (rc != -1) {
+        rc = qore_child_exit_code(rc);
+    }
 #endif
     return s.release();
 }
