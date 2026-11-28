@@ -1533,6 +1533,12 @@
     directory creates a @ref FileDataProvider::FileDataProvider "FileDataProvider" itself
     (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
 
+    @par The File Poller of a Filesystem Connection Polls the Connection's Directory
+    The \c "filepoller" data provider of a @ref ConnectionProvider::FilesystemConnection "FilesystemConnection"
+    raises \c DATA-PROVIDER-ERROR for a \c path constructor option that names another directory than the
+    connection's: code that polled another directory with it uses a connection to that directory
+    (<a href="https://github.com/qoretechnologies/qore/issues/7806">issue 7806</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
 
     @par Calls Confined to a Directory
