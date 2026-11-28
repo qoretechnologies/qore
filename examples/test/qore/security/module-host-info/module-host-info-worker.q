@@ -128,7 +128,8 @@ string hostname = gethostname();
 string cwd = getcwd();
 string pid = getpid().toString();
 string tmp_host = tmp_location();
-string tmp_free = realpath(PlatformOS == "Windows" ? "c:\\temp" : "/tmp");
+# the platform default, unresolved (ex: not "/private/tmp" on macOS)
+string tmp_free = PlatformOS == "Windows" ? "c:\\temp" : "/tmp";
 string url_wild_host = http_get_url_from_bind("0.0.0.0:8080");
 string url_wild6_host = http_get_url_from_bind("[::]:8080");
 string ds = "pgsql:host-user/host-secret@hostdb";

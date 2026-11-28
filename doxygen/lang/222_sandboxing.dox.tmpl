@@ -1713,7 +1713,9 @@ authenticate();
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
     - @ref Util::tmp_location() "tmp_location()" takes no directory from the environment (\c TMPDIR and the others):
-      it is the platform's default (\c /tmp), or the directory that the host set for the code's %Program (see
+      it is the platform's default (\c /tmp), returned unresolved (its symbolic links are not resolved, ex: \c /tmp
+      on macOS, a link to \c /private/tmp, so that it is the same absolute path whatever the current directory is;
+      see @ref sandbox_fs_dir_cwd), or the directory that the host set for the code's %Program (see
       @ref sandbox_temp_dir), also for the temporary files and directories that library code creates without a
       directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their directory; @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read
       \c NO_COLOR, @ref QUnit::Test::getEnv() "QUnit::Test::getEnv()" gives no values,
