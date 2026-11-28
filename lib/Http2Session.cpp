@@ -1586,12 +1586,21 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     // and before it is released
     struct ResponseSendWatchUpdater {
         Http2Session& h2;
-        ResponseSendWatchUpdater(Http2Session& h2) : h2(h2) {
+        //! true if the connection waited for its client before the send
+        bool was_waiting;
+        ResponseSendWatchUpdater(Http2Session& h2) : h2(h2),
+                was_waiting(h2.pump_send_rate.enabled() && h2.isConnectionWaitingUnlocked(-1)) {
         }
         ~ResponseSendWatchUpdater() {
             h2.updateResponseSendWatches();
             // the bounded bodies whose END_STREAM frame has been written are done (qore#7653)
             h2.updateBoundBodiesWritten();
+            // a body whose source has no data ready, and whose data that its client held back has been sent now,
+            // waits for its source: the end of the wait is recorded now, as no check of the I/O thread may follow
+            // before the source is readable again (qore#7809)
+            if (was_waiting) {
+                h2.endSendRateWaitIfIdleUnlocked();
+            }
         }
     } response_send_watch_updater(*this);
     [[maybe_unused]] size_t pending = send_buffer.size() - send_offset;
@@ -4579,6 +4588,9 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
         return;
     }
     printd(5, "Http2Session::processStreamInputStreams() count=%zu\n", stream_input_streams_.size());
+    // whether the connection waits for its client, as the check above recorded it
+    bool rate_enabled = pump_send_rate.enabled();
+    bool was_waiting = rate_enabled && isConnectionWaitingUnlocked(-1);
     for (auto& [stream_id, info] : stream_input_streams_) {
         if (!info.eof) {
             ExceptionSink stream_error;
@@ -4590,6 +4602,12 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
                 }
             }
         }
+    }
+    // the rate is told when the pass changed what the connection waits for: a body whose source has nothing more
+    // ready waits for its source, so that the time until its source is readable again is not charged to the client
+    // (qore#7809); the bodies that a verdict ends are ended by the next check
+    if (rate_enabled && isConnectionWaitingUnlocked(-1) != was_waiting) {
+        updateSendRateUnlocked(q_clock_getmicros_monotonic() / 1000, rate_ended_bodies);
     }
 
     // Clean up completed streams (unassignThread + erase)
@@ -4808,7 +4826,14 @@ bool Http2Session::isBoundBodyWaiting(int32_t stream_id) const {
     // socket buffers, which a client that stops reading leaves full while Qore's own buffers are empty (qore#7280)
     auto i = stream_input_streams_.find(stream_id);
     if (i != stream_input_streams_.end() && !i->second.eof) {
-        return !i->second.source_waiting;
+        if (!i->second.source_waiting) {
+            return true;
+        }
+        // a body whose source has no data ready still waits for its client while it has data that the client has
+        // not let it send: the client's flow control, or the connection's output that the client does not read,
+        // holds it in the stream's buffer (qore#7809)
+        auto pit = pending_body_data.find(stream_id);
+        return pit != pending_body_data.end() && pit->second.data.size() > pit->second.offset;
     }
     // a body whose data is all buffered or sent waits for its client until its END_STREAM frame has been written to
     // the socket, when it is removed (qore#7653)
