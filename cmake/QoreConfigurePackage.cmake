@@ -24,11 +24,23 @@ macro(_qore_config_set_paths _installed)
     set(QORE_CONFIG_PREFIX_SETUP "")
     set(QORE_CONFIG_RELOCATABLE FALSE)
     if (${_installed} AND NOT IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
-        # QoreConfig.cmake is installed in <libdir>/cmake/Qore
-        file(RELATIVE_PATH _qore_config_to_prefix "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore" "${CMAKE_INSTALL_PREFIX}")
-        set(QORE_CONFIG_PREFIX_SETUP
-            "get_filename_component(_qore_install_prefix \"\${CMAKE_CURRENT_LIST_DIR}/${_qore_config_to_prefix}\" ABSOLUTE)")
-        set(QORE_CONFIG_RELOCATABLE TRUE)
+        # QoreConfig.cmake is installed in <libdir>/cmake/Qore: the prefix is one ".." above it for each component of
+        # that relative path; it is computed from the relative directory alone, as the configured prefix can be empty
+        # (installed at the root, or staged with DESTDIR), which file(RELATIVE_PATH) does not accept
+        string(REGEX REPLACE "/+$" "" _qore_config_rel_dir "${CMAKE_INSTALL_LIBDIR}/cmake/Qore")
+        string(REGEX REPLACE "/+" ";" _qore_config_rel_parts "${_qore_config_rel_dir}")
+        list(REMOVE_ITEM _qore_config_rel_parts "" ".")
+        # a library directory that leaves its parent ("..") cannot be followed back: the installed file keeps the
+        # absolute paths of the configured prefix then
+        if (NOT ".." IN_LIST _qore_config_rel_parts)
+            set(_qore_config_to_prefix "")
+            foreach(_qore_config_part IN LISTS _qore_config_rel_parts)
+                string(APPEND _qore_config_to_prefix "../")
+            endforeach()
+            set(QORE_CONFIG_PREFIX_SETUP
+                "get_filename_component(_qore_install_prefix \"\${CMAKE_CURRENT_LIST_DIR}/${_qore_config_to_prefix}\" ABSOLUTE)")
+            set(QORE_CONFIG_RELOCATABLE TRUE)
+        endif()
     endif()
     _qore_config_install_path(QORE_CONFIG_INCLUDEDIR "${CMAKE_INSTALL_FULL_INCLUDEDIR}")
     _qore_config_install_path(QORE_CONFIG_LIBDIR "${CMAKE_INSTALL_FULL_LIBDIR}")

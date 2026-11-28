@@ -33,20 +33,32 @@ class PackageConfigsTest(unittest.TestCase):
         result = subprocess.run([CMAKE, *map(str, args)], text=True, capture_output=True, timeout=60)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def generate(self, name):
+    def generate(self, name, empty_prefix=False):
         source = self.root / name / "source with spaces"
         build = self.root / name / "build with spaces"
         (source / "cmake").mkdir(parents=True)
         (source / "cmake/QoreMacros.cmake").write_text("set(QORE_MACROS_LOADED TRUE)\n")
+        if empty_prefix:
+            # an empty install prefix (qore#7849: the macOS CI job configures with -DCMAKE_INSTALL_PREFIX=), with the
+            # directories that GNUInstallDirs gives for it
+            dirs = '''set(CMAKE_INSTALL_PREFIX "")
+set(CMAKE_INSTALL_LIBDIR lib)
+set(CMAKE_INSTALL_FULL_BINDIR "/bin")
+set(CMAKE_INSTALL_FULL_LIBDIR "/lib")
+set(CMAKE_INSTALL_FULL_INCLUDEDIR "/include")
+set(CMAKE_INSTALL_FULL_DATADIR "/share")
+'''
+        else:
+            dirs = f'''set(CMAKE_INSTALL_FULL_BINDIR "{self.prefix}/bin")
+set(CMAKE_INSTALL_FULL_LIBDIR "{self.prefix}/lib")
+set(CMAKE_INSTALL_FULL_INCLUDEDIR "{self.prefix}/include")
+set(CMAKE_INSTALL_FULL_DATADIR "{self.prefix}/share")
+'''
         (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.20)
 project(QorePackageFixture NONE)
 set(CMAKE_SHARED_LIBRARY_PREFIX lib)
 set(CMAKE_SHARED_LIBRARY_SUFFIX .so)
-set(CMAKE_INSTALL_FULL_BINDIR "{self.prefix}/bin")
-set(CMAKE_INSTALL_FULL_LIBDIR "{self.prefix}/lib")
-set(CMAKE_INSTALL_FULL_INCLUDEDIR "{self.prefix}/include")
-set(CMAKE_INSTALL_FULL_DATADIR "{self.prefix}/share")
-set(MODULE_API_MAJOR 1)
+{dirs}set(MODULE_API_MAJOR 1)
 set(MODULE_API_MINOR 4)
 set(QORE_LLVM_MAJOR_VERSION 21)
 set(myprefix "{self.prefix}")
@@ -86,6 +98,22 @@ file(WRITE "${CMAKE_BINARY_DIR}/result.txt"
         # Prove the installed export works with the original source and build gone.
         shutil.rmtree(first.parent)
         report = self.consume(installed, "installed")
+        self.assertEqual(["FALSE", str(installed), str(self.prefix / "include"),
+                          str(self.prefix / "bin/qore"), str(self.prefix / "bin/qcc"),
+                          str(self.prefix / "lib/libqore.so")], report)
+
+    def test_installed_config_with_empty_prefix(self):
+        """An empty install prefix configures, and the installed file finds the tree it is installed in (qore#7849)"""
+        _, build = self.generate("empty-prefix", empty_prefix=True)
+        config = build / "cmake/install/QoreConfig.cmake"
+        text = config.read_text()
+        # <libdir>/cmake/Qore is three levels below the prefix
+        self.assertIn('get_filename_component(_qore_install_prefix "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)',
+                      text)
+        installed = self.prefix / "lib/cmake/Qore"
+        shutil.copyfile(config, installed / "QoreConfig.cmake")
+        shutil.rmtree(build.parent)
+        report = self.consume(installed, "empty-prefix-installed")
         self.assertEqual(["FALSE", str(installed), str(self.prefix / "include"),
                           str(self.prefix / "bin/qore"), str(self.prefix / "bin/qcc"),
                           str(self.prefix / "lib/libqore.so")], report)
