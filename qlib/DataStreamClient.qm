@@ -228,8 +228,9 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in request
           method calls
         - \c http_version: HTTP version to use (\c 'auto', \c '1.0', \c '1.1', \c '2.0', or \c '3.0'; defaults
-          to \c 'auto'); both DataStream v1 and Connect protocols work over any HTTP version — Qore's HTTPClient
-          transparently maps streaming to HTTP/2 DATA frames or HTTP/3 QUIC DATA as appropriate
+          to \c 'auto'); with the default \c protocol (\c 'auto'), the Connect protocol is used with HTTP/2 and HTTP/3,
+          given here or negotiated, as DataStream v1 relies on HTTP/1.1 chunked transfer encoding for the boundaries of
+          the items of a stream, which HTTP/2 and HTTP/3 do not have
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
@@ -1002,8 +1003,10 @@ rest.setContentEncoding("gzip");
         if (cached_protocol) {
             return cached_protocol;
         }
-        # In auto mode, use Connect if the connection is already HTTP/2 or HTTP/3
-        if (isHttp2()) {
+        # In auto mode, use Connect if the connection is already HTTP/2 or HTTP/3, or if the HTTP version given is 2
+        # or 3, before the connection is made: DataStream v1 has no item boundaries without HTTP/1.1 chunked transfer
+        # encoding (qore#7892)
+        if (isHttp2() || effective_http_version == "2.0" || effective_http_version == "3.0") {
             return DataStreamProtocol::Connect;
         }
         # If not yet connected but using HTTPS with "auto" HTTP version, prefer Connect

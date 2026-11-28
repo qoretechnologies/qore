@@ -134,6 +134,10 @@ class DataStreamClientChunkedResponseTest inherits QUnit::Test {
         server.waitForAsyncIo();
 
         addTestCase("HTTP/1.1: a chunked DataStream response to sendDataStream() is a list", \chunkedListTest());
+        addTestCase("HTTP/2 given: sendDataStream() gets the items of a chunked response",
+            \givenVersionSendTest(), "2.0");
+        addTestCase("HTTP/2 given: the items of a stream keep their boundaries", \givenVersionStreamTest(), "2.0");
+        addTestCase("HTTP/3 given: the items of a stream keep their boundaries", \givenVersionStreamTest(), "3.0");
         addTestCase("HTTP/2 negotiated: the items of a stream keep their boundaries", \negotiatedStreamTest());
         set_return_value(main());
     }
